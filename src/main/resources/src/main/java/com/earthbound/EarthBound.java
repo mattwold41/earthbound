@@ -1,7 +1,6 @@
 package com.earthbound;
 
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -10,49 +9,40 @@ public class EarthBound extends JavaPlugin {
     @Override
     public void onEnable() {
         getLogger().info("EarthBound is now online!");
-    }
 
-    @Override
-    public boolean onCommand(
-            CommandSender sender,
-            Command command,
-            String label,
-            String[] args) {
+        registerCommand("earth", (CommandSourceStack source, String[] args) -> {
 
-        if (!command.getName().equalsIgnoreCase("earth")) {
-            return false;
-        }
-
-        if (args.length == 0) {
-            sender.sendMessage("§6EarthBound §7- Real Earth Simulation");
-            sender.sendMessage("§e/earth locate §7- Show your EarthBound location");
-            return true;
-        }
-
-        if (args[0].equalsIgnoreCase("locate")) {
-
-            if (!(sender instanceof Player player)) {
-                sender.sendMessage("This command can only be used by a player.");
-                return true;
+            if (args.length == 0) {
+                source.getSender().sendPlainMessage("EarthBound - Real Earth Simulation");
+                source.getSender().sendPlainMessage("/earth locate - Show your EarthBound location");
+                return;
             }
 
-            double x = player.getLocation().getX();
-            double y = player.getLocation().getY();
-            double z = player.getLocation().getZ();
+            if (args[0].equalsIgnoreCase("locate")) {
 
-            player.sendMessage("§6§lEARTHBOUND");
-            player.sendMessage("§7Minecraft Coordinates:");
-            player.sendMessage("§fX: §e" + String.format("%.2f", x));
-            player.sendMessage("§fY: §e" + String.format("%.2f", y));
-            player.sendMessage("§fZ: §e" + String.format("%.2f", z));
+                if (!(source.getSender() instanceof Player player)) {
+                    source.getSender().sendPlainMessage(
+                            "This command can only be used by a player."
+                    );
+                    return;
+                }
 
-            player.sendMessage("§7Earth coordinates: §cComing soon");
-            player.sendMessage("§7Real-world location: §cComing soon");
+                double x = player.getLocation().getX();
+                double y = player.getLocation().getY();
+                double z = player.getLocation().getZ();
 
-            return true;
-        }
+                player.sendPlainMessage("EARTHBOUND");
+                player.sendPlainMessage("Minecraft Coordinates:");
+                player.sendPlainMessage("X: " + String.format("%.2f", x));
+                player.sendPlainMessage("Y: " + String.format("%.2f", y));
+                player.sendPlainMessage("Z: " + String.format("%.2f", z));
+                player.sendPlainMessage("Earth coordinates: Coming soon");
+                player.sendPlainMessage("Real-world location: Coming soon");
 
-        sender.sendMessage("§cUnknown EarthBound command.");
-        return true;
+                return;
+            }
+
+            source.getSender().sendPlainMessage("Unknown EarthBound command.");
+        });
     }
 }
