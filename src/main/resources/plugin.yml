@@ -1,0 +1,17 @@
+name: EarthBound
+version: 0.1.0
+main: com.earthbound.EarthBound
+api-version: '26.2'
+description: Real Earth simulation server for Minecraft
+author: EarthBound
+
+commands:
+  earth:
+    description: EarthBound commands
+    usage: /earth locate
+    permission: earthbound.locate
+
+permissions:
+  earthbound.locate:
+    description: Allows use of /earth locate
+    default: true
