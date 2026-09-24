@@ -10,30 +10,20 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class EarthElevation {
 
-    // Keeps elevations we've already downloaded in memory.
     private static final Map<String, Double> CACHE =
             new ConcurrentHashMap<>();
 
-    /**
-     * Returns real-world ground elevation in meters.
-     *
-     * If USGS cannot be reached, this returns 0.
-     */
     public static double getElevation(
             double latitude,
             double longitude) {
 
-        // Round the location before caching.
-        // This prevents nearly identical coordinates
-        // from creating unnecessary requests.
         double roundedLat =
                 Math.round(latitude * 100000.0) / 100000.0;
 
         double roundedLon =
                 Math.round(longitude * 100000.0) / 100000.0;
 
-        String key =
-                roundedLat + "," + roundedLon;
+        String key = roundedLat + "," + roundedLon;
 
         Double cached = CACHE.get(key);
 
@@ -51,14 +41,27 @@ public class EarthElevation {
                     + "&wkid=4326"
                     + "&includeDate=false";
 
+            System.out.println(
+                    "[EarthBound] Requesting elevation: "
+                    + address
+            );
+
             URL url = URI.create(address).toURL();
 
             HttpURLConnection connection =
                     (HttpURLConnection) url.openConnection();
 
             connection.setRequestMethod("GET");
-            connection.setConnectTimeout(3000);
-            connection.setReadTimeout(3000);
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+
+            int responseCode =
+                    connection.getResponseCode();
+
+            System.out.println(
+                    "[EarthBound] USGS response code: "
+                    + responseCode
+            );
 
             try (BufferedReader reader =
                          new BufferedReader(
@@ -74,8 +77,18 @@ public class EarthElevation {
                     response.append(line);
                 }
 
+                System.out.println(
+                        "[EarthBound] USGS response: "
+                        + response
+                );
+
                 double elevation =
                         parseElevation(response.toString());
+
+                System.out.println(
+                        "[EarthBound] Parsed elevation: "
+                        + elevation
+                );
 
                 CACHE.put(key, elevation);
 
@@ -91,6 +104,8 @@ public class EarthElevation {
                     + longitude
             );
 
+            exception.printStackTrace();
+
             return 0.0;
         }
     }
@@ -103,17 +118,27 @@ public class EarthElevation {
         int start = json.indexOf(marker);
 
         if (start == -1) {
+
+            System.out.println(
+                    "[EarthBound] Could not find elevation value in response."
+            );
+
             return 0.0;
         }
 
         start += marker.length();
 
+        while (start < json.length()
+                && Character.isWhitespace(
+                        json.charAt(start))) {
+            start++;
+        }
+
         int end = start;
 
         while (end < json.length()) {
 
-            char character =
-                    json.charAt(end);
+            char character = json.charAt(end);
 
             if ((character >= '0' && character <= '9')
                     || character == '.'
@@ -122,7 +147,6 @@ public class EarthElevation {
                 end++;
 
             } else {
-
                 break;
             }
         }
@@ -134,6 +158,10 @@ public class EarthElevation {
             );
 
         } catch (Exception exception) {
+
+            System.out.println(
+                    "[EarthBound] Could not parse elevation number."
+            );
 
             return 0.0;
         }
