@@ -2,26 +2,32 @@ package com.earthbound;
 
 public class EarthCoordinates {
 
-    private static final double SCALE = 2.0;
+    // Guemes Island reference point
+    private static final double START_LAT = 48.5500;
+    private static final double START_LON = -122.5800;
 
-    // Starting point: Guemes Island, Washington
-    private static final double START_LAT = 48.56;
-    private static final double START_LON = -122.59;
+    // Minecraft scale
+    // 1 block = 2 meters
+    private static final double METERS_PER_BLOCK = 2.0;
 
-    public static double getLatitude(double x, double z) {
+    public static double getLatitude(int x, int z) {
 
-        double metersNorth = z * SCALE;
+        double metersNorth = -z * METERS_PER_BLOCK;
 
-        return START_LAT + (metersNorth / 111000.0);
+        double latitudeChange = metersNorth / 111320.0;
+
+        return START_LAT + latitudeChange;
     }
 
-    public static double getLongitude(double x, double z) {
 
-        double metersEast = x * SCALE;
+    public static double getLongitude(int x, int z) {
 
-        double longitudeDistance =
-                111000.0 * Math.cos(Math.toRadians(START_LAT));
+        double metersEast = x * METERS_PER_BLOCK;
 
-        return START_LON + (metersEast / longitudeDistance);
+        double longitudeChange =
+                metersEast /
+                (111320.0 * Math.cos(Math.toRadians(START_LAT)));
+
+        return START_LON + longitudeChange;
     }
 }
