@@ -16,6 +16,7 @@ public class EarthSpawn implements Listener {
         this.plugin = plugin;
     }
 
+
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
 
@@ -23,18 +24,21 @@ public class EarthSpawn implements Listener {
 
         World world = player.getWorld();
 
-        // Temporary Guemes Island spawn
+
+        // Guemes Island Ferry Terminal spawn
         Location guemesSpawn = new Location(
                 world,
-                0,
+                -624,
                 80,
-                0
+                -544
         );
+
 
         player.teleport(guemesSpawn);
 
+
         player.sendMessage(
-                "§6EarthBound §7spawned you at Guemes Island test area."
+                "§6EarthBound §7spawned at Guemes Island Ferry Terminal."
         );
     }
 }
