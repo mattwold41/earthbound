@@ -1,6 +1,5 @@
 package com.earthbound;
 
-import io.papermc.paper.command.brigadier.CommandSourceStack;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -10,18 +9,18 @@ public class EarthBound extends JavaPlugin {
     public void onEnable() {
         getLogger().info("EarthBound is now online!");
 
-        registerCommand("earth", (CommandSourceStack source, String[] args) -> {
+        this.registerCommand("earth", (sender, args) -> {
 
             if (args.length == 0) {
-                source.getSender().sendPlainMessage("EarthBound - Real Earth Simulation");
-                source.getSender().sendPlainMessage("/earth locate - Show your EarthBound location");
+                sender.sendPlainMessage("EarthBound - Real Earth Simulation");
+                sender.sendPlainMessage("/earth locate - Show your EarthBound location");
                 return;
             }
 
             if (args[0].equalsIgnoreCase("locate")) {
 
-                if (!(source.getSender() instanceof Player player)) {
-                    source.getSender().sendPlainMessage(
+                if (!(sender instanceof Player player)) {
+                    sender.sendPlainMessage(
                             "This command can only be used by a player."
                     );
                     return;
@@ -42,7 +41,7 @@ public class EarthBound extends JavaPlugin {
                 return;
             }
 
-            source.getSender().sendPlainMessage("Unknown EarthBound command.");
+            sender.sendPlainMessage("Unknown EarthBound command.");
         });
     }
 }
