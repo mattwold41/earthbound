@@ -1,48 +1,111 @@
 package com.earthbound;
 
 import org.bukkit.Material;
-import org.bukkit.Chunk;
-import org.bukkit.Location;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.Listener;
-import org.bukkit.event.aworld.ChunkLoadEvent;
-import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.generator.WorldInfo;
 
-public class EarthGenerator implements Listener {
+import java.util.Random;
 
-    private final JavaPlugin plugin;
+public class EarthGenerator extends ChunkGenerator {
 
-    public EarthGenerator(JavaPlugin plugin) {
-        this.plugin = plugin;
-    }
+    private static final int ISLAND_SIZE = 160;
 
-    @EventHandler
-    public void onChunkLoad(ChunkLoadEvent event) {
+    @Override
+    public void generateNoise(
+            WorldInfo worldInfo,
+            Random random,
+            int chunkX,
+            int chunkZ,
+            ChunkData chunkData) {
 
-        Chunk chunk = event.getChunk();
+        int startX = chunkX * 16;
+        int startZ = chunkZ * 16;
 
-        int x = chunk.getX() * 16;
-        int z = chunk.getZ() * 16;
+        for (int x = 0; x < 16; x++) {
 
-        double latitude =
-                EarthCoordinates.getLatitude(x, z);
+            for (int z = 0; z < 16; z++) {
 
-        double longitude =
-                EarthCoordinates.getLongitude(x, z);
+                int worldX = startX + x;
+                int worldZ = startZ + z;
 
-        if (EarthLocation.isNearGuemes(latitude, longitude)) {
+                double distance = Math.sqrt(
+                        worldX * worldX +
+                        worldZ * worldZ
+                );
 
-            generateGuemesTest(chunk);
+
+                // Island
+                if (distance < ISLAND_SIZE) {
+
+                    int height = 62;
+
+
+                    // Hills
+                    if (distance < 100) {
+                        height += (int)((100 - distance) / 10);
+                    }
+
+
+                    // Stone base
+                    for (int y = 0; y < height - 5; y++) {
+
+                        chunkData.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.STONE
+                        );
+                    }
+
+
+                    // Dirt
+                    for (int y = height - 5; y < height; y++) {
+
+                        chunkData.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.DIRT
+                        );
+                    }
+
+
+                    // Grass
+                    chunkData.setBlock(
+                            x,
+                            height,
+                            z,
+                            Material.GRASS_BLOCK
+                    );
+
+
+                    // Beach
+                    if (distance > 120) {
+
+                        chunkData.setBlock(
+                                x,
+                                height,
+                                z,
+                                Material.SAND
+                        );
+                    }
+
+
+                } else {
+
+
+                    // Ocean
+                    for (int y = 0; y < 62; y++) {
+
+                        chunkData.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.WATER
+                        );
+                    }
+                }
+            }
         }
-    }
-
-
-    private void generateGuemesTest(Chunk chunk) {
-
-        Location location =
-                chunk.getBlock(8, 64, 8).getLocation();
-
-        location.getBlock()
-                .setType(Material.GRASS_BLOCK);
     }
 }
