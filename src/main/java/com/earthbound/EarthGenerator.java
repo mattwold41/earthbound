@@ -8,7 +8,14 @@ import java.util.Random;
 
 public class EarthGenerator extends ChunkGenerator {
 
-    private static final int ISLAND_RADIUS = 180;
+    // Guemes Ferry Terminal spawn reference
+    private static final int START_X = -624;
+    private static final int START_Z = -544;
+
+    // Approximate Guemes Island size
+    // 1 block = 2 meters
+    private static final int ISLAND_RADIUS = 2000;
+
 
     @Override
     public void generateNoise(
@@ -18,43 +25,60 @@ public class EarthGenerator extends ChunkGenerator {
             int chunkZ,
             ChunkData chunkData) {
 
+
         int startX = chunkX * 16;
         int startZ = chunkZ * 16;
 
+
         for (int x = 0; x < 16; x++) {
+
             for (int z = 0; z < 16; z++) {
+
 
                 int worldX = startX + x;
                 int worldZ = startZ + z;
 
+
+                // Distance from ferry terminal
                 double distance = Math.sqrt(
-                        worldX * worldX +
-                        worldZ * worldZ
+                        Math.pow(worldX - START_X, 2) +
+                        Math.pow(worldZ - START_Z, 2)
                 );
 
-                // Natural coastline variation
-                double variation =
-                        Math.sin(worldX * 0.05) * 12 +
-                        Math.cos(worldZ * 0.04) * 10 +
-                        Math.sin((worldX + worldZ) * 0.03) * 8;
 
-                double islandEdge = ISLAND_RADIUS + variation;
+                // Natural coastline variation
+                double coastline =
+                        Math.sin(worldX * 0.003) * 150 +
+                        Math.cos(worldZ * 0.004) * 120 +
+                        Math.sin((worldX + worldZ) * 0.002) * 100;
+
+
+                double islandEdge =
+                        ISLAND_RADIUS + coastline;
+
 
                 if (distance < islandEdge) {
 
-                    // Base island height
+
+                    // Base elevation
                     int height = 62;
 
-                    // Raise center of island
-                    if (distance < 120) {
-                        height += (int)((120 - distance) / 8);
+
+                    // Interior hills
+                    if (distance < 1200) {
+
+                        height +=
+                                (int)((1200 - distance) / 30);
                     }
 
-                    // More hills
+
+                    // Natural variation
                     height += random.nextInt(3);
 
-                    // Deep stone base
+
+                    // Stone foundation
                     for (int y = 0; y < height - 6; y++) {
+
                         chunkData.setBlock(
                                 x,
                                 y,
@@ -63,8 +87,13 @@ public class EarthGenerator extends ChunkGenerator {
                         );
                     }
 
-                    // Dirt layer
-                    for (int y = height - 6; y < height; y++) {
+
+                    // Soil
+                    for (
+                            int y = height - 6;
+                            y < height;
+                            y++) {
+
                         chunkData.setBlock(
                                 x,
                                 y,
@@ -73,8 +102,9 @@ public class EarthGenerator extends ChunkGenerator {
                         );
                     }
 
-                    // Beach near shoreline
-                    if (distance > islandEdge - 18) {
+
+                    // Beaches near shoreline
+                    if (distance > islandEdge - 40) {
 
                         chunkData.setBlock(
                                 x,
@@ -93,7 +123,9 @@ public class EarthGenerator extends ChunkGenerator {
                         );
                     }
 
+
                 } else {
+
 
                     // Ocean
                     for (int y = 0; y < 62; y++) {
