@@ -37,3 +37,4 @@ public class EarthSpawn implements Listener {
                 "§6EarthBound §7spawned you at Guemes Island test area."
         );
     }
+}
