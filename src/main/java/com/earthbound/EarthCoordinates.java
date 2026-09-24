@@ -8,18 +8,21 @@ public class EarthCoordinates {
     private static final double START_LON = -122.624694;
 
 
-    // Minecraft location of the anchor
-    private static final int START_X = -789;
-    private static final int START_Z = -501;
+    // Minecraft coordinates of the spawn point
+    // This location matches the ferry terminal
+    private static final int START_X = -624;
+    private static final int START_Z = -544;
 
 
     // EarthBound scale
-    // 1 block = 2 meters
+    // 1 Minecraft block = 2 meters
     private static final double METERS_PER_BLOCK = 2.0;
 
 
     public static double getLatitude(int x, int z) {
 
+        // Positive Z goes south in Minecraft
+        // Negative Z goes north
         double metersNorth =
                 (START_Z - z) * METERS_PER_BLOCK;
 
@@ -34,6 +37,8 @@ public class EarthCoordinates {
 
     public static double getLongitude(int x, int z) {
 
+        // Positive X goes east
+        // Negative X goes west
         double metersEast =
                 (x - START_X) * METERS_PER_BLOCK;
 
