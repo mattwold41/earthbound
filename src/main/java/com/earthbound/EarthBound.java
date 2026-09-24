@@ -6,7 +6,6 @@ import org.bukkit.generator.WorldInfo;
 
 import java.util.Random;
 
-public class EarthGenerator extends ChunkGenerator {
 
     private static final int ISLAND_RADIUS = 160;
 
