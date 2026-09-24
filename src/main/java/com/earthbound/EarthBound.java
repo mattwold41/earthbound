@@ -1,13 +1,9 @@
 package com.earthbound;
 
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public class EarthBound extends JavaPlugin implements CommandExecutor {
+public class EarthBound extends JavaPlugin {
 
     @Override
     public void onEnable() {
@@ -15,13 +11,11 @@ public class EarthBound extends JavaPlugin implements CommandExecutor {
         getLogger().info("EarthBound is now online!");
 
         if (getCommand("earth") != null) {
-            getCommand("earth").setExecutor(this);
+            getCommand("earth").setExecutor(new EarthCommand());
         }
     }
 
 
-    // Step 2C:
-    // This tells Paper to use EarthGenerator
     @Override
     public ChunkGenerator getDefaultWorldGenerator(
             String worldName,
@@ -30,75 +24,5 @@ public class EarthBound extends JavaPlugin implements CommandExecutor {
         getLogger().info("EarthBound generator loading...");
 
         return new EarthGenerator();
-    }
-
-
-    @Override
-    public boolean onCommand(
-            CommandSender sender,
-            Command command,
-            String label,
-            String[] args) {
-
-
-        if (!command.getName().equalsIgnoreCase("earth")) {
-            return false;
-        }
-
-
-        if (args.length == 0) {
-
-            sender.sendMessage("§6§lEarthBound");
-            sender.sendMessage("§7Real Earth Simulation");
-            sender.sendMessage("§e/earth locate");
-
-            return true;
-        }
-
-
-        if (args[0].equalsIgnoreCase("locate")) {
-
-
-            if (!(sender instanceof Player player)) {
-
-                sender.sendMessage("Players only.");
-
-                return true;
-            }
-
-
-            double x = player.getLocation().getX();
-            double y = player.getLocation().getY();
-            double z = player.getLocation().getZ();
-
-
-            player.sendMessage("§6§lEARTHBOUND");
-
-            player.sendMessage("§7Minecraft Coordinates:");
-            player.sendMessage(
-                    "§fX: §e" + String.format("%.2f", x)
-            );
-            player.sendMessage(
-                    "§fY: §e" + String.format("%.2f", y)
-            );
-            player.sendMessage(
-                    "§fZ: §e" + String.format("%.2f", z)
-            );
-
-
-            player.sendMessage(
-                    "§7Region: §aGuemes Island Test Area"
-            );
-
-
-            return true;
-        }
-
-
-        sender.sendMessage(
-                "§cUnknown EarthBound command."
-        );
-
-        return true;
     }
 }
