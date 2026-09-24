@@ -10,8 +10,16 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class EarthElevation {
 
+    // EarthBound scale:
+    // 1 Minecraft block = 2 real-world meters
+    private static final double METERS_PER_BLOCK = 2.0;
+
+    // Minecraft ocean surface
+    private static final int SEA_LEVEL = 63;
+
     private static final Map<String, Double> CACHE =
             new ConcurrentHashMap<>();
+
 
     public static double getElevation(
             double latitude,
@@ -112,6 +120,26 @@ public class EarthElevation {
 
             return 0.0;
         }
+    }
+
+
+    /*
+     * Converts real-world elevation into
+     * an EarthBound Minecraft Y coordinate.
+     *
+     * EarthBound scale:
+     * 2 real meters = 1 Minecraft block.
+     *
+     * Real sea level = Minecraft Y 63.
+     */
+    public static int getMinecraftHeight(
+            double elevationMeters) {
+
+        double blocksAboveSeaLevel =
+                elevationMeters / METERS_PER_BLOCK;
+
+        return SEA_LEVEL +
+                (int) Math.round(blocksAboveSeaLevel);
     }
 
 
