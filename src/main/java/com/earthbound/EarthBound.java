@@ -1,27 +1,36 @@
 package com.earthbound;
 
 import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public class EarthBound extends JavaPlugin {
+public class EarthBound extends JavaPlugin implements CommandExecutor {
 
     @Override
     public void onEnable() {
         getLogger().info("EarthBound is now online!");
+
+        if (getCommand("earth") != null) {
+            getCommand("earth").setExecutor(this);
+        }
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+    public boolean onCommand(
+            CommandSender sender,
+            Command command,
+            String label,
+            String[] args) {
 
         if (!command.getName().equalsIgnoreCase("earth")) {
             return false;
         }
 
         if (args.length == 0) {
-            sender.sendMessage("EarthBound - Real Earth Simulation");
-            sender.sendMessage("/earth locate");
+            sender.sendMessage("§6EarthBound §7- Real Earth Simulation");
+            sender.sendMessage("§e/earth locate §7- Show your EarthBound location");
             return true;
         }
 
@@ -32,16 +41,22 @@ public class EarthBound extends JavaPlugin {
                 return true;
             }
 
-            player.sendMessage("EARTHBOUND");
-            player.sendMessage("X: " + player.getLocation().getX());
-            player.sendMessage("Y: " + player.getLocation().getY());
-            player.sendMessage("Z: " + player.getLocation().getZ());
-            player.sendMessage("Real-world location: Coming soon");
+            double x = player.getLocation().getX();
+            double y = player.getLocation().getY();
+            double z = player.getLocation().getZ();
+
+            player.sendMessage("§6§lEARTHBOUND");
+            player.sendMessage("§7Minecraft Coordinates:");
+            player.sendMessage("§fX: §e" + String.format("%.2f", x));
+            player.sendMessage("§fY: §e" + String.format("%.2f", y));
+            player.sendMessage("§fZ: §e" + String.format("%.2f", z));
+            player.sendMessage("§7Earth coordinates: §cComing soon");
+            player.sendMessage("§7Real-world location: §cComing soon");
 
             return true;
         }
 
-        sender.sendMessage("Unknown EarthBound command.");
+        sender.sendMessage("§cUnknown EarthBound command.");
         return true;
     }
 }
