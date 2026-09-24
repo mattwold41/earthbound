@@ -8,13 +8,15 @@ import java.util.Random;
 
 public class EarthGenerator extends ChunkGenerator {
 
-    // Guemes Ferry Terminal spawn reference
+    // Guemes Ferry Terminal reference
     private static final int START_X = -624;
     private static final int START_Z = -544;
 
-    // Approximate Guemes Island size
     // 1 block = 2 meters
+    // Approximate Guemes area
     private static final int ISLAND_RADIUS = 2000;
+
+    private static final int SEA_LEVEL = 63;
 
 
     @Override
@@ -39,14 +41,13 @@ public class EarthGenerator extends ChunkGenerator {
                 int worldZ = startZ + z;
 
 
-                // Distance from ferry terminal
                 double distance = Math.sqrt(
                         Math.pow(worldX - START_X, 2) +
                         Math.pow(worldZ - START_Z, 2)
                 );
 
 
-                // Natural coastline variation
+                // Coastline variation
                 double coastline =
                         Math.sin(worldX * 0.003) * 150 +
                         Math.cos(worldZ * 0.004) * 120 +
@@ -57,27 +58,51 @@ public class EarthGenerator extends ChunkGenerator {
                         ISLAND_RADIUS + coastline;
 
 
+                // Default ocean floor
+                for (int y = 0; y < SEA_LEVEL - 5; y++) {
+
+                    chunkData.setBlock(
+                            x,
+                            y,
+                            z,
+                            Material.STONE
+                    );
+                }
+
+
+                // Ocean
+                for (int y = SEA_LEVEL - 5; y <= SEA_LEVEL; y++) {
+
+                    chunkData.setBlock(
+                            x,
+                            y,
+                            z,
+                            Material.WATER
+                    );
+                }
+
+
+                // Land generation
                 if (distance < islandEdge) {
 
 
-                    // Base elevation
-                    int height = 62;
+                    int height = SEA_LEVEL;
 
 
-                    // Interior hills
-                    if (distance < 1200) {
+                    // Gentle hills inland
+                    if (distance < 1400) {
 
                         height +=
-                                (int)((1200 - distance) / 30);
+                                (int)((1400 - distance) / 40);
                     }
 
 
-                    // Natural variation
+                    // Small terrain variation
                     height += random.nextInt(3);
 
 
-                    // Stone foundation
-                    for (int y = 0; y < height - 6; y++) {
+                    // Replace ocean with land
+                    for (int y = 0; y < height - 5; y++) {
 
                         chunkData.setBlock(
                                 x,
@@ -88,9 +113,9 @@ public class EarthGenerator extends ChunkGenerator {
                     }
 
 
-                    // Soil
+                    // Soil layer
                     for (
-                            int y = height - 6;
+                            int y = height - 5;
                             y < height;
                             y++) {
 
@@ -103,8 +128,8 @@ public class EarthGenerator extends ChunkGenerator {
                     }
 
 
-                    // Beaches near shoreline
-                    if (distance > islandEdge - 40) {
+                    // Beach edge
+                    if (distance > islandEdge - 50) {
 
                         chunkData.setBlock(
                                 x,
@@ -120,21 +145,6 @@ public class EarthGenerator extends ChunkGenerator {
                                 height,
                                 z,
                                 Material.GRASS_BLOCK
-                        );
-                    }
-
-
-                } else {
-
-
-                    // Ocean
-                    for (int y = 0; y < 62; y++) {
-
-                        chunkData.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.WATER
                         );
                     }
                 }
