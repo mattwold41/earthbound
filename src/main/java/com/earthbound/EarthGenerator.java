@@ -5,7 +5,7 @@ import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.event.aworld.ChunkLoadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class EarthGenerator implements Listener {
