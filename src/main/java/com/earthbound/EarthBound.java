@@ -1,98 +1,104 @@
 package com.earthbound;
 
-import org.bukkit.Material;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.bukkit.generator.ChunkGenerator;
-import org.bukkit.generator.WorldInfo;
+import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.Random;
-
-public class EarthGenerator extends ChunkGenerator {
-
-    private static final int ISLAND_SIZE = 160;
+public class EarthBound extends JavaPlugin implements CommandExecutor {
 
     @Override
-    public void generateNoise(
-            WorldInfo worldInfo,
-            Random random,
-            int chunkX,
-            int chunkZ,
-            ChunkData chunkData) {
+    public void onEnable() {
 
-        int startX = chunkX * 16;
-        int startZ = chunkZ * 16;
+        getLogger().info("EarthBound is now online!");
 
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
-
-                int worldX = startX + x;
-                int worldZ = startZ + z;
-
-                double distance = Math.sqrt(
-                        worldX * worldX +
-                        worldZ * worldZ
-                );
-
-                // Island
-                if (distance < ISLAND_SIZE) {
-
-                    int height = 62;
-
-                    // Hills in center
-                    if (distance < 100) {
-                        height += (int)((100 - distance) / 10);
-                    }
-
-                    // Stone
-                    for (int y = 0; y < height - 5; y++) {
-                        chunkData.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.STONE
-                        );
-                    }
-
-                    // Dirt
-                    for (int y = height - 5; y < height; y++) {
-                        chunkData.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.DIRT
-                        );
-                    }
-
-                    // Grass
-                    chunkData.setBlock(
-                            x,
-                            height,
-                            z,
-                            Material.GRASS_BLOCK
-                    );
-
-                    // Beach
-                    if (distance > 120) {
-                        chunkData.setBlock(
-                                x,
-                                height,
-                                z,
-                                Material.SAND
-                        );
-                    }
-
-                } else {
-
-                    // Ocean
-                    for (int y = 0; y < 62; y++) {
-                        chunkData.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.WATER
-                        );
-                    }
-                }
-            }
+        if (getCommand("earth") != null) {
+            getCommand("earth").setExecutor(this);
         }
+    }
+
+
+    // Step 2C:
+    // This tells Paper to use EarthGenerator
+    @Override
+    public ChunkGenerator getDefaultWorldGenerator(
+            String worldName,
+            String id) {
+
+        getLogger().info("EarthBound generator loading...");
+
+        return new EarthGenerator();
+    }
+
+
+    @Override
+    public boolean onCommand(
+            CommandSender sender,
+            Command command,
+            String label,
+            String[] args) {
+
+
+        if (!command.getName().equalsIgnoreCase("earth")) {
+            return false;
+        }
+
+
+        if (args.length == 0) {
+
+            sender.sendMessage("§6§lEarthBound");
+            sender.sendMessage("§7Real Earth Simulation");
+            sender.sendMessage("§e/earth locate");
+
+            return true;
+        }
+
+
+        if (args[0].equalsIgnoreCase("locate")) {
+
+
+            if (!(sender instanceof Player player)) {
+
+                sender.sendMessage("Players only.");
+
+                return true;
+            }
+
+
+            double x = player.getLocation().getX();
+            double y = player.getLocation().getY();
+            double z = player.getLocation().getZ();
+
+
+            player.sendMessage("§6§lEARTHBOUND");
+
+            player.sendMessage("§7Minecraft Coordinates:");
+            player.sendMessage(
+                    "§fX: §e" + String.format("%.2f", x)
+            );
+            player.sendMessage(
+                    "§fY: §e" + String.format("%.2f", y)
+            );
+            player.sendMessage(
+                    "§fZ: §e" + String.format("%.2f", z)
+            );
+
+
+            player.sendMessage(
+                    "§7Region: §aGuemes Island Test Area"
+            );
+
+
+            return true;
+        }
+
+
+        sender.sendMessage(
+                "§cUnknown EarthBound command."
+        );
+
+        return true;
     }
 }
