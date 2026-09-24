@@ -29,8 +29,9 @@ public class EarthBound extends JavaPlugin implements CommandExecutor {
         }
 
         if (args.length == 0) {
-            sender.sendMessage("§6EarthBound §7- Real Earth Simulation");
-            sender.sendMessage("§e/earth locate §7- Show your EarthBound location");
+            sender.sendMessage("§6§lEarthBound");
+            sender.sendMessage("§7Real Earth Simulation");
+            sender.sendMessage("§e/earth locate");
             return true;
         }
 
@@ -45,13 +46,20 @@ public class EarthBound extends JavaPlugin implements CommandExecutor {
             double y = player.getLocation().getY();
             double z = player.getLocation().getZ();
 
+            double latitude = z / 111000.0;
+            double longitude = x / 111000.0;
+
             player.sendMessage("§6§lEARTHBOUND");
             player.sendMessage("§7Minecraft Coordinates:");
             player.sendMessage("§fX: §e" + String.format("%.2f", x));
             player.sendMessage("§fY: §e" + String.format("%.2f", y));
             player.sendMessage("§fZ: §e" + String.format("%.2f", z));
-            player.sendMessage("§7Earth coordinates: §cComing soon");
-            player.sendMessage("§7Real-world location: §cComing soon");
+
+            player.sendMessage("§7Earth Coordinates:");
+            player.sendMessage("§fLatitude: §a" + String.format("%.5f", latitude));
+            player.sendMessage("§fLongitude: §a" + String.format("%.5f", longitude));
+
+            player.sendMessage("§7Real-world location: §aMapping active");
 
             return true;
         }
