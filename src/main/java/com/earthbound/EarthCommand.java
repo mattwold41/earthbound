@@ -25,8 +25,11 @@ public class EarthCommand implements CommandExecutor {
         int x = player.getLocation().getBlockX();
         int z = player.getLocation().getBlockZ();
 
-        double latitude = EarthCoordinates.getLatitude(x, z);
-        double longitude = EarthCoordinates.getLongitude(x, z);
+        double latitude =
+                EarthCoordinates.getLatitude(x, z);
+
+        double longitude =
+                EarthCoordinates.getLongitude(x, z);
 
         player.sendMessage(
                 ChatColor.GOLD + "EarthBound Coordinates"
@@ -52,6 +55,35 @@ public class EarthCommand implements CommandExecutor {
                 ChatColor.WHITE +
                 "X=" + x + " Z=" + z
         );
+
+        player.sendMessage(
+                ChatColor.GRAY +
+                "Downloading real Earth elevation..."
+        );
+
+        player.getServer()
+                .getScheduler()
+                .runTaskAsynchronously(
+                        EarthBound.getPlugin(EarthBound.class),
+                        () -> {
+
+                            double elevation =
+                                    EarthElevation.getElevation(
+                                            latitude,
+                                            longitude
+                                    );
+
+                            player.sendMessage(
+                                    ChatColor.GREEN +
+                                    "Real elevation: " +
+                                    ChatColor.WHITE +
+                                    String.format(
+                                            "%.1f meters",
+                                            elevation
+                                    )
+                            );
+                        }
+                );
 
         return true;
     }
