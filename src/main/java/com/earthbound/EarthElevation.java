@@ -23,7 +23,8 @@ public class EarthElevation {
         double roundedLon =
                 Math.round(longitude * 100000.0) / 100000.0;
 
-        String key = roundedLat + "," + roundedLon;
+        String key =
+                roundedLat + "," + roundedLon;
 
         Double cached = CACHE.get(key);
 
@@ -46,7 +47,8 @@ public class EarthElevation {
                     + address
             );
 
-            URL url = URI.create(address).toURL();
+            URL url =
+                    URI.create(address).toURL();
 
             HttpURLConnection connection =
                     (HttpURLConnection) url.openConnection();
@@ -83,7 +85,9 @@ public class EarthElevation {
                 );
 
                 double elevation =
-                        parseElevation(response.toString());
+                        parseElevation(
+                                response.toString()
+                        );
 
                 System.out.println(
                         "[EarthBound] Parsed elevation: "
@@ -111,11 +115,20 @@ public class EarthElevation {
     }
 
 
-    private static double parseElevation(String json) {
+    private static double parseElevation(
+            String json) {
 
-        String marker = "\"value\":";
+        /*
+         * USGS currently returns elevation like:
+         *
+         * "value":"53.009941101"
+         */
 
-        int start = json.indexOf(marker);
+        String marker =
+                "\"value\":\"";
+
+        int start =
+                json.indexOf(marker);
 
         if (start == -1) {
 
@@ -128,19 +141,15 @@ public class EarthElevation {
 
         start += marker.length();
 
-        while (start < json.length()
-                && Character.isWhitespace(
-                        json.charAt(start))) {
-            start++;
-        }
-
         int end = start;
 
         while (end < json.length()) {
 
-            char character = json.charAt(end);
+            char character =
+                    json.charAt(end);
 
-            if ((character >= '0' && character <= '9')
+            if ((character >= '0'
+                    && character <= '9')
                     || character == '.'
                     || character == '-') {
 
@@ -154,7 +163,10 @@ public class EarthElevation {
         try {
 
             return Double.parseDouble(
-                    json.substring(start, end)
+                    json.substring(
+                            start,
+                            end
+                    )
             );
 
         } catch (Exception exception) {
