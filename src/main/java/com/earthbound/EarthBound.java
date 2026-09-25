@@ -21,70 +21,6 @@ public class EarthBound extends JavaPlugin {
                     new EarthCommand()
             );
         }
-
-
-        /*
-         * Run USGS tests asynchronously so the
-         * Minecraft server is not frozen while
-         * downloading Earth data.
-         */
-        getServer()
-                .getScheduler()
-                .runTaskAsynchronously(
-                        this,
-                        () -> {
-
-                            getLogger().info(
-                                    "Testing USGS 3DEP terrain service..."
-                            );
-
-                            boolean connected =
-                                    EarthTerrainLoader
-                                            .test3DEPConnection();
-
-
-                            if (!connected) {
-
-                                getLogger().warning(
-                                        "USGS 3DEP terrain service test failed."
-                                );
-
-                                return;
-                            }
-
-
-                            getLogger().info(
-                                    "USGS 3DEP terrain service is ready!"
-                            );
-
-
-                            /*
-                             * First real terrain tile test.
-                             */
-                            getLogger().info(
-                                    "Testing Guemes Island terrain download..."
-                            );
-
-
-                            boolean guemesDownloaded =
-                                    EarthTerrainLoader
-                                            .testGuemesTerrainTile();
-
-
-                            if (guemesDownloaded) {
-
-                                getLogger().info(
-                                        "Guemes Island terrain data is available!"
-                                );
-
-                            } else {
-
-                                getLogger().warning(
-                                        "Guemes Island terrain download failed."
-                                );
-                            }
-                        }
-                );
     }
 
 
@@ -96,6 +32,39 @@ public class EarthBound extends JavaPlugin {
         getLogger().info(
                 "EarthBound generator loading..."
         );
+
+        /*
+         * Load the Guemes USGS elevation raster
+         * BEFORE Minecraft begins generating
+         * EarthBound terrain.
+         *
+         * This is one raster download, NOT
+         * one Internet request per block.
+         */
+        if (!EarthTerrainLoader.isGuemesTerrainLoaded()) {
+
+            getLogger().info(
+                    "Loading Guemes terrain before world generation..."
+            );
+
+            boolean loaded =
+                    EarthTerrainLoader
+                            .loadGuemesTerrainTile();
+
+            if (loaded) {
+
+                getLogger().info(
+                        "Guemes terrain loaded and ready for generation!"
+                );
+
+            } else {
+
+                getLogger().warning(
+                        "Guemes terrain could not be loaded. "
+                                + "Flat fallback terrain will be used."
+                );
+            }
+        }
 
         return new EarthGenerator();
     }
