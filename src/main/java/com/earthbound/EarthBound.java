@@ -8,14 +8,26 @@ public class EarthBound extends JavaPlugin {
     @Override
     public void onEnable() {
 
-        getLogger().info("EarthBound is now online!");
+        getLogger().info(
+                "EarthBound is now online!"
+        );
 
+        /*
+         * Register /earth command.
+         */
         if (getCommand("earth") != null) {
+
             getCommand("earth").setExecutor(
                     new EarthCommand()
             );
         }
 
+
+        /*
+         * Run USGS tests asynchronously so the
+         * Minecraft server is not frozen while
+         * downloading Earth data.
+         */
         getServer()
                 .getScheduler()
                 .runTaskAsynchronously(
@@ -30,16 +42,45 @@ public class EarthBound extends JavaPlugin {
                                     EarthTerrainLoader
                                             .test3DEPConnection();
 
-                            if (connected) {
+
+                            if (!connected) {
+
+                                getLogger().warning(
+                                        "USGS 3DEP terrain service test failed."
+                                );
+
+                                return;
+                            }
+
+
+                            getLogger().info(
+                                    "USGS 3DEP terrain service is ready!"
+                            );
+
+
+                            /*
+                             * First real terrain tile test.
+                             */
+                            getLogger().info(
+                                    "Testing Guemes Island terrain download..."
+                            );
+
+
+                            boolean guemesDownloaded =
+                                    EarthTerrainLoader
+                                            .testGuemesTerrainTile();
+
+
+                            if (guemesDownloaded) {
 
                                 getLogger().info(
-                                        "USGS 3DEP terrain service is ready!"
+                                        "Guemes Island terrain data is available!"
                                 );
 
                             } else {
 
                                 getLogger().warning(
-                                        "USGS 3DEP terrain service test failed."
+                                        "Guemes Island terrain download failed."
                                 );
                             }
                         }
