@@ -22,15 +22,12 @@ public class EarthGenerator extends ChunkGenerator {
 
             for (int z = 0; z < 16; z++) {
 
-                int worldX =
-                        chunkX * 16 + x;
-
-                int worldZ =
-                        chunkZ * 16 + z;
+                int worldX = chunkX * 16 + x;
+                int worldZ = chunkZ * 16 + z;
 
                 /*
-                 * Convert Minecraft coordinates
-                 * using the EarthBound coordinate system.
+                 * Convert Minecraft coordinates into
+                 * real-world latitude and longitude.
                  *
                  * Guemes Ferry Terminal:
                  * Minecraft X = -624
@@ -52,15 +49,23 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
                 /*
-                 * IMPORTANT:
-                 *
-                 * This ONLY reads the Guemes raster
+                 * Read the USGS Guemes elevation raster
                  * already stored in memory.
-                 *
-                 * It NEVER makes an Internet request.
                  */
                 Double elevation =
                         EarthTerrainLoader.getGuemesElevation(
+                                latitude,
+                                longitude
+                        );
+
+                boolean water =
+                        EarthWaterData.isWater(
+                                latitude,
+                                longitude
+                        );
+
+                boolean road =
+                        EarthRoadData.isRoad(
                                 latitude,
                                 longitude
                         );
@@ -77,14 +82,6 @@ public class EarthGenerator extends ChunkGenerator {
 
                 } else {
 
-                    /*
-                     * Safe temporary fallback.
-                     *
-                     * If the Guemes raster has not loaded yet,
-                     * or we're outside the Guemes tile,
-                     * generate flat terrain instead of
-                     * contacting USGS.
-                     */
                     height = SEA_LEVEL;
                 }
 
@@ -98,10 +95,77 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
                 /*
-                 * Basic terrain materials for now.
+                 * WATER
                  *
-                 * We'll improve coastlines, water,
-                 * beaches, soil and vegetation later.
+                 * Water-mask locations become ocean.
+                 * The ocean floor is placed below sea level,
+                 * then water fills up to Y=63.
+                 */
+                if (water) {
+
+                    int oceanFloor =
+                            Math.min(height, SEA_LEVEL - 4);
+
+                    oceanFloor =
+                            Math.max(
+                                    worldInfo.getMinHeight(),
+                                    oceanFloor
+                            );
+
+                    for (int y = worldInfo.getMinHeight();
+                         y <= oceanFloor;
+                         y++) {
+
+                        if (y == oceanFloor) {
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.SAND
+                            );
+
+                        } else if (y >= oceanFloor - 3) {
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.SAND
+                            );
+
+                        } else {
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.STONE
+                            );
+                        }
+                    }
+
+                    for (int y = oceanFloor + 1;
+                         y <= SEA_LEVEL;
+                         y++) {
+
+                        chunkData.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.WATER
+                        );
+                    }
+
+                    /*
+                     * Never put roads over ocean during
+                     * Phase 1. Bridges/ferries come later.
+                     */
+                    continue;
+                }
+
+                /*
+                 * LAND
                  */
                 for (int y = worldInfo.getMinHeight();
                      y <= height;
@@ -109,21 +173,54 @@ public class EarthGenerator extends ChunkGenerator {
 
                     if (y == height) {
 
-                        chunkData.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.GRASS_BLOCK
-                        );
+                        /*
+                         * ROAD
+                         *
+                         * Road-mask locations get a visible
+                         * gray road surface.
+                         */
+                        if (road) {
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.GRAY_CONCRETE
+                            );
+
+                        } else {
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.GRASS_BLOCK
+                            );
+                        }
 
                     } else if (y >= height - 3) {
 
-                        chunkData.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.DIRT
-                        );
+                        if (road) {
+
+                            /*
+                             * Give roads a solid foundation.
+                             */
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.STONE
+                            );
+
+                        } else {
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.DIRT
+                            );
+                        }
 
                     } else {
 
