@@ -10,16 +10,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class EarthElevation {
 
-    // EarthBound scale:
-    // 1 Minecraft block = 2 real-world meters
-    private static final double METERS_PER_BLOCK = 2.0;
-
-    // Minecraft ocean surface
     private static final int SEA_LEVEL = 63;
+    private static final int MAX_TERRAIN_Y = 315;
+    private static final double EVEREST_METERS = 8848.86;
 
     private static final Map<String, Double> CACHE =
             new ConcurrentHashMap<>();
-
 
     public static double getElevation(
             double latitude,
@@ -87,19 +83,13 @@ public class EarthElevation {
                     response.append(line);
                 }
 
-                System.out.println(
-                        "[EarthBound] USGS response: "
-                        + response
-                );
-
                 double elevation =
-                        parseElevation(
-                                response.toString()
-                        );
+                        parseElevation(response.toString());
 
                 System.out.println(
-                        "[EarthBound] Parsed elevation: "
+                        "[EarthBound] Real elevation: "
                         + elevation
+                        + " meters"
                 );
 
                 CACHE.put(key, elevation);
@@ -122,35 +112,114 @@ public class EarthElevation {
         }
     }
 
-
     /*
-     * Converts real-world elevation into
-     * an EarthBound Minecraft Y coordinate.
+     * Progressive EarthBound vertical scale:
      *
-     * EarthBound scale:
-     * 2 real meters = 1 Minecraft block.
-     *
-     * Real sea level = Minecraft Y 63.
+     * 0 m       -> Y 63
+     * 500 m     -> Y 130
+     * 1000 m    -> Y 160
+     * 3286 m    -> Y 225   (Mount Baker)
+     * 4392 m    -> Y 245   (Mount Rainier)
+     * 8848.86 m -> Y 315   (Mount Everest)
      */
     public static int getMinecraftHeight(
             double elevationMeters) {
 
-        double blocksAboveSeaLevel =
-                elevationMeters / METERS_PER_BLOCK;
+        if (elevationMeters <= 0.0) {
+            return SEA_LEVEL;
+        }
 
-        return SEA_LEVEL +
-                (int) Math.round(blocksAboveSeaLevel);
+        double minecraftHeight;
+
+        if (elevationMeters <= 500.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            0.0,
+                            500.0,
+                            63.0,
+                            130.0
+                    );
+
+        } else if (elevationMeters <= 1000.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            500.0,
+                            1000.0,
+                            130.0,
+                            160.0
+                    );
+
+        } else if (elevationMeters <= 3286.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            1000.0,
+                            3286.0,
+                            160.0,
+                            225.0
+                    );
+
+        } else if (elevationMeters <= 4392.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            3286.0,
+                            4392.0,
+                            225.0,
+                            245.0
+                    );
+
+        } else {
+
+            double limitedElevation =
+                    Math.min(
+                            elevationMeters,
+                            EVEREST_METERS
+                    );
+
+            minecraftHeight =
+                    interpolate(
+                            limitedElevation,
+                            4392.0,
+                            EVEREST_METERS,
+                            245.0,
+                            MAX_TERRAIN_Y
+                    );
+        }
+
+        int finalHeight =
+                (int) Math.round(minecraftHeight);
+
+        return Math.min(
+                finalHeight,
+                MAX_TERRAIN_Y
+        );
     }
 
+    private static double interpolate(
+            double value,
+            double inputMin,
+            double inputMax,
+            double outputMin,
+            double outputMax) {
+
+        double percentage =
+                (value - inputMin)
+                        / (inputMax - inputMin);
+
+        return outputMin
+                + percentage
+                * (outputMax - outputMin);
+    }
 
     private static double parseElevation(
             String json) {
-
-        /*
-         * USGS currently returns elevation like:
-         *
-         * "value":"53.009941101"
-         */
 
         String marker =
                 "\"value\":\"";
@@ -161,7 +230,7 @@ public class EarthElevation {
         if (start == -1) {
 
             System.out.println(
-                    "[EarthBound] Could not find elevation value in response."
+                    "[EarthBound] Could not find elevation value."
             );
 
             return 0.0;
@@ -191,10 +260,7 @@ public class EarthElevation {
         try {
 
             return Double.parseDouble(
-                    json.substring(
-                            start,
-                            end
-                    )
+                    json.substring(start, end)
             );
 
         } catch (Exception exception) {
