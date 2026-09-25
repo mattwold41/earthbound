@@ -1,16 +1,28 @@
 package com.earthbound;
 
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
+
+import java.awt.image.BufferedImage;
+import java.awt.image.Raster;
+
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 
+import java.util.Iterator;
+
 public class EarthTerrainLoader {
 
     /*
-     * Official USGS 3DEP Elevation ImageServer.
+     * Official USGS 3DEP Elevation ImageServer
      */
     private static final String USGS_3DEP_SERVICE =
             "https://elevation.nationalmap.gov/arcgis/rest/services/"
@@ -18,19 +30,42 @@ public class EarthTerrainLoader {
 
 
     /*
-     * First EarthBound terrain test area.
+     * Guemes Island test area.
      *
-     * This box covers the Guemes Island area.
-     * It is deliberately a test tile before we connect
-     * terrain downloading directly to world generation.
+     * This is intentionally a 512 x 512 test raster.
+     * Later we will divide the Earth into higher-resolution
+     * cached tiles appropriate for the 2 meter/block scale.
      */
-    private static final double GUEMES_WEST = -122.70;
-    private static final double GUEMES_SOUTH = 48.47;
-    private static final double GUEMES_EAST = -122.55;
-    private static final double GUEMES_NORTH = 48.60;
+    private static final double GUEMES_WEST =
+            -122.70;
 
-    private static final int GUEMES_TILE_WIDTH = 512;
-    private static final int GUEMES_TILE_HEIGHT = 512;
+    private static final double GUEMES_SOUTH =
+            48.47;
+
+    private static final double GUEMES_EAST =
+            -122.55;
+
+    private static final double GUEMES_NORTH =
+            48.60;
+
+
+    private static final int GUEMES_TILE_WIDTH =
+            512;
+
+    private static final int GUEMES_TILE_HEIGHT =
+            512;
+
+
+    /*
+     * Decoded Guemes elevation raster.
+     *
+     * Indexed:
+     *
+     * [y][x]
+     *
+     * Values are elevation in meters.
+     */
+    private static volatile float[][] guemesElevationGrid = null;
 
 
     private EarthTerrainLoader() {
@@ -39,11 +74,9 @@ public class EarthTerrainLoader {
 
 
     /*
-     * Loads one elevation point.
+     * Existing single-point elevation loader.
      *
-     * This is still useful for /earth locate.
-     * World generation will eventually use terrain tiles
-     * instead of making one web request per block.
+     * This remains useful for /earth locate.
      */
     public static double loadElevation(
             double latitude,
@@ -77,7 +110,7 @@ public class EarthTerrainLoader {
 
     /*
      * Converts real elevation into EarthBound's
-     * progressive Minecraft vertical scale.
+     * progressive Minecraft height scale.
      */
     public static int loadMinecraftHeight(
             double latitude,
@@ -96,7 +129,7 @@ public class EarthTerrainLoader {
 
 
     /*
-     * Tests basic access to the USGS 3DEP service.
+     * Tests basic access to USGS 3DEP.
      */
     public static boolean test3DEPConnection() {
 
@@ -106,7 +139,7 @@ public class EarthTerrainLoader {
 
             String address =
                     USGS_3DEP_SERVICE
-                    + "?f=pjson";
+                            + "?f=pjson";
 
             URL url =
                     URI.create(address).toURL();
@@ -116,6 +149,7 @@ public class EarthTerrainLoader {
                             url.openConnection();
 
             connection.setRequestMethod("GET");
+
             connection.setConnectTimeout(10000);
             connection.setReadTimeout(10000);
 
@@ -182,9 +216,7 @@ public class EarthTerrainLoader {
 
 
     /*
-     * Creates a USGS terrain tile URL.
-     *
-     * The result is a floating-point TIFF elevation raster.
+     * Creates a USGS floating-point TIFF request.
      */
     public static String createTerrainTileURL(
             double west,
@@ -213,10 +245,6 @@ public class EarthTerrainLoader {
     }
 
 
-    /*
-     * Creates the URL for our first Guemes Island
-     * elevation tile.
-     */
     public static String createGuemesTerrainTileURL() {
 
         return createTerrainTileURL(
@@ -231,34 +259,29 @@ public class EarthTerrainLoader {
 
 
     /*
-     * Downloads the first Guemes Island terrain tile
-     * as a test.
-     *
-     * For now we only verify that real raster bytes
-     * arrive from USGS. We do NOT generate Minecraft
-     * terrain from the TIFF yet.
+     * Downloads and decodes the Guemes elevation TIFF.
      */
-    public static boolean testGuemesTerrainTile() {
+    public static boolean loadGuemesTerrainTile() {
 
         HttpURLConnection connection = null;
 
         try {
 
-            String address =
-                    createGuemesTerrainTileURL();
-
             System.out.println(
-                    "[EarthBound] Requesting Guemes Island terrain tile..."
+                    "[EarthBound] Downloading Guemes elevation raster..."
             );
 
             URL url =
-                    URI.create(address).toURL();
+                    URI.create(
+                            createGuemesTerrainTileURL()
+                    ).toURL();
 
             connection =
                     (HttpURLConnection)
                             url.openConnection();
 
             connection.setRequestMethod("GET");
+
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(30000);
 
@@ -268,17 +291,21 @@ public class EarthTerrainLoader {
             if (responseCode != 200) {
 
                 System.out.println(
-                        "[EarthBound] Guemes terrain request failed. HTTP "
+                        "[EarthBound] Guemes raster request failed. HTTP "
                                 + responseCode
                 );
 
                 return false;
             }
 
-            long totalBytes = 0;
+
+            byte[] data;
 
             try (InputStream input =
-                         connection.getInputStream()) {
+                         connection.getInputStream();
+
+                 ByteArrayOutputStream output =
+                         new ByteArrayOutputStream()) {
 
                 byte[] buffer =
                         new byte[8192];
@@ -288,35 +315,32 @@ public class EarthTerrainLoader {
                 while ((bytesRead =
                                 input.read(buffer)) != -1) {
 
-                    totalBytes += bytesRead;
+                    output.write(
+                            buffer,
+                            0,
+                            bytesRead
+                    );
                 }
+
+                data =
+                        output.toByteArray();
             }
 
-            if (totalBytes > 0) {
-
-                System.out.println(
-                        "[EarthBound] Guemes terrain tile downloaded successfully."
-                );
-
-                System.out.println(
-                        "[EarthBound] Guemes terrain tile size: "
-                                + totalBytes
-                                + " bytes"
-                );
-
-                return true;
-            }
 
             System.out.println(
-                    "[EarthBound] Guemes terrain tile was empty."
+                    "[EarthBound] Guemes TIFF downloaded: "
+                            + data.length
+                            + " bytes"
             );
 
-            return false;
+
+            return decodeGuemesRaster(data);
+
 
         } catch (Exception exception) {
 
             System.out.println(
-                    "[EarthBound] Could not download Guemes terrain tile."
+                    "[EarthBound] Could not load Guemes terrain raster."
             );
 
             exception.printStackTrace();
@@ -329,5 +353,259 @@ public class EarthTerrainLoader {
                 connection.disconnect();
             }
         }
+    }
+
+
+    /*
+     * Decode the floating-point TIFF returned by USGS.
+     */
+    private static boolean decodeGuemesRaster(
+            byte[] data) {
+
+        try {
+
+            ByteArrayInputStream byteStream =
+                    new ByteArrayInputStream(data);
+
+            ImageInputStream imageStream =
+                    ImageIO.createImageInputStream(
+                            byteStream
+                    );
+
+            if (imageStream == null) {
+
+                System.out.println(
+                        "[EarthBound] Could not create TIFF image stream."
+                );
+
+                return false;
+            }
+
+
+            Iterator<ImageReader> readers =
+                    ImageIO.getImageReaders(
+                            imageStream
+                    );
+
+
+            if (!readers.hasNext()) {
+
+                System.out.println(
+                        "[EarthBound] No Java TIFF reader was found."
+                );
+
+                imageStream.close();
+
+                return false;
+            }
+
+
+            ImageReader reader =
+                    readers.next();
+
+
+            try {
+
+                reader.setInput(
+                        imageStream,
+                        true,
+                        true
+                );
+
+
+                BufferedImage image =
+                        reader.read(0);
+
+
+                Raster raster =
+                        image.getRaster();
+
+
+                int width =
+                        raster.getWidth();
+
+                int height =
+                        raster.getHeight();
+
+
+                System.out.println(
+                        "[EarthBound] Decoded Guemes raster: "
+                                + width
+                                + " x "
+                                + height
+                );
+
+
+                float[][] grid =
+                        new float[height][width];
+
+
+                for (int y = 0;
+                     y < height;
+                     y++) {
+
+                    for (int x = 0;
+                         x < width;
+                         x++) {
+
+                        grid[y][x] =
+                                raster.getSampleFloat(
+                                        x,
+                                        y,
+                                        0
+                                );
+                    }
+                }
+
+
+                guemesElevationGrid =
+                        grid;
+
+
+                int centerX =
+                        width / 2;
+
+                int centerY =
+                        height / 2;
+
+
+                float centerElevation =
+                        grid[centerY][centerX];
+
+
+                System.out.println(
+                        "[EarthBound] Guemes raster decoded successfully."
+                );
+
+                System.out.println(
+                        "[EarthBound] Center elevation sample: "
+                                + centerElevation
+                                + " meters"
+                );
+
+
+                return true;
+
+
+            } finally {
+
+                reader.dispose();
+                imageStream.close();
+            }
+
+
+        } catch (Exception exception) {
+
+            System.out.println(
+                    "[EarthBound] Failed to decode Guemes TIFF."
+            );
+
+            exception.printStackTrace();
+
+            return false;
+        }
+    }
+
+
+    /*
+     * Returns whether the Guemes raster
+     * has been downloaded and decoded.
+     */
+    public static boolean isGuemesTerrainLoaded() {
+
+        return guemesElevationGrid != null;
+    }
+
+
+    /*
+     * Reads an elevation from the loaded Guemes raster
+     * using latitude and longitude.
+     */
+    public static Double getGuemesElevation(
+            double latitude,
+            double longitude) {
+
+        float[][] grid =
+                guemesElevationGrid;
+
+
+        if (grid == null) {
+            return null;
+        }
+
+
+        if (latitude < GUEMES_SOUTH
+                || latitude > GUEMES_NORTH
+                || longitude < GUEMES_WEST
+                || longitude > GUEMES_EAST) {
+
+            return null;
+        }
+
+
+        double xPercent =
+                (longitude - GUEMES_WEST)
+                        / (GUEMES_EAST - GUEMES_WEST);
+
+
+        /*
+         * Raster row 0 is the north edge.
+         */
+        double yPercent =
+                (GUEMES_NORTH - latitude)
+                        / (GUEMES_NORTH - GUEMES_SOUTH);
+
+
+        int width =
+                grid[0].length;
+
+        int height =
+                grid.length;
+
+
+        int x =
+                (int) Math.round(
+                        xPercent
+                                * (width - 1)
+                );
+
+
+        int y =
+                (int) Math.round(
+                        yPercent
+                                * (height - 1)
+                );
+
+
+        x =
+                Math.max(
+                        0,
+                        Math.min(
+                                width - 1,
+                                x
+                        )
+                );
+
+
+        y =
+                Math.max(
+                        0,
+                        Math.min(
+                                height - 1,
+                                y
+                        )
+                );
+
+
+        return (double) grid[y][x];
+    }
+
+
+    /*
+     * Compatibility method used by the previous test.
+     */
+    public static boolean testGuemesTerrainTile() {
+
+        return loadGuemesTerrainTile();
     }
 }
