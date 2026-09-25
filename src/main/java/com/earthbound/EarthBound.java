@@ -33,13 +33,11 @@ public class EarthBound extends JavaPlugin {
                 "EarthBound generator loading..."
         );
 
+
         /*
          * Load the Guemes USGS elevation raster
          * BEFORE Minecraft begins generating
          * EarthBound terrain.
-         *
-         * This is one raster download, NOT
-         * one Internet request per block.
          */
         if (!EarthTerrainLoader.isGuemesTerrainLoaded()) {
 
@@ -47,11 +45,10 @@ public class EarthBound extends JavaPlugin {
                     "Loading Guemes terrain before world generation..."
             );
 
-            boolean loaded =
-                    EarthTerrainLoader
-                            .loadGuemesTerrainTile();
+            boolean terrainLoaded =
+                    EarthTerrainLoader.loadGuemesTerrainTile();
 
-            if (loaded) {
+            if (terrainLoaded) {
 
                 getLogger().info(
                         "Guemes terrain loaded and ready for generation!"
@@ -66,6 +63,47 @@ public class EarthBound extends JavaPlugin {
             }
         }
 
+
+        /*
+         * Load the Guemes land/water mask
+         * BEFORE Minecraft begins generating
+         * EarthBound terrain.
+         *
+         * This downloads ONE 512 x 512
+         * hydrography image.
+         *
+         * It does NOT make an Internet
+         * request for every Minecraft block.
+         */
+        if (!EarthWaterData.isLoaded()) {
+
+            getLogger().info(
+                    "Loading Guemes water mask before world generation..."
+            );
+
+            boolean waterLoaded =
+                    EarthWaterData.loadGuemesWaterMask();
+
+            if (waterLoaded) {
+
+                getLogger().info(
+                        "Guemes water mask loaded and ready for generation!"
+                );
+
+            } else {
+
+                getLogger().warning(
+                        "Guemes water mask could not be loaded. "
+                                + "Terrain will generate without ocean masking."
+                );
+            }
+        }
+
+
+        /*
+         * Give Paper our EarthBound
+         * custom world generator.
+         */
         return new EarthGenerator();
     }
 }
