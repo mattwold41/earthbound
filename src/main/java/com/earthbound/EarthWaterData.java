@@ -1,12 +1,5 @@
 package com.earthbound;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URL;
-
 public class EarthWaterData {
 
     /*
@@ -16,15 +9,48 @@ public class EarthWaterData {
 
 
     /*
-     * U.S. Census Bureau TIGERweb
-     * Areal Hydrography layer.
+     * Guemes test-area bounds.
      *
-     * This contains polygon water features.
+     * These match our USGS elevation raster.
      */
-    private static final String HYDRO_SERVICE =
-            "https://tigerweb.geo.census.gov/"
-                    + "arcgis/rest/services/TIGERweb/Hydro/"
-                    + "MapServer/1/query";
+    private static final double GUEMES_WEST =
+            -122.70;
+
+    private static final double GUEMES_SOUTH =
+            48.47;
+
+    private static final double GUEMES_EAST =
+            -122.55;
+
+    private static final double GUEMES_NORTH =
+            48.60;
+
+
+    /*
+     * Water-mask resolution.
+     *
+     * This is deliberately much smaller than
+     * Minecraft's block grid.
+     *
+     * We query the geographic water service once
+     * for each mask cell during startup.
+     *
+     * Minecraft terrain generation itself makes
+     * ZERO Internet requests.
+     */
+    private static final int MASK_WIDTH =
+            128;
+
+    private static final int MASK_HEIGHT =
+            128;
+
+
+    /*
+     * true  = water
+     * false = land
+     */
+    private static volatile boolean[][] waterMask =
+            null;
 
 
     private EarthWaterData() {
@@ -33,26 +59,148 @@ public class EarthWaterData {
 
 
     /*
-     * Checks whether a latitude/longitude point
-     * falls inside an areal hydrography polygon.
+     * Loads the Guemes water mask.
      *
      * IMPORTANT:
-     * We will NOT call this once per Minecraft block
-     * during terrain generation.
+     * This is only called during startup,
+     * never once per Minecraft block.
+     */
+    public static boolean loadGuemesWaterMask() {
+
+        System.out.println(
+                "[EarthBound] Loading Guemes water mask..."
+        );
+
+
+        boolean[][] newMask =
+                new boolean[MASK_HEIGHT][MASK_WIDTH];
+
+
+        int waterCells = 0;
+
+
+        try {
+
+            for (int y = 0;
+                 y < MASK_HEIGHT;
+                 y++) {
+
+                double yPercent =
+                        (double) y
+                                / (MASK_HEIGHT - 1);
+
+
+                double latitude =
+                        GUEMES_NORTH
+                                - yPercent
+                                * (GUEMES_NORTH
+                                - GUEMES_SOUTH);
+
+
+                for (int x = 0;
+                     x < MASK_WIDTH;
+                     x++) {
+
+                    double xPercent =
+                            (double) x
+                                    / (MASK_WIDTH - 1);
+
+
+                    double longitude =
+                            GUEMES_WEST
+                                    + xPercent
+                                    * (GUEMES_EAST
+                                    - GUEMES_WEST);
+
+
+                    boolean water =
+                            queryWater(
+                                    latitude,
+                                    longitude
+                            );
+
+
+                    newMask[y][x] =
+                            water;
+
+
+                    if (water) {
+                        waterCells++;
+                    }
+                }
+
+
+                /*
+                 * Progress message every 16 rows.
+                 */
+                if (y % 16 == 0) {
+
+                    System.out.println(
+                            "[EarthBound] Water mask progress: "
+                                    + y
+                                    + "/"
+                                    + MASK_HEIGHT
+                    );
+                }
+            }
+
+
+            waterMask =
+                    newMask;
+
+
+            System.out.println(
+                    "[EarthBound] Guemes water mask ready."
+            );
+
+            System.out.println(
+                    "[EarthBound] Water cells: "
+                            + waterCells
+                            + " / "
+                            + (MASK_WIDTH * MASK_HEIGHT)
+            );
+
+
+            return true;
+
+
+        } catch (Exception exception) {
+
+            System.out.println(
+                    "[EarthBound] Failed to build Guemes water mask."
+            );
+
+            exception.printStackTrace();
+
+            return false;
+        }
+    }
+
+
+    /*
+     * Queries Census TIGERweb hydrography.
      *
-     * This method is the data-source connection.
-     * We will add a cached Guemes water mask next.
+     * This is ONLY used while building
+     * the startup water mask.
      */
     public static boolean queryWater(
             double latitude,
             double longitude) {
 
-        HttpURLConnection connection = null;
+        java.net.HttpURLConnection connection =
+                null;
 
         try {
 
+            String service =
+                    "https://tigerweb.geo.census.gov/"
+                            + "arcgis/rest/services/"
+                            + "TIGERweb/Hydro/MapServer/"
+                            + "1/query";
+
+
             String address =
-                    HYDRO_SERVICE
+                    service
                             + "?geometry="
                             + longitude
                             + ","
@@ -65,12 +213,14 @@ public class EarthWaterData {
                             + "&f=json";
 
 
-            URL url =
-                    URI.create(address).toURL();
+            java.net.URL url =
+                    java.net.URI
+                            .create(address)
+                            .toURL();
 
 
             connection =
-                    (HttpURLConnection)
+                    (java.net.HttpURLConnection)
                             url.openConnection();
 
 
@@ -86,11 +236,6 @@ public class EarthWaterData {
 
             if (responseCode != 200) {
 
-                System.out.println(
-                        "[EarthBound] Water lookup HTTP "
-                                + responseCode
-                );
-
                 return false;
             }
 
@@ -99,9 +244,9 @@ public class EarthWaterData {
                     new StringBuilder();
 
 
-            try (BufferedReader reader =
-                         new BufferedReader(
-                                 new InputStreamReader(
+            try (java.io.BufferedReader reader =
+                         new java.io.BufferedReader(
+                                 new java.io.InputStreamReader(
                                          connection.getInputStream()
                                  )
                          )) {
@@ -120,21 +265,11 @@ public class EarthWaterData {
                     response.toString();
 
 
-            /*
-             * ArcGIS returns:
-             *
-             * {"count":0}
-             *
-             * for land, and a count greater
-             * than zero when the point intersects
-             * a water polygon.
-             */
             int marker =
                     json.indexOf("\"count\":");
 
 
             if (marker < 0) {
-
                 return false;
             }
 
@@ -157,7 +292,6 @@ public class EarthWaterData {
 
 
             if (end <= start) {
-
                 return false;
             }
 
@@ -176,12 +310,6 @@ public class EarthWaterData {
 
         } catch (Exception exception) {
 
-            System.out.println(
-                    "[EarthBound] Water lookup failed."
-            );
-
-            exception.printStackTrace();
-
             return false;
 
 
@@ -196,19 +324,88 @@ public class EarthWaterData {
 
 
     /*
-     * Temporary compatibility method.
+     * Returns whether the water mask
+     * has finished loading.
+     */
+    public static boolean isLoaded() {
+
+        return waterMask != null;
+    }
+
+
+    /*
+     * Fast lookup used by Minecraft terrain generation.
      *
-     * We are deliberately NOT performing
-     * Internet requests here yet.
-     *
-     * The next step will build a Guemes
-     * water mask in memory and this method
-     * will read from that mask.
+     * NO Internet request happens here.
      */
     public static boolean isWater(
             double latitude,
             double longitude) {
 
-        return false;
+        boolean[][] mask =
+                waterMask;
+
+
+        if (mask == null) {
+            return false;
+        }
+
+
+        if (latitude < GUEMES_SOUTH
+                || latitude > GUEMES_NORTH
+                || longitude < GUEMES_WEST
+                || longitude > GUEMES_EAST) {
+
+            return false;
+        }
+
+
+        double xPercent =
+                (longitude - GUEMES_WEST)
+                        / (GUEMES_EAST
+                        - GUEMES_WEST);
+
+
+        double yPercent =
+                (GUEMES_NORTH - latitude)
+                        / (GUEMES_NORTH
+                        - GUEMES_SOUTH);
+
+
+        int x =
+                (int) Math.round(
+                        xPercent
+                                * (MASK_WIDTH - 1)
+                );
+
+
+        int y =
+                (int) Math.round(
+                        yPercent
+                                * (MASK_HEIGHT - 1)
+                );
+
+
+        x =
+                Math.max(
+                        0,
+                        Math.min(
+                                MASK_WIDTH - 1,
+                                x
+                        )
+                );
+
+
+        y =
+                Math.max(
+                        0,
+                        Math.min(
+                                MASK_HEIGHT - 1,
+                                y
+                        )
+                );
+
+
+        return mask[y][x];
     }
 }
