@@ -6,7 +6,7 @@ import org.bukkit.generator.WorldInfo;
 
 import java.util.Random;
 
-public class EarthGenerator extends ChunkGenerator {
+public class  extends ChunkGenerator {
 
     // Guemes Ferry Terminal reference
     private static final int START_X = -624;
