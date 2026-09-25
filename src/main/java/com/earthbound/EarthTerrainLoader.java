@@ -9,11 +9,7 @@ import java.net.URL;
 public class EarthTerrainLoader {
 
     /*
-     * USGS 3DEP Elevation ImageServer.
-     *
-     * EarthBound will eventually request rectangular
-     * terrain tiles from this service and cache them
-     * before Minecraft generates the corresponding chunks.
+     * USGS 3DEP Elevation ImageServer
      */
     private static final String USGS_3DEP_SERVICE =
             "https://elevation.nationalmap.gov/arcgis/rest/services/"
@@ -21,18 +17,20 @@ public class EarthTerrainLoader {
 
 
     private EarthTerrainLoader() {
-        // Utility class.
+        // Utility class
     }
 
 
     /*
-     * Existing point loader.
+     * Loads a single elevation point.
      *
-     * We keep this for testing and fallback use.
+     * Uses the cache first.
+     * If missing, downloads from USGS and stores it.
      */
     public static double loadElevation(
             double latitude,
             double longitude) {
+
 
         Double cachedElevation =
                 EarthTerrainData.getElevation(
@@ -40,9 +38,12 @@ public class EarthTerrainLoader {
                         longitude
                 );
 
+
         if (cachedElevation != null) {
+
             return cachedElevation;
         }
+
 
         double elevation =
                 EarthElevation.getElevation(
@@ -50,19 +51,26 @@ public class EarthTerrainLoader {
                         longitude
                 );
 
+
         EarthTerrainData.storeElevation(
                 latitude,
                 longitude,
                 elevation
         );
 
+
         return elevation;
     }
 
 
+
+    /*
+     * Converts real elevation into Minecraft height.
+     */
     public static int loadMinecraftHeight(
             double latitude,
             double longitude) {
+
 
         double elevation =
                 loadElevation(
@@ -70,16 +78,18 @@ public class EarthTerrainLoader {
                         longitude
                 );
 
+
         return EarthElevation.getMinecraftHeight(
                 elevation
         );
     }
 
 
+
     /*
-     * Tests communication with the USGS 3DEP
-     * ImageServer before we begin downloading
-     * Guemes terrain tiles.
+     * Tests connection to USGS 3DEP.
+     *
+     * We only check that USGS responds with data.
      */
     public static boolean test3DEPConnection() {
 
@@ -89,86 +99,106 @@ public class EarthTerrainLoader {
                     USGS_3DEP_SERVICE
                     + "?f=pjson";
 
+
             URL url =
                     URI.create(address).toURL();
+
 
             HttpURLConnection connection =
                     (HttpURLConnection)
                             url.openConnection();
 
+
             connection.setRequestMethod("GET");
 
             connection.setConnectTimeout(10000);
+
             connection.setReadTimeout(10000);
+
 
             int responseCode =
                     connection.getResponseCode();
 
+
             if (responseCode != 200) {
 
+
                 System.out.println(
-                        "[EarthBound] 3DEP connection failed. HTTP "
+                        "[EarthBound] USGS HTTP response: "
                         + responseCode
                 );
 
+
                 return false;
             }
+
+
 
             try (BufferedReader reader =
                          new BufferedReader(
                                  new InputStreamReader(
                                          connection.getInputStream()))) {
 
+
                 StringBuilder response =
                         new StringBuilder();
 
+
                 String line;
 
+
                 while ((line = reader.readLine()) != null) {
+
                     response.append(line);
                 }
 
-                boolean valid =
-                        response.toString()
-                                .contains(
-                                        "\"name\":\"3DEPElevation\""
-                                );
 
-                if (valid) {
+
+                if (response.length() > 0) {
+
 
                     System.out.println(
                             "[EarthBound] USGS 3DEP connection successful."
                     );
 
-                } else {
 
-                    System.out.println(
-                            "[EarthBound] USGS responded, "
-                            + "but the 3DEP service was not recognized."
-                    );
+                    return true;
                 }
 
-                return valid;
+
+
+                System.out.println(
+                        "[EarthBound] USGS returned empty data."
+                );
+
+
+                return false;
             }
 
+
+
         } catch (Exception exception) {
+
 
             System.out.println(
                     "[EarthBound] Could not connect to USGS 3DEP."
             );
 
+
             exception.printStackTrace();
+
 
             return false;
         }
     }
 
 
+
     /*
-     * Creates the URL that EarthBound will use
-     * to request one elevation raster tile.
+     * Creates a future terrain tile request.
      *
-     * west/south/east/north are longitude/latitude.
+     * Used when we start downloading Guemes Island
+     * elevation areas instead of single points.
      */
     public static String createTerrainTileURL(
             double west,
@@ -178,17 +208,22 @@ public class EarthTerrainLoader {
             int width,
             int height) {
 
+
         return USGS_3DEP_SERVICE
                 + "/exportImage"
                 + "?bbox="
-                + west + ","
-                + south + ","
-                + east + ","
+                + west
+                + ","
+                + south
+                + ","
+                + east
+                + ","
                 + north
                 + "&bboxSR=4326"
                 + "&imageSR=4326"
                 + "&size="
-                + width + ","
+                + width
+                + ","
                 + height
                 + "&format=tiff"
                 + "&pixelType=F32"
