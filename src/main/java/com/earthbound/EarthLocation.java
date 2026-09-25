@@ -1,55 +1,88 @@
 package com.earthbound;
 
+import org.bukkit.Location;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+
 public class EarthLocation {
 
-    // Guemes Island Ferry Terminal reference point
-    private static final double GUEMES_LAT = 48.5228603;
-    private static final double GUEMES_LON = -122.624694;
+
+    public static void showLocation(
+            CommandSender sender,
+            Player player) {
 
 
-    // Search radius around Guemes Island
-    private static final double TEST_RADIUS_KM = 20.0;
+        Location location =
+                player.getLocation();
 
 
-    public static boolean isNearGuemes(
-            double latitude,
-            double longitude) {
+        double latitude =
+                EarthCoordinates
+                        .minecraftToLatitude(
+                                location.getBlockZ()
+                        );
 
 
-        double latDistance =
-                latitude - GUEMES_LAT;
+        double longitude =
+                EarthCoordinates
+                        .minecraftToLongitude(
+                                location.getBlockX()
+                        );
 
-        double lonDistance =
-                longitude - GUEMES_LON;
+
+        sender.sendMessage(
+                "§6EarthBound Coordinates"
+        );
 
 
-        double distance =
-                Math.sqrt(
-                        (latDistance * latDistance) +
-                        (lonDistance * lonDistance)
+        sender.sendMessage(
+                "§eLatitude: §f"
+                        + latitude
+        );
+
+
+        sender.sendMessage(
+                "§eLongitude: §f"
+                        + longitude
+        );
+
+
+        sender.sendMessage(
+                "§eMinecraft X: §f"
+                        + location.getBlockX()
+                        + " Z: "
+                        + location.getBlockZ()
+        );
+
+
+        sender.sendMessage(
+                "§aDownloading real Earth elevation..."
+        );
+
+
+        double elevation =
+                EarthElevation.getElevation(
+                        latitude,
+                        longitude
                 );
 
 
-        // Convert rough degree distance to kilometers
-        double kilometers =
-                distance * 111;
+        int minecraftHeight =
+                EarthElevation.getMinecraftHeight(
+                        elevation
+                );
 
 
-        return kilometers <= TEST_RADIUS_KM;
-    }
+        sender.sendMessage(
+                "§aReal elevation: §f"
+                        + elevation
+                        + " meters"
+        );
 
 
-    public static String getRegion(
-            double latitude,
-            double longitude) {
-
-
-        if (isNearGuemes(latitude, longitude)) {
-
-            return "Guemes Island, Washington";
-        }
-
-
-        return "Unknown EarthBound Region";
+        sender.sendMessage(
+                "§aMinecraft terrain height: §f"
+                        + minecraftHeight
+        );
     }
 }
