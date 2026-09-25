@@ -8,26 +8,7 @@ import java.util.Random;
 
 public class EarthGenerator extends ChunkGenerator {
 
-
-    /*
-     * EarthBound scale:
-     *
-     * 1 Minecraft block = 2 real-world meters
-     */
-    private static final double METERS_PER_BLOCK = 2.0;
-
-
-    /*
-     * Starting point:
-     * Guemes Island, Washington
-     */
-    private static final double SPAWN_LAT =
-            48.5265;
-
-    private static final double SPAWN_LON =
-            -122.6165;
-
-
+    private static final int SEA_LEVEL = 63;
 
     @Override
     public void generateNoise(
@@ -37,11 +18,9 @@ public class EarthGenerator extends ChunkGenerator {
             int chunkZ,
             ChunkData chunkData) {
 
-
         for (int x = 0; x < 16; x++) {
 
             for (int z = 0; z < 16; z++) {
-
 
                 int worldX =
                         chunkX * 16 + x;
@@ -49,73 +28,95 @@ public class EarthGenerator extends ChunkGenerator {
                 int worldZ =
                         chunkZ * 16 + z;
 
-
+                /*
+                 * Convert Minecraft coordinates
+                 * using the EarthBound coordinate system.
+                 *
+                 * Guemes Ferry Terminal:
+                 * Minecraft X = -624
+                 * Minecraft Z = -544
+                 *
+                 * Latitude  = 48.5228603
+                 * Longitude = -122.624694
+                 */
                 double latitude =
-                        minecraftToLatitude(
+                        EarthCoordinates.getLatitude(
+                                worldX,
                                 worldZ
                         );
 
-
                 double longitude =
-                        minecraftToLongitude(
-                                worldX
+                        EarthCoordinates.getLongitude(
+                                worldX,
+                                worldZ
                         );
 
-
-                int height =
-                        EarthTerrainLoader
-                                .loadMinecraftHeight(
-                                        latitude,
-                                        longitude
-                                );
-
-
                 /*
-                 * Keep terrain inside Minecraft limits
+                 * IMPORTANT:
+                 *
+                 * This ONLY reads the Guemes raster
+                 * already stored in memory.
+                 *
+                 * It NEVER makes an Internet request.
                  */
-                if (height < 1) {
+                Double elevation =
+                        EarthTerrainLoader.getGuemesElevation(
+                                latitude,
+                                longitude
+                        );
 
-                    height = 1;
+                int height;
+
+                if (elevation != null
+                        && Double.isFinite(elevation)) {
+
+                    height =
+                            EarthElevation.getMinecraftHeight(
+                                    elevation
+                            );
+
+                } else {
+
+                    /*
+                     * Safe temporary fallback.
+                     *
+                     * If the Guemes raster has not loaded yet,
+                     * or we're outside the Guemes tile,
+                     * generate flat terrain instead of
+                     * contacting USGS.
+                     */
+                    height = SEA_LEVEL;
                 }
 
-                if (height > 319) {
-
-                    height = 319;
-                }
-
-
+                height =
+                        Math.max(
+                                worldInfo.getMinHeight(),
+                                Math.min(
+                                        worldInfo.getMaxHeight() - 1,
+                                        height
+                                )
+                        );
 
                 /*
-                 * Generate terrain column
+                 * Basic terrain materials for now.
+                 *
+                 * We'll improve coastlines, water,
+                 * beaches, soil and vegetation later.
                  */
-                for (int y = 0; y <= height; y++) {
-
+                for (int y = worldInfo.getMinHeight();
+                     y <= height;
+                     y++) {
 
                     if (y == height) {
 
+                        chunkData.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.GRASS_BLOCK
+                        );
 
-                        if (height <= 63) {
-
-                            chunkData.setBlock(
-                                    x,
-                                    y,
-                                    z,
-                                    Material.SAND
-                            );
-
-                        } else {
-
-                            chunkData.setBlock(
-                                    x,
-                                    y,
-                                    z,
-                                    Material.GRASS_BLOCK
-                            );
-                        }
-
-
-                    } else if (y > height - 4) {
-
+                    } else if (y >= height - 3) {
 
                         chunkData.setBlock(
                                 x,
@@ -124,9 +125,7 @@ public class EarthGenerator extends ChunkGenerator {
                                 Material.DIRT
                         );
 
-
                     } else {
-
 
                         chunkData.setBlock(
                                 x,
@@ -138,42 +137,5 @@ public class EarthGenerator extends ChunkGenerator {
                 }
             }
         }
-    }
-
-
-
-    /*
-     * Minecraft Z → latitude
-     */
-    private double minecraftToLatitude(
-            int z) {
-
-
-        return SPAWN_LAT -
-                (z * METERS_PER_BLOCK
-                        / 111320.0);
-    }
-
-
-
-    /*
-     * Minecraft X → longitude
-     */
-    private double minecraftToLongitude(
-            int x) {
-
-
-        double metersPerLongitude =
-                111320.0 *
-                Math.cos(
-                        Math.toRadians(
-                                SPAWN_LAT
-                        )
-                );
-
-
-        return SPAWN_LON +
-                (x * METERS_PER_BLOCK
-                        / metersPerLongitude);
     }
 }
