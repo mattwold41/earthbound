@@ -12,13 +12,31 @@ public class EarthCoordinates {
 
 
     /*
-     * Guemes Island spawn point
+     * Guemes Island starting point
      */
     private static final double SPAWN_LAT =
             48.5265;
 
     private static final double SPAWN_LON =
             -122.6165;
+
+
+
+    public static double getLatitude(
+            int x,
+            int z) {
+
+        return minecraftToLatitude(z);
+    }
+
+
+
+    public static double getLongitude(
+            int x,
+            int z) {
+
+        return minecraftToLongitude(x);
+    }
 
 
 
@@ -34,7 +52,6 @@ public class EarthCoordinates {
 
     public static double minecraftToLongitude(
             int x) {
-
 
         double metersPerLongitude =
                 111320.0 *
