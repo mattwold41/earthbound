@@ -6,17 +6,27 @@ import org.bukkit.generator.WorldInfo;
 
 import java.util.Random;
 
-public class  extends ChunkGenerator {
+public class EarthGenerator extends ChunkGenerator {
 
-    // Guemes Ferry Terminal reference
-    private static final int START_X = -624;
-    private static final int START_Z = -544;
 
-    // 1 block = 2 meters
-    // Approximate Guemes area
-    private static final int ISLAND_RADIUS = 2000;
+    /*
+     * EarthBound scale:
+     *
+     * 1 Minecraft block = 2 real-world meters
+     */
+    private static final double METERS_PER_BLOCK = 2.0;
 
-    private static final int SEA_LEVEL = 63;
+
+    /*
+     * Starting point:
+     * Guemes Island, Washington
+     */
+    private static final double SPAWN_LAT =
+            48.5265;
+
+    private static final double SPAWN_LON =
+            -122.6165;
+
 
 
     @Override
@@ -28,81 +38,95 @@ public class  extends ChunkGenerator {
             ChunkData chunkData) {
 
 
-        int startX = chunkX * 16;
-        int startZ = chunkZ * 16;
-
-
         for (int x = 0; x < 16; x++) {
 
             for (int z = 0; z < 16; z++) {
 
 
-                int worldX = startX + x;
-                int worldZ = startZ + z;
+                int worldX =
+                        chunkX * 16 + x;
+
+                int worldZ =
+                        chunkZ * 16 + z;
 
 
-                double distance = Math.sqrt(
-                        Math.pow(worldX - START_X, 2) +
-                        Math.pow(worldZ - START_Z, 2)
-                );
+                double latitude =
+                        minecraftToLatitude(
+                                worldZ
+                        );
 
 
-                // Coastline variation
-                double coastline =
-                        Math.sin(worldX * 0.003) * 150 +
-                        Math.cos(worldZ * 0.004) * 120 +
-                        Math.sin((worldX + worldZ) * 0.002) * 100;
+                double longitude =
+                        minecraftToLongitude(
+                                worldX
+                        );
 
 
-                double islandEdge =
-                        ISLAND_RADIUS + coastline;
+                int height =
+                        EarthTerrainLoader
+                                .loadMinecraftHeight(
+                                        latitude,
+                                        longitude
+                                );
 
 
-                // Default ocean floor
-                for (int y = 0; y < SEA_LEVEL - 5; y++) {
+                /*
+                 * Keep terrain inside Minecraft limits
+                 */
+                if (height < 1) {
 
-                    chunkData.setBlock(
-                            x,
-                            y,
-                            z,
-                            Material.STONE
-                    );
+                    height = 1;
+                }
+
+                if (height > 319) {
+
+                    height = 319;
                 }
 
 
-                // Ocean
-                for (int y = SEA_LEVEL - 5; y <= SEA_LEVEL; y++) {
 
-                    chunkData.setBlock(
-                            x,
-                            y,
-                            z,
-                            Material.WATER
-                    );
-                }
+                /*
+                 * Generate terrain column
+                 */
+                for (int y = 0; y <= height; y++) {
 
 
-                // Land generation
-                if (distance < islandEdge) {
+                    if (y == height) {
 
 
-                    int height = SEA_LEVEL;
+                        if (height <= 63) {
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.SAND
+                            );
+
+                        } else {
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.GRASS_BLOCK
+                            );
+                        }
 
 
-                    // Gentle hills inland
-                    if (distance < 1400) {
-
-                        height +=
-                                (int)((1400 - distance) / 40);
-                    }
+                    } else if (y > height - 4) {
 
 
-                    // Small terrain variation
-                    height += random.nextInt(3);
+                        chunkData.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.DIRT
+                        );
 
 
-                    // Replace ocean with land
-                    for (int y = 0; y < height - 5; y++) {
+                    } else {
+
 
                         chunkData.setBlock(
                                 x,
@@ -111,44 +135,45 @@ public class  extends ChunkGenerator {
                                 Material.STONE
                         );
                     }
-
-
-                    // Soil layer
-                    for (
-                            int y = height - 5;
-                            y < height;
-                            y++) {
-
-                        chunkData.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.DIRT
-                        );
-                    }
-
-
-                    // Beach edge
-                    if (distance > islandEdge - 50) {
-
-                        chunkData.setBlock(
-                                x,
-                                height,
-                                z,
-                                Material.SAND
-                        );
-
-                    } else {
-
-                        chunkData.setBlock(
-                                x,
-                                height,
-                                z,
-                                Material.GRASS_BLOCK
-                        );
-                    }
                 }
             }
         }
+    }
+
+
+
+    /*
+     * Minecraft Z → latitude
+     */
+    private double minecraftToLatitude(
+            int z) {
+
+
+        return SPAWN_LAT -
+                (z * METERS_PER_BLOCK
+                        / 111320.0);
+    }
+
+
+
+    /*
+     * Minecraft X → longitude
+     */
+    private double minecraftToLongitude(
+            int x) {
+
+
+        double metersPerLongitude =
+                111320.0 *
+                Math.cos(
+                        Math.toRadians(
+                                SPAWN_LAT
+                        )
+                );
+
+
+        return SPAWN_LON +
+                (x * METERS_PER_BLOCK
+                        / metersPerLongitude);
     }
 }
