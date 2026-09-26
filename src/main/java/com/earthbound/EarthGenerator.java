@@ -94,7 +94,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * OCEAN
+                 * WATER
                  */
                 if (water) {
 
@@ -159,7 +159,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * COASTLINE CHECK
+                 * COAST CHECK
                  */
                 int beachLevel =
                         EarthCoastData.getBeachLevel(
@@ -185,10 +185,9 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                         /*
-                         * ROAD ALWAYS WINS
+                         * Roads always win
                          */
                         if (road) {
-
 
                             chunkData.setBlock(
                                     x,
@@ -200,7 +199,6 @@ public class EarthGenerator extends ChunkGenerator {
 
                         } else if (beach) {
 
-
                             chunkData.setBlock(
                                     x,
                                     y,
@@ -210,7 +208,6 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                         } else {
-
 
                             chunkData.setBlock(
                                     x,
@@ -248,7 +245,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * VEGETATION
+                 * Vegetation
                  */
                 Material vegetation =
                         EarthVegetation.getVegetation(
@@ -260,7 +257,6 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 if (vegetation != Material.AIR) {
-
 
                     chunkData.setBlock(
                             x,
