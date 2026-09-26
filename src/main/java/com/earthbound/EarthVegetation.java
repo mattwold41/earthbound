@@ -7,6 +7,14 @@ import java.util.Random;
 public class EarthVegetation {
 
 
+    /*
+     * Returns the type of vegetation
+     * that belongs at this location.
+     *
+     * Roads and beaches stay clear.
+     */
+
+
     public static Material getVegetation(
             Random random,
             int height,
@@ -15,25 +23,29 @@ public class EarthVegetation {
 
 
         /*
-         * No plants on roads
+         * Keep roads clear
          */
         if (road) {
+
             return Material.AIR;
         }
 
 
         /*
-         * No plants on beaches
+         * Keep beaches open
          */
         if (beach) {
+
             return Material.AIR;
         }
 
 
         /*
-         * Only above sea level
+         * Too close to sea level
+         * for forest
          */
-        if (height < 68) {
+        if (height < 70) {
+
             return Material.AIR;
         }
 
@@ -45,34 +57,28 @@ public class EarthVegetation {
 
 
         /*
-         * Pacific Northwest forest floor
+         * Forest floor plants
          */
-        if (chance < 12) {
+        if (chance < 15) {
 
             return Material.FERN;
-
         }
 
 
-        if (chance < 25) {
+
+        if (chance < 30) {
 
             return Material.TALL_GRASS;
-
         }
+
 
 
         /*
-         * Tree marker
-         * Full trees will be added
-         * in the next decorator step.
+         * Tree marker removed.
+         *
+         * Trees will now be handled
+         * by EarthTreeGenerator.
          */
-        if (chance == 99) {
-
-            return Material.SPRUCE_SAPLING;
-
-        }
-
-
         return Material.AIR;
     }
 }
