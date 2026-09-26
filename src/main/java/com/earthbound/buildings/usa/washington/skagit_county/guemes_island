@@ -1,4 +1,3 @@
-GuemesGeneralStore.java
 package com.earthbound.buildings.usa.washington.skagit_county.guemes_island;
 
 import com.earthbound.EarthCoordinates;
