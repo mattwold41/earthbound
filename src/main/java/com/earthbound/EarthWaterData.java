@@ -1,14 +1,23 @@
 package com.earthbound;
 
-import javax.imageio.ImageIO;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
-import java.awt.image.BufferedImage;
-
+import java.io.BufferedReader;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.net.URLEncoder;
+
+import java.nio.charset.StandardCharsets;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class EarthWaterData {
 
@@ -19,8 +28,7 @@ public class EarthWaterData {
 
 
     /*
-     * Same Guemes test bounds used by
-     * EarthTerrainLoader.
+     * Current EarthBound Guemes test area.
      */
     private static final double GUEMES_WEST =
             -122.70;
@@ -36,32 +44,26 @@ public class EarthWaterData {
 
 
     /*
-     * Water-mask resolution.
-     */
-    private static final int MASK_WIDTH =
-            512;
-
-    private static final int MASK_HEIGHT =
-            512;
-
-
-    /*
-     * Census TIGERweb Hydro MapServer.
+     * Census TIGERweb Hydro service.
      *
      * Layer 1 = Areal Hydrography.
+     *
+     * Unlike the old system, we are NOT
+     * downloading a 512 x 512 rendered image.
+     *
+     * We download the actual water polygons.
      */
-    private static final String HYDRO_SERVICE =
+    private static final String HYDRO_QUERY =
             "https://tigerweb.geo.census.gov/"
                     + "arcgis/rest/services/"
-                    + "TIGERweb/Hydro/MapServer";
+                    + "TIGERweb/Hydro/MapServer/1/query";
 
 
     /*
-     * true  = water
-     * false = land
+     * All downloaded water polygons.
      */
-    private static volatile boolean[][] waterMask =
-            null;
+    private static volatile List<WaterPolygon>
+            waterPolygons = null;
 
 
     private EarthWaterData() {
@@ -70,10 +72,16 @@ public class EarthWaterData {
 
 
     /*
-     * Downloads ONE rendered hydrography image
-     * covering the Guemes test area.
+     * Compatibility method.
      *
-     * No per-block Internet requests.
+     * EarthBound.java already calls
+     * loadGuemesWaterMask().
+     *
+     * We keep that method name so we do not
+     * need to change EarthBound.java yet.
+     *
+     * Internally this now loads VECTOR
+     * water polygons instead of a PNG mask.
      */
     public static boolean loadGuemesWaterMask() {
 
@@ -83,41 +91,43 @@ public class EarthWaterData {
         try {
 
             System.out.println(
-                    "[EarthBound] Downloading Guemes water mask..."
+                    "[EarthBound] Loading vector water polygons..."
             );
 
 
-            String address =
-                    HYDRO_SERVICE
-                            + "/export"
-                            + "?bbox="
-                            + GUEMES_WEST
+            /*
+             * ArcGIS envelope:
+             *
+             * west,south,east,north
+             */
+            String geometry =
+                    GUEMES_WEST
                             + ","
                             + GUEMES_SOUTH
                             + ","
                             + GUEMES_EAST
                             + ","
-                            + GUEMES_NORTH
-                            + "&bboxSR=4326"
-                            + "&imageSR=4326"
-                            + "&size="
-                            + MASK_WIDTH
-                            + ","
-                            + MASK_HEIGHT
+                            + GUEMES_NORTH;
 
-                            /*
-                             * Only draw layer 1:
-                             * Areal Hydrography.
-                             */
-                            + "&layers=show:1"
 
-                            /*
-                             * Transparent background.
-                             * Water polygons remain visible.
-                             */
-                            + "&transparent=true"
-                            + "&format=png32"
-                            + "&f=image";
+            String address =
+                    HYDRO_QUERY
+                            + "?where="
+                            + encode("1=1")
+                            + "&geometry="
+                            + encode(geometry)
+                            + "&geometryType="
+                            + encode("esriGeometryEnvelope")
+                            + "&inSR=4326"
+                            + "&spatialRel="
+                            + encode(
+                                    "esriSpatialRelIntersects"
+                            )
+                            + "&outFields="
+                            + encode("OBJECTID,NAME")
+                            + "&returnGeometry=true"
+                            + "&outSR=4326"
+                            + "&f=geojson";
 
 
             URL url =
@@ -132,8 +142,13 @@ public class EarthWaterData {
 
             connection.setRequestMethod("GET");
 
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(30000);
+            connection.setConnectTimeout(
+                    20000
+            );
+
+            connection.setReadTimeout(
+                    60000
+            );
 
 
             int responseCode =
@@ -143,7 +158,7 @@ public class EarthWaterData {
             if (responseCode != 200) {
 
                 System.out.println(
-                        "[EarthBound] Water mask request failed. HTTP "
+                        "[EarthBound] Vector water request failed. HTTP "
                                 + responseCode
                 );
 
@@ -151,107 +166,170 @@ public class EarthWaterData {
             }
 
 
-            BufferedImage image;
+            String json;
 
 
             try (InputStream input =
-                         connection.getInputStream()) {
+                         connection.getInputStream();
 
-                image =
-                        ImageIO.read(input);
+                 BufferedReader reader =
+                         new BufferedReader(
+                                 new InputStreamReader(
+                                         input,
+                                         StandardCharsets.UTF_8
+                                 )
+                         )) {
+
+
+                StringBuilder builder =
+                        new StringBuilder();
+
+
+                String line;
+
+
+                while ((line =
+                        reader.readLine())
+                        != null) {
+
+                    builder.append(line);
+                }
+
+
+                json =
+                        builder.toString();
             }
 
 
-            if (image == null) {
+            JsonObject root =
+                    JsonParser.parseString(json)
+                            .getAsJsonObject();
+
+
+            JsonArray features =
+                    root.getAsJsonArray(
+                            "features"
+                    );
+
+
+            if (features == null) {
 
                 System.out.println(
-                        "[EarthBound] Water mask PNG could not be decoded."
+                        "[EarthBound] No water features returned."
                 );
 
                 return false;
             }
 
 
-            int width =
-                    image.getWidth();
-
-            int height =
-                    image.getHeight();
-
-
             System.out.println(
-                    "[EarthBound] Water mask image: "
-                            + width
-                            + " x "
-                            + height
+                    "[EarthBound] Water feature count="
+                            + features.size()
             );
 
 
-            boolean[][] newMask =
-                    new boolean[height][width];
+            List<WaterPolygon> polygons =
+                    new ArrayList<>();
 
 
-            int waterCells =
-                    0;
+            for (JsonElement featureElement
+                    : features) {
 
 
-            for (int y = 0;
-                 y < height;
-                 y++) {
+                if (!featureElement
+                        .isJsonObject()) {
 
-                for (int x = 0;
-                     x < width;
-                     x++) {
+                    continue;
+                }
 
 
-                    int argb =
-                            image.getRGB(
-                                    x,
-                                    y
-                            );
+                JsonObject feature =
+                        featureElement
+                                .getAsJsonObject();
 
 
-                    /*
-                     * Transparent pixels have
-                     * alpha = 0.
-                     *
-                     * Hydrography polygons have
-                     * visible pixels.
-                     */
-                    int alpha =
-                            (argb >>> 24)
-                                    & 0xFF;
+                JsonObject geometryObject =
+                        feature.getAsJsonObject(
+                                "geometry"
+                        );
 
 
-                    boolean water =
-                            alpha > 0;
+                if (geometryObject == null) {
+
+                    continue;
+                }
 
 
-                    newMask[y][x] =
-                            water;
+                JsonElement typeElement =
+                        geometryObject.get(
+                                "type"
+                        );
 
 
-                    if (water) {
-                        waterCells++;
+                JsonArray coordinates =
+                        geometryObject
+                                .getAsJsonArray(
+                                        "coordinates"
+                                );
+
+
+                if (typeElement == null
+                        || coordinates == null) {
+
+                    continue;
+                }
+
+
+                String type =
+                        typeElement
+                                .getAsString();
+
+
+                if ("Polygon".equals(type)) {
+
+                    addPolygon(
+                            coordinates,
+                            polygons
+                    );
+
+                } else if (
+                        "MultiPolygon"
+                                .equals(type)) {
+
+
+                    for (JsonElement polygonElement
+                            : coordinates) {
+
+
+                        if (!polygonElement
+                                .isJsonArray()) {
+
+                            continue;
+                        }
+
+
+                        addPolygon(
+                                polygonElement
+                                        .getAsJsonArray(),
+                                polygons
+                        );
                     }
                 }
             }
 
 
-            waterMask =
-                    newMask;
+            waterPolygons =
+                    polygons;
 
 
             System.out.println(
-                    "[EarthBound] Guemes water mask loaded!"
+                    "[EarthBound] Vector water polygons loaded!"
             );
 
 
             System.out.println(
-                    "[EarthBound] Water pixels: "
-                            + waterCells
-                            + " / "
-                            + (width * height)
+                    "[EarthBound] Water polygons: "
+                            + polygons.size()
             );
 
 
@@ -261,7 +339,7 @@ public class EarthWaterData {
         } catch (Exception exception) {
 
             System.out.println(
-                    "[EarthBound] Failed to load Guemes water mask."
+                    "[EarthBound] Failed to load vector water polygons."
             );
 
             exception.printStackTrace();
@@ -280,39 +358,159 @@ public class EarthWaterData {
 
 
     /*
-     * Returns true after the mask
-     * has successfully loaded.
+     * Converts one GeoJSON Polygon
+     * into our local polygon representation.
+     *
+     * GeoJSON polygon coordinates contain:
+     *
+     * ring 0 = outside boundary
+     * ring 1+ = holes
+     */
+    private static void addPolygon(
+            JsonArray polygonCoordinates,
+            List<WaterPolygon> polygons) {
+
+
+        if (polygonCoordinates.size()
+                == 0) {
+
+            return;
+        }
+
+
+        List<Ring> rings =
+                new ArrayList<>();
+
+
+        for (JsonElement ringElement
+                : polygonCoordinates) {
+
+
+            if (!ringElement
+                    .isJsonArray()) {
+
+                continue;
+            }
+
+
+            JsonArray ringCoordinates =
+                    ringElement
+                            .getAsJsonArray();
+
+
+            List<Point> points =
+                    new ArrayList<>();
+
+
+            for (JsonElement pointElement
+                    : ringCoordinates) {
+
+
+                if (!pointElement
+                        .isJsonArray()) {
+
+                    continue;
+                }
+
+
+                JsonArray coordinate =
+                        pointElement
+                                .getAsJsonArray();
+
+
+                if (coordinate.size()
+                        < 2) {
+
+                    continue;
+                }
+
+
+                /*
+                 * GeoJSON order:
+                 *
+                 * [longitude, latitude]
+                 */
+                double longitude =
+                        coordinate
+                                .get(0)
+                                .getAsDouble();
+
+
+                double latitude =
+                        coordinate
+                                .get(1)
+                                .getAsDouble();
+
+
+                points.add(
+                        new Point(
+                                latitude,
+                                longitude
+                        )
+                );
+            }
+
+
+            if (points.size()
+                    >= 3) {
+
+                rings.add(
+                        new Ring(points)
+                );
+            }
+        }
+
+
+        if (!rings.isEmpty()) {
+
+            polygons.add(
+                    new WaterPolygon(
+                            rings
+                    )
+            );
+        }
+    }
+
+
+    /*
+     * Returns true after vector water
+     * polygons have loaded.
      */
     public static boolean isLoaded() {
 
-        return waterMask != null;
+        return waterPolygons
+                != null;
     }
 
 
     /*
      * Fast local lookup.
      *
-     * Minecraft can call this thousands
-     * of times without making any
-     * Internet requests.
+     * There are NO Internet requests here.
+     *
+     * Minecraft passes the real-world
+     * latitude and longitude for a block.
+     * We check whether that point falls
+     * inside one of the downloaded
+     * hydrography polygons.
      */
     public static boolean isWater(
             double latitude,
             double longitude) {
 
 
-        boolean[][] mask =
-                waterMask;
+        List<WaterPolygon> polygons =
+                waterPolygons;
 
 
-        if (mask == null) {
+        if (polygons == null) {
 
             return false;
         }
 
 
         /*
-         * Outside our current Guemes
+         * Outside the current Guemes
          * test area.
          */
         if (latitude < GUEMES_SOUTH
@@ -324,62 +522,279 @@ public class EarthWaterData {
         }
 
 
-        double xPercent =
-                (longitude - GUEMES_WEST)
-                        / (GUEMES_EAST
-                        - GUEMES_WEST);
+        for (WaterPolygon polygon
+                : polygons) {
+
+
+            if (polygon.contains(
+                    latitude,
+                    longitude)) {
+
+                return true;
+            }
+        }
+
+
+        return false;
+    }
+
+
+    /*
+     * URL encoding helper.
+     */
+    private static String encode(
+            String value) {
+
+        return URLEncoder.encode(
+                value,
+                StandardCharsets.UTF_8
+        );
+    }
+
+
+    /*
+     * One water polygon.
+     *
+     * First ring = outer boundary.
+     * Remaining rings = holes/islands.
+     */
+    private static class WaterPolygon {
+
+        private final List<Ring> rings;
+
+
+        private WaterPolygon(
+                List<Ring> rings) {
+
+            this.rings =
+                    rings;
+        }
+
+
+        private boolean contains(
+                double latitude,
+                double longitude) {
+
+
+            if (rings.isEmpty()) {
+
+                return false;
+            }
+
+
+            /*
+             * Must be inside outer ring.
+             */
+            if (!rings.get(0)
+                    .contains(
+                            latitude,
+                            longitude)) {
+
+                return false;
+            }
+
+
+            /*
+             * If inside any interior ring,
+             * this point is a hole and
+             * therefore not water.
+             */
+            for (int i = 1;
+                 i < rings.size();
+                 i++) {
+
+
+                if (rings.get(i)
+                        .contains(
+                                latitude,
+                                longitude)) {
+
+                    return false;
+                }
+            }
+
+
+            return true;
+        }
+    }
+
+
+    /*
+     * One polygon ring.
+     */
+    private static class Ring {
+
+        private final List<Point> points;
+
+
+        private final double minLatitude;
+        private final double maxLatitude;
+
+        private final double minLongitude;
+        private final double maxLongitude;
+
+
+        private Ring(
+                List<Point> points) {
+
+            this.points =
+                    points;
+
+
+            double minLat =
+                    Double.POSITIVE_INFINITY;
+
+            double maxLat =
+                    Double.NEGATIVE_INFINITY;
+
+            double minLon =
+                    Double.POSITIVE_INFINITY;
+
+            double maxLon =
+                    Double.NEGATIVE_INFINITY;
+
+
+            for (Point point
+                    : points) {
+
+
+                minLat =
+                        Math.min(
+                                minLat,
+                                point.latitude
+                        );
+
+
+                maxLat =
+                        Math.max(
+                                maxLat,
+                                point.latitude
+                        );
+
+
+                minLon =
+                        Math.min(
+                                minLon,
+                                point.longitude
+                        );
+
+
+                maxLon =
+                        Math.max(
+                                maxLon,
+                                point.longitude
+                        );
+            }
+
+
+            minLatitude =
+                    minLat;
+
+            maxLatitude =
+                    maxLat;
+
+            minLongitude =
+                    minLon;
+
+            maxLongitude =
+                    maxLon;
+        }
 
 
         /*
-         * Image row zero is north.
+         * Standard ray-casting
+         * point-in-polygon test.
          */
-        double yPercent =
-                (GUEMES_NORTH - latitude)
-                        / (GUEMES_NORTH
-                        - GUEMES_SOUTH);
+        private boolean contains(
+                double latitude,
+                double longitude) {
 
 
-        int width =
-                mask[0].length;
+            /*
+             * Fast bounding-box rejection.
+             */
+            if (latitude < minLatitude
+                    || latitude > maxLatitude
+                    || longitude < minLongitude
+                    || longitude > maxLongitude) {
 
-        int height =
-                mask.length;
-
-
-        int x =
-                (int) Math.round(
-                        xPercent
-                                * (width - 1)
-                );
+                return false;
+            }
 
 
-        int y =
-                (int) Math.round(
-                        yPercent
-                                * (height - 1)
-                );
+            boolean inside =
+                    false;
 
 
-        x =
-                Math.max(
-                        0,
-                        Math.min(
-                                width - 1,
-                                x
-                        )
-                );
+            int size =
+                    points.size();
 
 
-        y =
-                Math.max(
-                        0,
-                        Math.min(
-                                height - 1,
-                                y
-                        )
-                );
+            for (int i = 0,
+                 j = size - 1;
+                 i < size;
+                 j = i++) {
 
 
-        return mask[y][x];
+                Point pointI =
+                        points.get(i);
+
+                Point pointJ =
+                        points.get(j);
+
+
+                boolean crosses =
+                        ((pointI.latitude
+                                > latitude)
+                                !=
+                                (pointJ.latitude
+                                        > latitude))
+                                &&
+                                (longitude
+                                        <
+                                        (pointJ.longitude
+                                                - pointI.longitude)
+                                                *
+                                                (latitude
+                                                        - pointI.latitude)
+                                                /
+                                                (pointJ.latitude
+                                                        - pointI.latitude)
+                                                +
+                                                pointI.longitude);
+
+
+                if (crosses) {
+
+                    inside =
+                            !inside;
+                }
+            }
+
+
+            return inside;
+        }
+    }
+
+
+    /*
+     * Real-world geographic point.
+     */
+    private static class Point {
+
+        private final double latitude;
+        private final double longitude;
+
+
+        private Point(
+                double latitude,
+                double longitude) {
+
+            this.latitude =
+                    latitude;
+
+            this.longitude =
+                    longitude;
+        }
     }
 }
