@@ -4,15 +4,10 @@ public class EarthCoastData {
 
 
     /*
-     * Coastline beach system
-     *
-     * Returns:
+     * Beach system
      *
      * 0 = normal land
      * 1 = beach
-     * 2 = wider beach area
-     * 3 = coastal transition
-     *
      */
 
 
@@ -22,7 +17,7 @@ public class EarthCoastData {
 
 
         /*
-         * Never create beach underwater
+         * No beach underwater
          */
         if (EarthWaterData.isWater(
                 latitude,
@@ -30,17 +25,6 @@ public class EarthCoastData {
 
             return 0;
         }
-
-
-        /*
-         * Temporary Guemes coastline system.
-         *
-         * This will later be replaced
-         * with real shoreline distance data.
-         *
-         * For now we use elevation
-         * and proximity checks.
-         */
 
 
         Double elevation =
@@ -56,23 +40,16 @@ public class EarthCoastData {
         }
 
 
-
         /*
-         * Low coastal areas become beach.
+         * Only very low coastal areas
+         * become beach.
          *
-         * Higher areas remain grass.
+         * Prevents whole island
+         * becoming sand.
          */
-        if (elevation <= 3) {
+        if (elevation <= 1.5) {
 
             return 1;
-
-        } else if (elevation <= 6) {
-
-            return 2;
-
-        } else if (elevation <= 10) {
-
-            return 3;
         }
 
 
