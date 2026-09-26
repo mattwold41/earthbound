@@ -32,13 +32,6 @@ public class EarthCoordinates {
      * EarthBound horizontal scale.
      *
      * 1 Minecraft block = 1 real-world meter.
-     *
-     * This is a 1:1 horizontal scale.
-     *
-     * If we ever decide to change EarthBound
-     * to 1:2 later, this can be changed to:
-     *
-     * 2.0
      */
     private static final double METERS_PER_BLOCK =
             1.0;
@@ -49,17 +42,18 @@ public class EarthCoordinates {
     /*
      * Converts Minecraft coordinates
      * into real-world latitude.
+     *
+     * For the EarthBound world:
+     *
+     * Z increasing = north
+     * Z decreasing = south
      */
     public static double getLatitude(
             int x,
             int z) {
 
-        /*
-         * Minecraft Z decreases when
-         * traveling north.
-         */
         double metersNorth =
-                (START_Z - z)
+                (z - START_Z)
                         * METERS_PER_BLOCK;
 
         double latitudeChange =
@@ -73,15 +67,13 @@ public class EarthCoordinates {
     /*
      * Converts Minecraft coordinates
      * into real-world longitude.
+     *
+     * X increasing = east.
      */
     public static double getLongitude(
             int x,
             int z) {
 
-        /*
-         * Minecraft X increases when
-         * traveling east.
-         */
         double metersEast =
                 (x - START_X)
                         * METERS_PER_BLOCK;
