@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 public final class EarthRoadData {
 
     /*
-     * Guemes Island geographic bounds.
+     * Guemes Island / Anacortes geographic bounds.
      */
     private static final double WEST = -122.70;
     private static final double SOUTH = 48.47;
@@ -20,7 +20,7 @@ public final class EarthRoadData {
     private static final double NORTH = 48.60;
 
     /*
-     * Resolution of the downloaded road mask.
+     * Road-mask resolution.
      */
     private static final int MASK_WIDTH = 1024;
     private static final int MASK_HEIGHT = 1024;
@@ -28,42 +28,34 @@ public final class EarthRoadData {
     /*
      * EarthBound road-width standards.
      *
-     * Freeway / Interstate = 10 blocks
+     * Interstate / Freeway = 10 blocks
      * Highway              = 8 blocks
-     * City / Local Street  = 6 blocks
+     * Local / City Street  = 6 blocks
      */
     public static final int FREEWAY_WIDTH = 10;
     public static final int HIGHWAY_WIDTH = 8;
     public static final int LOCAL_WIDTH = 6;
 
     /*
-     * Download reliability settings.
-     *
-     * EarthBound will try up to 3 times
-     * before giving up on the road service.
+     * Download reliability.
      */
     private static final int MAX_DOWNLOAD_ATTEMPTS = 3;
 
-    /*
-     * Give TIGERweb more time than before.
-     */
     private static final int CONNECT_TIMEOUT_MS = 20000;
+
     private static final int READ_TIMEOUT_MS = 60000;
 
-    /*
-     * Wait between failed attempts.
-     */
     private static final long RETRY_DELAY_MS = 3000L;
 
     /*
-     * U.S. Census TIGERweb transportation service.
+     * Census TIGERweb Transportation service.
      */
     private static final String ROAD_SERVICE =
             "https://tigerweb.geo.census.gov/arcgis/rest/services/"
                     + "TIGERweb/Transportation/MapServer";
 
     /*
-     * Downloaded Guemes road mask.
+     * Road data stored in memory.
      */
     private static boolean[][] roadMask;
 
@@ -73,7 +65,7 @@ public final class EarthRoadData {
     }
 
     /*
-     * Road types supported by EarthBound.
+     * EarthBound road classifications.
      */
     public enum RoadType {
 
@@ -97,9 +89,9 @@ public final class EarthRoadData {
     }
 
     /*
-     * Loads the Guemes road mask.
+     * Load the Guemes / Anacortes road mask.
      *
-     * If TIGERweb temporarily times out,
+     * If TIGERweb temporarily fails,
      * EarthBound automatically retries.
      */
     public static synchronized boolean loadGuemesRoadMask() {
@@ -125,7 +117,10 @@ public final class EarthRoadData {
 
             try {
 
-                if (downloadRoadMask()) {
+                boolean success =
+                        downloadRoadMask();
+
+                if (success) {
 
                     loaded = true;
 
@@ -155,7 +150,7 @@ public final class EarthRoadData {
             }
 
             /*
-             * Don't wait after the final attempt.
+             * Wait before another attempt.
              */
             if (attempt < MAX_DOWNLOAD_ATTEMPTS) {
 
@@ -167,7 +162,9 @@ public final class EarthRoadData {
 
                 try {
 
-                    Thread.sleep(RETRY_DELAY_MS);
+                    Thread.sleep(
+                            RETRY_DELAY_MS
+                    );
 
                 } catch (InterruptedException exception) {
 
@@ -182,6 +179,9 @@ public final class EarthRoadData {
             }
         }
 
+        /*
+         * All attempts failed.
+         */
         roadMask = null;
         loaded = false;
 
@@ -196,7 +196,7 @@ public final class EarthRoadData {
     }
 
     /*
-     * Performs one road-mask download attempt.
+     * Performs one download attempt.
      */
     private static boolean downloadRoadMask()
             throws Exception {
@@ -225,7 +225,9 @@ public final class EarthRoadData {
                         + "&f=image";
 
         URL url =
-                URI.create(request).toURL();
+                URI.create(
+                        request
+                ).toURL();
 
         HttpURLConnection connection =
                 (HttpURLConnection)
@@ -270,7 +272,9 @@ public final class EarthRoadData {
                          connection.getInputStream()) {
 
                 image =
-                        ImageIO.read(input);
+                        ImageIO.read(
+                                input
+                        );
             }
 
             if (image == null) {
@@ -342,14 +346,15 @@ public final class EarthRoadData {
     }
 
     /*
-     * Determines the road type at a
-     * real-world latitude/longitude.
+     * Get the road classification at
+     * a real-world coordinate.
      *
-     * During the Guemes phase, roads from
-     * this mask are classified as LOCAL.
+     * For this first phase, roads detected
+     * in the Guemes / Anacortes mask are
+     * classified as LOCAL.
      *
-     * Later we will load highway/freeway
-     * classes separately.
+     * Later we will separate Highway 20
+     * and freeways such as I-5.
      */
     public static RoadType getRoadType(
             double latitude,
@@ -357,7 +362,8 @@ public final class EarthRoadData {
 
         if (!isRawRoad(
                 latitude,
-                longitude)) {
+                longitude
+        )) {
 
             return RoadType.NONE;
         }
@@ -366,7 +372,8 @@ public final class EarthRoadData {
     }
 
     /*
-     * Compatibility method.
+     * Compatibility method used by
+     * other EarthBound code.
      */
     public static boolean isRoad(
             double latitude,
@@ -379,7 +386,8 @@ public final class EarthRoadData {
     }
 
     /*
-     * Returns the configured road width.
+     * Return the configured width for
+     * the road at this coordinate.
      */
     public static int getRoadWidth(
             double latitude,
@@ -392,8 +400,7 @@ public final class EarthRoadData {
     }
 
     /*
-     * Checks whether a coordinate falls
-     * on the downloaded road mask.
+     * Check the downloaded TIGERweb mask.
      */
     private static boolean isRawRoad(
             double latitude,
@@ -405,6 +412,9 @@ public final class EarthRoadData {
             return false;
         }
 
+        /*
+         * Outside our current data area.
+         */
         if (longitude < WEST
                 || longitude > EAST
                 || latitude < SOUTH
@@ -413,10 +423,17 @@ public final class EarthRoadData {
             return false;
         }
 
+        /*
+         * Convert longitude to image X.
+         */
         double xFraction =
                 (longitude - WEST)
                         / (EAST - WEST);
 
+        /*
+         * Image Y runs downward while
+         * latitude runs northward.
+         */
         double yFraction =
                 (NORTH - latitude)
                         / (NORTH - SOUTH);
@@ -433,6 +450,10 @@ public final class EarthRoadData {
                                 * (roadMask.length - 1)
                 );
 
+        /*
+         * Keep coordinates safely inside
+         * the downloaded image.
+         */
         x =
                 Math.max(
                         0,
@@ -456,7 +477,7 @@ public final class EarthRoadData {
 
     /*
      * Returns true after road data
-     * successfully loads.
+     * has successfully loaded.
      */
     public static boolean isLoaded() {
 
@@ -465,7 +486,7 @@ public final class EarthRoadData {
     }
 
     /*
-     * URL encoder for TIGERweb parameters.
+     * Encode TIGERweb URL parameters.
      */
     private static String encode(
             String value) {
@@ -475,3 +496,4 @@ public final class EarthRoadData {
                 StandardCharsets.UTF_8
         );
     }
+}
