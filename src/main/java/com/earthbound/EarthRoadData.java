@@ -49,12 +49,16 @@ public final class EarthRoadData {
         }
 
         try {
+
             System.out.println(
                     "[EarthBound] Downloading Guemes road mask..."
             );
 
             String bbox =
-                    WEST + "," + SOUTH + "," + EAST + "," + NORTH;
+                    WEST + ","
+                            + SOUTH + ","
+                            + EAST + ","
+                            + NORTH;
 
             String request =
                     ROAD_SERVICE
@@ -73,63 +77,93 @@ public final class EarthRoadData {
                             + "&format=png32"
                             + "&f=image";
 
-            URL url = URI.create(request).toURL();
+            URL url =
+                    URI.create(request).toURL();
 
             HttpURLConnection connection =
                     (HttpURLConnection) url.openConnection();
 
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(30000);
+
             connection.setRequestProperty(
                     "User-Agent",
                     "EarthBound-Minecraft/0.1.0"
             );
 
-            int responseCode = connection.getResponseCode();
+            int responseCode =
+                    connection.getResponseCode();
 
-            if (responseCode != HttpURLConnection.HTTP_OK) {
+            if (responseCode
+                    != HttpURLConnection.HTTP_OK) {
+
                 System.out.println(
                         "[EarthBound] Road service returned HTTP "
                                 + responseCode
                 );
+
                 connection.disconnect();
+
                 return false;
             }
 
             BufferedImage image;
 
-            try (InputStream input = connection.getInputStream()) {
-                image = ImageIO.read(input);
+            try (InputStream input =
+                         connection.getInputStream()) {
+
+                image =
+                        ImageIO.read(input);
+
             } finally {
+
                 connection.disconnect();
             }
 
             if (image == null) {
+
                 System.out.println(
                         "[EarthBound] Could not decode road mask image."
                 );
+
                 return false;
             }
 
             boolean[][] newMask =
-                    new boolean[image.getHeight()][image.getWidth()];
+                    new boolean[
+                            image.getHeight()
+                            ][
+                            image.getWidth()
+                            ];
 
             int roadPixels = 0;
 
-            for (int y = 0; y < image.getHeight(); y++) {
-                for (int x = 0; x < image.getWidth(); x++) {
+            for (int y = 0;
+                 y < image.getHeight();
+                 y++) {
 
-                    int argb = image.getRGB(x, y);
+                for (int x = 0;
+                     x < image.getWidth();
+                     x++) {
 
-                    int alpha = (argb >>> 24) & 0xFF;
+                    int argb =
+                            image.getRGB(x, y);
+
+                    int alpha =
+                            (argb >>> 24) & 0xFF;
 
                     /*
                      * Transparent background = no road.
-                     * Visible pixels are road symbols from TIGERweb.
+                     *
+                     * Any sufficiently visible TIGERweb
+                     * road pixel becomes part of our
+                     * Minecraft road mask.
                      */
-                    boolean road = alpha > 20;
+                    boolean road =
+                            alpha > 20;
 
-                    newMask[y][x] = road;
+                    newMask[y][x] =
+                            road;
 
                     if (road) {
                         roadPixels++;
@@ -137,8 +171,11 @@ public final class EarthRoadData {
                 }
             }
 
-            roadMask = newMask;
-            loaded = true;
+            roadMask =
+                    newMask;
+
+            loaded =
+                    true;
 
             System.out.println(
                     "[EarthBound] Guemes road mask loaded: "
@@ -175,10 +212,15 @@ public final class EarthRoadData {
             double latitude,
             double longitude) {
 
-        if (!loaded || roadMask == null) {
+        if (!loaded
+                || roadMask == null) {
+
             return false;
         }
 
+        /*
+         * Outside the current Guemes test area.
+         */
         if (longitude < WEST
                 || longitude > EAST
                 || latitude < SOUTH
@@ -187,38 +229,69 @@ public final class EarthRoadData {
             return false;
         }
 
+        /*
+         * Convert longitude into horizontal
+         * road-mask position.
+         */
         double xFraction =
-                (longitude - WEST) / (EAST - WEST);
+                (longitude - WEST)
+                        / (EAST - WEST);
 
+        /*
+         * Image Y runs downward,
+         * while latitude runs northward.
+         */
         double yFraction =
-                (NORTH - latitude) / (NORTH - SOUTH);
+                (NORTH - latitude)
+                        / (NORTH - SOUTH);
 
         int x =
                 (int) Math.round(
-                        xFraction * (roadMask[0].length - 1)
+                        xFraction
+                                * (roadMask[0].length - 1)
                 );
 
         int y =
                 (int) Math.round(
-                        yFraction * (roadMask.length - 1)
+                        yFraction
+                                * (roadMask.length - 1)
                 );
 
-        x = Math.max(
-                0,
-                Math.min(roadMask[0].length - 1, x)
-        );
+        /*
+         * Keep the pixel safely inside
+         * the downloaded image.
+         */
+        x =
+                Math.max(
+                        0,
+                        Math.min(
+                                roadMask[0].length - 1,
+                                x
+                        )
+                );
 
-        y = Math.max(
-                0,
-                Math.min(roadMask.length - 1, y)
-        );
+        y =
+                Math.max(
+                        0,
+                        Math.min(
+                                roadMask.length - 1,
+                                y
+                        )
+                );
 
         /*
-         * Search a small neighborhood around the coordinate.
-         * This makes thin TIGER road lines wide enough to become
-         * practical Minecraft roads instead of single-pixel paths.
+         * IMPORTANT:
+         *
+         * Radius is now ZERO.
+         *
+         * Previously this was 2, which expanded
+         * every TIGER road pixel outward and made
+         * the Minecraft roads much too wide.
+         *
+         * Radius 0 uses only the actual road-mask
+         * pixel at this geographic position.
          */
-        int radius = 2;
+        int radius = 0;
 
         for (int offsetY = -radius;
              offsetY <= radius;
@@ -228,18 +301,24 @@ public final class EarthRoadData {
                  offsetX <= radius;
                  offsetX++) {
 
-                int sampleX = x + offsetX;
-                int sampleY = y + offsetY;
+                int sampleX =
+                        x + offsetX;
+
+                int sampleY =
+                        y + offsetY;
 
                 if (sampleX < 0
-                        || sampleX >= roadMask[0].length
+                        || sampleX
+                        >= roadMask[0].length
                         || sampleY < 0
-                        || sampleY >= roadMask.length) {
+                        || sampleY
+                        >= roadMask.length) {
 
                     continue;
                 }
 
                 if (roadMask[sampleY][sampleX]) {
+
                     return true;
                 }
             }
@@ -248,14 +327,25 @@ public final class EarthRoadData {
         return false;
     }
 
+    /**
+     * Returns whether the Guemes road
+     * data has successfully loaded.
+     */
     public static boolean isLoaded() {
-        return loaded && roadMask != null;
+
+        return loaded
+                && roadMask != null;
     }
 
-    private static String encode(String value) {
+    /**
+     * URL-encodes values used in the
+     * TIGERweb request.
+     */
+    private static String encode(
+            String value) {
+
         return URLEncoder.encode(
                 value,
                 StandardCharsets.UTF_8
         );
     }
-}
