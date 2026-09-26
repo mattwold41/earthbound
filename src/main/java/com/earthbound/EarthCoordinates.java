@@ -6,8 +6,6 @@ public class EarthCoordinates {
      * EarthBound geographic anchor.
      *
      * Guemes Island - south side ferry terminal.
-     * Starting point is centered on the road
-     * approaching the ferry dock.
      *
      * Minecraft:
      * X = -624
@@ -31,14 +29,19 @@ public class EarthCoordinates {
             -544;
 
     /*
-     * EarthBound horizontal scale:
+     * EarthBound horizontal scale.
      *
-     * 1 Minecraft block = 2 real-world meters.
+     * 1 Minecraft block = 1 real-world meter.
      *
-     * This gives us a 1:2 horizontal scale.
+     * This is a 1:1 horizontal scale.
+     *
+     * If we ever decide to change EarthBound
+     * to 1:2 later, this can be changed to:
+     *
+     * 2.0
      */
     private static final double METERS_PER_BLOCK =
-            2.0;
+            1.0;
 
     private EarthCoordinates() {
     }
