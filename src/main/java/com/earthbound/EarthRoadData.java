@@ -1,26 +1,30 @@
 package com.earthbound;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
+import java.io.BufferedReader;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class EarthRoadData {
 
     /*
-     * Guemes / Anacortes test area.
+     * Current Guemes / Anacortes test area.
      */
     private static final double WEST = -122.70;
     private static final double SOUTH = 48.47;
     private static final double EAST = -122.55;
     private static final double NORTH = 48.60;
-
-    private static final int MASK_WIDTH = 1024;
-    private static final int MASK_HEIGHT = 1024;
 
     /*
      * EarthBound target road widths.
@@ -30,7 +34,23 @@ public final class EarthRoadData {
     public static final int LOCAL_WIDTH = 6;
 
     /*
-     * Download retry settings.
+     * How close a Minecraft location must be
+     * to a road centerline to count as road.
+     *
+     * These are half-widths because the
+     * centerline runs through the middle.
+     */
+    private static final double FREEWAY_RADIUS =
+            FREEWAY_WIDTH / 2.0;
+
+    private static final double HIGHWAY_RADIUS =
+            HIGHWAY_WIDTH / 2.0;
+
+    private static final double LOCAL_RADIUS =
+            LOCAL_WIDTH / 2.0;
+
+    /*
+     * Download reliability.
      */
     private static final int MAX_DOWNLOAD_ATTEMPTS = 3;
 
@@ -41,27 +61,34 @@ public final class EarthRoadData {
     private static final long RETRY_DELAY_MS = 3000L;
 
     /*
-     * Current Census TIGERweb Transportation service.
-     *
-     * Relevant layers:
-     *
-     * 2 = Primary Roads
-     * 6 = Secondary Roads
-     * 8 = Local Roads
+     * TIGERweb Transportation service.
      */
     private static final String ROAD_SERVICE =
             "https://tigerweb.geo.census.gov/arcgis/rest/services/"
                     + "TIGERweb/Transportation/MapServer";
 
     /*
-     * Separate masks allow EarthBound to
-     * distinguish road classes.
+     * TIGERweb feature layers.
+     *
+     * 2 = Primary Roads
+     * 6 = Secondary Roads
+     * 8 = Local Roads
      */
-    private static boolean[][] primaryMask;
+    private static final int PRIMARY_LAYER = 2;
+    private static final int SECONDARY_LAYER = 6;
+    private static final int LOCAL_LAYER = 8;
 
-    private static boolean[][] secondaryMask;
+    /*
+     * Actual road centerline segments.
+     */
+    private static final List<RoadSegment>
+            primaryRoads = new ArrayList<>();
 
-    private static boolean[][] localMask;
+    private static final List<RoadSegment>
+            secondaryRoads = new ArrayList<>();
+
+    private static final List<RoadSegment>
+            localRoads = new ArrayList<>();
 
     private static boolean loaded = false;
 
@@ -90,49 +117,79 @@ public final class EarthRoadData {
     }
 
     /*
-     * Load all three road classes.
+     * One piece of a road centerline.
+     */
+    private static final class RoadSegment {
+
+        private final double latitude1;
+        private final double longitude1;
+
+        private final double latitude2;
+        private final double longitude2;
+
+        private RoadSegment(
+                double latitude1,
+                double longitude1,
+                double latitude2,
+                double longitude2) {
+
+            this.latitude1 = latitude1;
+            this.longitude1 = longitude1;
+
+            this.latitude2 = latitude2;
+            this.longitude2 = longitude2;
+        }
+    }
+
+    /*
+     * Keep the old method name so
+     * EarthBound.java does not need to
+     * change yet.
      */
     public static synchronized boolean loadGuemesRoadMask() {
 
-        if (loaded
-                && primaryMask != null
-                && secondaryMask != null
-                && localMask != null) {
-
+        if (loaded) {
             return true;
         }
 
         System.out.println(
-                "[EarthBound] Loading classified road data..."
+                "[EarthBound] Loading vector road centerlines..."
         );
 
-        primaryMask =
-                downloadLayerWithRetry(
-                        2,
-                        "primary roads"
+        primaryRoads.clear();
+        secondaryRoads.clear();
+        localRoads.clear();
+
+        boolean primaryLoaded =
+                loadLayerWithRetry(
+                        PRIMARY_LAYER,
+                        "primary roads",
+                        primaryRoads
                 );
 
-        secondaryMask =
-                downloadLayerWithRetry(
-                        6,
-                        "secondary roads"
+        boolean secondaryLoaded =
+                loadLayerWithRetry(
+                        SECONDARY_LAYER,
+                        "secondary roads",
+                        secondaryRoads
                 );
 
-        localMask =
-                downloadLayerWithRetry(
-                        8,
-                        "local roads"
+        boolean localLoaded =
+                loadLayerWithRetry(
+                        LOCAL_LAYER,
+                        "local roads",
+                        localRoads
                 );
 
-        if (primaryMask == null
-                || secondaryMask == null
-                || localMask == null) {
+        if (!primaryLoaded
+                || !secondaryLoaded
+                || !localLoaded) {
 
             loaded = false;
 
             System.out.println(
-                    "[EarthBound] Classified road data could not "
-                            + "be completely loaded."
+                    "[EarthBound] Vector road data "
+                            + "could not be completely loaded."
             );
 
             return false;
@@ -141,13 +198,20 @@ public final class EarthRoadData {
         loaded = true;
 
         System.out.println(
-                "[EarthBound] Classified Guemes/Anacortes "
-                        + "road data loaded!"
+                "[EarthBound] Vector road centerlines loaded!"
         );
 
         System.out.println(
-                "[EarthBound] Road widths configured: "
-                        + "freeway="
+                "[EarthBound] Road segments: primary="
+                        + primaryRoads.size()
+                        + ", secondary="
+                        + secondaryRoads.size()
+                        + ", local="
+                        + localRoads.size()
+        );
+
+        System.out.println(
+                "[EarthBound] Road widths: freeway="
                         + FREEWAY_WIDTH
                         + ", highway="
                         + HIGHWAY_WIDTH
@@ -159,12 +223,12 @@ public final class EarthRoadData {
     }
 
     /*
-     * Download one TIGERweb layer,
-     * automatically retrying failures.
+     * Download one road class with retries.
      */
-    private static boolean[][] downloadLayerWithRetry(
+    private static boolean loadLayerWithRetry(
             int layer,
-            String layerName) {
+            String layerName,
+            List<RoadSegment> destination) {
 
         for (int attempt = 1;
              attempt <= MAX_DOWNLOAD_ATTEMPTS;
@@ -173,7 +237,7 @@ public final class EarthRoadData {
             System.out.println(
                     "[EarthBound] Downloading "
                             + layerName
-                            + " - attempt "
+                            + " vectors - attempt "
                             + attempt
                             + " of "
                             + MAX_DOWNLOAD_ATTEMPTS
@@ -181,15 +245,26 @@ public final class EarthRoadData {
 
             try {
 
-                boolean[][] mask =
+                List<RoadSegment> downloaded =
                         downloadLayer(
                                 layer,
                                 layerName
                         );
 
-                if (mask != null) {
+                if (downloaded != null) {
 
-                    return mask;
+                    destination.clear();
+                    destination.addAll(downloaded);
+
+                    System.out.println(
+                            "[EarthBound] "
+                                    + layerName
+                                    + " loaded with "
+                                    + destination.size()
+                                    + " centerline segments."
+                    );
+
+                    return true;
                 }
 
             } catch (Exception exception) {
@@ -229,23 +304,24 @@ public final class EarthRoadData {
 
                     Thread.currentThread().interrupt();
 
-                    return null;
+                    return false;
                 }
             }
         }
 
-        return null;
+        return false;
     }
 
     /*
-     * Download a single TIGERweb road layer.
+     * Query TIGERweb for actual GeoJSON
+     * road geometry.
      */
-    private static boolean[][] downloadLayer(
+    private static List<RoadSegment> downloadLayer(
             int layer,
             String layerName)
             throws Exception {
 
-        String bbox =
+        String envelope =
                 WEST + ","
                         + SOUTH + ","
                         + EAST + ","
@@ -253,22 +329,27 @@ public final class EarthRoadData {
 
         String request =
                 ROAD_SERVICE
-                        + "/export"
-                        + "?bbox="
-                        + encode(bbox)
-                        + "&bboxSR=4326"
-                        + "&imageSR=4326"
-                        + "&size="
-                        + MASK_WIDTH
-                        + ","
-                        + MASK_HEIGHT
-                        + "&layers="
+                        + "/"
+                        + layer
+                        + "/query"
+                        + "?where="
+                        + encode("1=1")
+                        + "&geometry="
+                        + encode(envelope)
+                        + "&geometryType="
+                        + encode("esriGeometryEnvelope")
+                        + "&inSR=4326"
+                        + "&spatialRel="
                         + encode(
-                                "show:" + layer
+                                "esriSpatialRelIntersects"
                         )
-                        + "&transparent=true"
-                        + "&format=png32"
-                        + "&f=image";
+                        + "&outFields="
+                        + encode(
+                                "OBJECTID,NAME,BASENAME,MTFCC,RTTYP"
+                        )
+                        + "&returnGeometry=true"
+                        + "&outSR=4326"
+                        + "&f=geojson";
 
         URL url =
                 URI.create(
@@ -296,7 +377,7 @@ public final class EarthRoadData {
 
             connection.setRequestProperty(
                     "Accept",
-                    "image/png"
+                    "application/geo+json, application/json"
             );
 
             int responseCode =
@@ -307,86 +388,46 @@ public final class EarthRoadData {
                 System.out.println(
                         "[EarthBound] "
                                 + layerName
-                                + " returned HTTP "
+                                + " query returned HTTP "
                                 + responseCode
                 );
 
                 return null;
             }
 
-            BufferedImage image;
+            String json;
 
             try (InputStream input =
-                         connection.getInputStream()) {
+                         connection.getInputStream();
 
-                image =
-                        ImageIO.read(
-                                input
-                        );
-            }
+                 BufferedReader reader =
+                         new BufferedReader(
+                                 new InputStreamReader(
+                                         input,
+                                         StandardCharsets.UTF_8
+                                 )
+                         )) {
 
-            if (image == null) {
+                StringBuilder builder =
+                        new StringBuilder();
 
-                System.out.println(
-                        "[EarthBound] Could not decode "
-                                + layerName
-                                + " image."
-                );
+                String line;
 
-                return null;
-            }
+                while ((line =
+                                reader.readLine())
+                        != null) {
 
-            boolean[][] mask =
-                    new boolean[
-                            image.getHeight()
-                            ][
-                            image.getWidth()
-                            ];
-
-            int roadPixels = 0;
-
-            for (int y = 0;
-                 y < image.getHeight();
-                 y++) {
-
-                for (int x = 0;
-                     x < image.getWidth();
-                     x++) {
-
-                    int argb =
-                            image.getRGB(
-                                    x,
-                                    y
-                            );
-
-                    int alpha =
-                            (argb >>> 24)
-                                    & 0xFF;
-
-                    boolean road =
-                            alpha > 20;
-
-                    mask[y][x] =
-                            road;
-
-                    if (road) {
-                        roadPixels++;
-                    }
+                    builder.append(line);
                 }
+
+                json =
+                        builder.toString();
             }
 
-            System.out.println(
-                    "[EarthBound] "
-                            + layerName
-                            + " loaded: "
-                            + image.getWidth()
-                            + "x"
-                            + image.getHeight()
-                            + ", road pixels="
-                            + roadPixels
+            return parseGeoJson(
+                    json,
+                    layerName
             );
-
-            return mask;
 
         } finally {
 
@@ -395,12 +436,179 @@ public final class EarthRoadData {
     }
 
     /*
-     * Determine road class.
+     * Convert GeoJSON LineStrings into
+     * individual centerline segments.
+     */
+    private static List<RoadSegment> parseGeoJson(
+            String json,
+            String layerName) {
+
+        List<RoadSegment> segments =
+                new ArrayList<>();
+
+        JsonObject root =
+                JsonParser.parseString(
+                        json
+                ).getAsJsonObject();
+
+        if (!root.has("features")) {
+
+            System.out.println(
+                    "[EarthBound] "
+                            + layerName
+                            + " GeoJSON contained no features array."
+            );
+
+            return segments;
+        }
+
+        JsonArray features =
+                root.getAsJsonArray(
+                        "features"
+                );
+
+        System.out.println(
+                "[EarthBound] "
+                        + layerName
+                        + " feature count="
+                        + features.size()
+        );
+
+        for (JsonElement featureElement
+                : features) {
+
+            if (!featureElement.isJsonObject()) {
+                continue;
+            }
+
+            JsonObject feature =
+                    featureElement
+                            .getAsJsonObject();
+
+            if (!feature.has("geometry")
+                    || feature.get("geometry")
+                    .isJsonNull()) {
+
+                continue;
+            }
+
+            JsonObject geometry =
+                    feature.getAsJsonObject(
+                            "geometry"
+                    );
+
+            if (!geometry.has("type")
+                    || !geometry.has("coordinates")) {
+
+                continue;
+            }
+
+            String geometryType =
+                    geometry.get("type")
+                            .getAsString();
+
+            JsonArray coordinates =
+                    geometry.getAsJsonArray(
+                            "coordinates"
+                    );
+
+            if ("LineString".equals(
+                    geometryType)) {
+
+                addLineString(
+                        coordinates,
+                        segments
+                );
+
+            } else if ("MultiLineString".equals(
+                    geometryType)) {
+
+                for (JsonElement lineElement
+                        : coordinates) {
+
+                    if (lineElement.isJsonArray()) {
+
+                        addLineString(
+                                lineElement
+                                        .getAsJsonArray(),
+                                segments
+                        );
+                    }
+                }
+            }
+        }
+
+        return segments;
+    }
+
+    /*
+     * Break one line into point-to-point
+     * segments.
      *
-     * Priority matters:
+     * GeoJSON coordinates are:
      *
-     * Primary beats secondary.
-     * Secondary beats local.
+     * [longitude, latitude]
+     */
+    private static void addLineString(
+            JsonArray coordinates,
+            List<RoadSegment> segments) {
+
+        if (coordinates.size() < 2) {
+            return;
+        }
+
+        for (int i = 0;
+             i < coordinates.size() - 1;
+             i++) {
+
+            JsonArray first =
+                    coordinates
+                            .get(i)
+                            .getAsJsonArray();
+
+            JsonArray second =
+                    coordinates
+                            .get(i + 1)
+                            .getAsJsonArray();
+
+            if (first.size() < 2
+                    || second.size() < 2) {
+
+                continue;
+            }
+
+            double longitude1 =
+                    first.get(0)
+                            .getAsDouble();
+
+            double latitude1 =
+                    first.get(1)
+                            .getAsDouble();
+
+            double longitude2 =
+                    second.get(0)
+                            .getAsDouble();
+
+            double latitude2 =
+                    second.get(1)
+                            .getAsDouble();
+
+            segments.add(
+                    new RoadSegment(
+                            latitude1,
+                            longitude1,
+                            latitude2,
+                            longitude2
+                    )
+            );
+        }
+    }
+
+    /*
+     * Determine which road class occupies
+     * a real-world coordinate.
+     *
+     * Higher road classes take priority.
      */
     public static RoadType getRoadType(
             double latitude,
@@ -410,37 +618,31 @@ public final class EarthRoadData {
             return RoadType.NONE;
         }
 
-        /*
-         * Primary roads.
-         */
-        if (isOnMask(
-                primaryMask,
+        if (isNearRoad(
+                primaryRoads,
                 latitude,
-                longitude
+                longitude,
+                FREEWAY_RADIUS
         )) {
 
             return RoadType.FREEWAY;
         }
 
-        /*
-         * Secondary roads.
-         */
-        if (isOnMask(
-                secondaryMask,
+        if (isNearRoad(
+                secondaryRoads,
                 latitude,
-                longitude
+                longitude,
+                HIGHWAY_RADIUS
         )) {
 
             return RoadType.HIGHWAY;
         }
 
-        /*
-         * Local streets.
-         */
-        if (isOnMask(
-                localMask,
+        if (isNearRoad(
+                localRoads,
                 latitude,
-                longitude
+                longitude,
+                LOCAL_RADIUS
         )) {
 
             return RoadType.LOCAL;
@@ -470,73 +672,139 @@ public final class EarthRoadData {
     }
 
     /*
-     * Test a latitude/longitude against
-     * one particular road-class mask.
+     * Determine whether the requested
+     * location is within the desired
+     * number of meters of any centerline.
      */
-    private static boolean isOnMask(
-            boolean[][] mask,
+    private static boolean isNearRoad(
+            List<RoadSegment> roads,
             double latitude,
-            double longitude) {
+            double longitude,
+            double radiusMeters) {
 
-        if (mask == null) {
-            return false;
+        for (RoadSegment segment : roads) {
+
+            double distance =
+                    distanceToSegmentMeters(
+                            latitude,
+                            longitude,
+                            segment
+                    );
+
+            if (distance <= radiusMeters) {
+                return true;
+            }
         }
 
-        if (longitude < WEST
-                || longitude > EAST
-                || latitude < SOUTH
-                || latitude > NORTH) {
+        return false;
+    }
 
-            return false;
+    /*
+     * Approximate local latitude/longitude
+     * as meter coordinates and measure the
+     * shortest distance to the road segment.
+     *
+     * This is appropriate for our relatively
+     * small Guemes / Anacortes test area.
+     */
+    private static double distanceToSegmentMeters(
+            double latitude,
+            double longitude,
+            RoadSegment segment) {
+
+        double referenceLatitude =
+                Math.toRadians(
+                        latitude
+                );
+
+        double metersPerLongitudeDegree =
+                111320.0
+                        * Math.cos(
+                                referenceLatitude
+                        );
+
+        double px =
+                longitude
+                        * metersPerLongitudeDegree;
+
+        double py =
+                latitude
+                        * 111320.0;
+
+        double ax =
+                segment.longitude1
+                        * metersPerLongitudeDegree;
+
+        double ay =
+                segment.latitude1
+                        * 111320.0;
+
+        double bx =
+                segment.longitude2
+                        * metersPerLongitudeDegree;
+
+        double by =
+                segment.latitude2
+                        * 111320.0;
+
+        double dx =
+                bx - ax;
+
+        double dy =
+                by - ay;
+
+        double lengthSquared =
+                dx * dx
+                        + dy * dy;
+
+        if (lengthSquared == 0.0) {
+
+            double xDifference =
+                    px - ax;
+
+            double yDifference =
+                    py - ay;
+
+            return Math.sqrt(
+                    xDifference * xDifference
+                            + yDifference * yDifference
+            );
         }
 
-        double xFraction =
-                (longitude - WEST)
-                        / (EAST - WEST);
+        double t =
+                ((px - ax) * dx
+                        + (py - ay) * dy)
+                        / lengthSquared;
 
-        double yFraction =
-                (NORTH - latitude)
-                        / (NORTH - SOUTH);
-
-        int x =
-                (int) Math.round(
-                        xFraction
-                                * (mask[0].length - 1)
-                );
-
-        int y =
-                (int) Math.round(
-                        yFraction
-                                * (mask.length - 1)
-                );
-
-        x =
+        t =
                 Math.max(
-                        0,
+                        0.0,
                         Math.min(
-                                mask[0].length - 1,
-                                x
+                                1.0,
+                                t
                         )
                 );
 
-        y =
-                Math.max(
-                        0,
-                        Math.min(
-                                mask.length - 1,
-                                y
-                        )
-                );
+        double nearestX =
+                ax + t * dx;
 
-        return mask[y][x];
+        double nearestY =
+                ay + t * dy;
+
+        double xDifference =
+                px - nearestX;
+
+        double yDifference =
+                py - nearestY;
+
+        return Math.sqrt(
+                xDifference * xDifference
+                        + yDifference * yDifference
+        );
     }
 
     public static boolean isLoaded() {
-
-        return loaded
-                && primaryMask != null
-                && secondaryMask != null
-                && localMask != null;
+        return loaded;
     }
 
     private static String encode(
