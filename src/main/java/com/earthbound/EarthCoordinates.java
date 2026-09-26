@@ -43,7 +43,7 @@ public class EarthCoordinates {
      * Converts Minecraft coordinates
      * into real-world latitude.
      *
-     * For the EarthBound world:
+     * EarthBound orientation:
      *
      * Z increasing = north
      * Z decreasing = south
@@ -68,14 +68,17 @@ public class EarthCoordinates {
      * Converts Minecraft coordinates
      * into real-world longitude.
      *
-     * X increasing = east.
+     * EarthBound orientation:
+     *
+     * X decreasing = east
+     * X increasing = west
      */
     public static double getLongitude(
             int x,
             int z) {
 
         double metersEast =
-                (x - START_X)
+                (START_X - x)
                         * METERS_PER_BLOCK;
 
         double metersPerLongitudeDegree =
