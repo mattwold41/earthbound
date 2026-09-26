@@ -81,7 +81,6 @@ public class EarthGenerator extends ChunkGenerator {
                 }
 
 
-
                 height =
                         Math.max(
                                 worldInfo.getMinHeight(),
@@ -143,7 +142,6 @@ public class EarthGenerator extends ChunkGenerator {
                          y <= SEA_LEVEL;
                          y++) {
 
-
                         chunkData.setBlock(
                                 x,
                                 y,
@@ -158,9 +156,6 @@ public class EarthGenerator extends ChunkGenerator {
 
 
 
-                /*
-                 * COAST CHECK
-                 */
                 int beachLevel =
                         EarthCoastData.getBeachLevel(
                                 latitude,
@@ -184,9 +179,6 @@ public class EarthGenerator extends ChunkGenerator {
                     if (y == height) {
 
 
-                        /*
-                         * Roads always win
-                         */
                         if (road) {
 
                             chunkData.setBlock(
@@ -218,7 +210,6 @@ public class EarthGenerator extends ChunkGenerator {
                         }
 
 
-
                     } else if (y >= height - 4) {
 
 
@@ -245,7 +236,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Vegetation
+                 * GROUND VEGETATION
                  */
                 Material vegetation =
                         EarthVegetation.getVegetation(
@@ -265,6 +256,15 @@ public class EarthGenerator extends ChunkGenerator {
                             vegetation
                     );
                 }
+
+
+
+                /*
+                 * TREE PLACEMENT MARKER
+                 *
+                 * Tree placement will happen
+                 * in the decoration stage.
+                 */
             }
         }
     }
