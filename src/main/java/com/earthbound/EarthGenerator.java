@@ -93,7 +93,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * OCEAN
+                 * OCEAN GENERATION
                  */
                 if (water) {
 
@@ -158,7 +158,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * LAND
+                 * LAND GENERATION
                  */
                 for (int y = worldInfo.getMinHeight();
                      y <= height;
@@ -168,8 +168,10 @@ public class EarthGenerator extends ChunkGenerator {
                     if (y == height) {
 
 
+                        /*
+                         * ROADS ALWAYS WIN
+                         */
                         if (road) {
-
 
                             chunkData.setBlock(
                                     x,
@@ -183,9 +185,16 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                             /*
-                             * BEACHES
+                             * COAST SYSTEM
                              */
-                            if (height <= SEA_LEVEL + 2) {
+                            int beachLevel =
+                                    EarthCoastData.getBeachLevel(
+                                            latitude,
+                                            longitude
+                                    );
+
+
+                            if (beachLevel > 0) {
 
                                 chunkData.setBlock(
                                         x,
@@ -233,9 +242,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * BASIC VEGETATION
-                 *
-                 * Avoid roads and beaches.
+                 * PACIFIC NORTHWEST VEGETATION
                  */
                 if (!road
                         && height > SEA_LEVEL + 5) {
@@ -245,7 +252,7 @@ public class EarthGenerator extends ChunkGenerator {
                             random.nextInt(100);
 
 
-                    if (chance < 8) {
+                    if (chance < 12) {
 
 
                         chunkData.setBlock(
@@ -253,6 +260,17 @@ public class EarthGenerator extends ChunkGenerator {
                                 height + 1,
                                 z,
                                 Material.TALL_GRASS
+                        );
+
+
+                    } else if (chance < 18) {
+
+
+                        chunkData.setBlock(
+                                x,
+                                height + 1,
+                                z,
+                                Material.FERN
                         );
 
 
