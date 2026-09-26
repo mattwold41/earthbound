@@ -5,23 +5,24 @@ public class EarthCoordinates {
     /*
      * EarthBound geographic anchor.
      *
-     * Guemes Island Ferry Terminal
-     * Center of road at ferry terminal.
+     * Guemes Island - south side ferry terminal.
+     * Starting point is centered on the road
+     * approaching the ferry dock.
      *
      * Minecraft:
      * X = -624
      * Z = -544
      *
      * Real Earth:
-     * Latitude  = 48.5285202
-     * Longitude = -122.6246908
+     * Latitude  = 48.528523
+     * Longitude = -122.625106
      */
 
     private static final double START_LAT =
-            48.5285202;
+            48.528523;
 
     private static final double START_LON =
-            -122.6246908;
+            -122.625106;
 
     private static final int START_X =
             -624;
@@ -34,7 +35,7 @@ public class EarthCoordinates {
      *
      * 1 Minecraft block = 2 real-world meters.
      *
-     * This is a 1:2 horizontal scale.
+     * This gives us a 1:2 horizontal scale.
      */
     private static final double METERS_PER_BLOCK =
             2.0;
@@ -43,7 +44,7 @@ public class EarthCoordinates {
     }
 
     /*
-     * Convert Minecraft X/Z
+     * Converts Minecraft coordinates
      * into real-world latitude.
      */
     public static double getLatitude(
@@ -51,8 +52,8 @@ public class EarthCoordinates {
             int z) {
 
         /*
-         * Minecraft Z decreases as
-         * we travel north.
+         * Minecraft Z decreases when
+         * traveling north.
          */
         double metersNorth =
                 (START_Z - z)
@@ -67,7 +68,7 @@ public class EarthCoordinates {
     }
 
     /*
-     * Convert Minecraft X/Z
+     * Converts Minecraft coordinates
      * into real-world longitude.
      */
     public static double getLongitude(
@@ -75,8 +76,8 @@ public class EarthCoordinates {
             int z) {
 
         /*
-         * Minecraft X increases as
-         * we travel east.
+         * Minecraft X increases when
+         * traveling east.
          */
         double metersEast =
                 (x - START_X)
