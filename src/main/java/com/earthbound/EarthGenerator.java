@@ -1,95 +1,271 @@
-@Override
-public void generateSurface(
-        WorldInfo worldInfo,
-        Random random,
-        int chunkX,
-        int chunkZ,
-        ChunkData chunkData) {
+package com.earthbound;
 
-    for (int x = 0; x < 16; x++) {
+import org.bukkit.Material;
+import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.generator.WorldInfo;
 
-        for (int z = 0; z < 16; z++) {
+import java.util.Random;
 
+public class EarthGenerator extends ChunkGenerator {
 
-            int worldX = chunkX * 16 + x;
-            int worldZ = chunkZ * 16 + z;
+    private static final int SEA_LEVEL = 63;
 
 
-            double latitude =
-                    EarthCoordinates.getLatitude(
-                            worldX,
-                            worldZ
-                    );
-
-            double longitude =
-                    EarthCoordinates.getLongitude(
-                            worldX,
-                            worldZ
-                    );
+    @Override
+    public void generateNoise(
+            WorldInfo worldInfo,
+            Random random,
+            int chunkX,
+            int chunkZ,
+            ChunkData chunkData) {
 
 
-            boolean water =
-                    EarthWaterData.isWater(
-                            latitude,
-                            longitude
-                    );
+        for (int x = 0; x < 16; x++) {
+
+            for (int z = 0; z < 16; z++) {
 
 
-            boolean road =
-                    EarthRoadData.isRoad(
-                            latitude,
-                            longitude
-                    );
+                int worldX = chunkX * 16 + x;
+                int worldZ = chunkZ * 16 + z;
 
 
-            if (water || road) {
-                continue;
-            }
+                double latitude =
+                        EarthCoordinates.getLatitude(
+                                worldX,
+                                worldZ
+                        );
 
 
-            int highest =
-                    chunkData.getHighestBlockYAt(
-                            x,
-                            z
-                    );
+                double longitude =
+                        EarthCoordinates.getLongitude(
+                                worldX,
+                                worldZ
+                        );
 
 
-            Material surface =
-                    chunkData.getType(
-                            x,
-                            highest,
-                            z
-                    );
+                Double elevation =
+                        EarthTerrainLoader.getGuemesElevation(
+                                latitude,
+                                longitude
+                        );
 
 
-            /*
-             * Grassland vegetation
-             */
-            if (surface == Material.GRASS_BLOCK) {
+                boolean water =
+                        EarthWaterData.isWater(
+                                latitude,
+                                longitude
+                        );
 
 
-                if (random.nextInt(8) == 0) {
+                boolean road =
+                        EarthRoadData.isRoad(
+                                latitude,
+                                longitude
+                        );
 
-                    chunkData.setBlock(
-                            x,
-                            highest + 1,
-                            z,
-                            Material.TALL_GRASS
-                    );
+
+                int height;
+
+
+                if (elevation != null
+                        && Double.isFinite(elevation)) {
+
+                    height =
+                            EarthElevation.getMinecraftHeight(
+                                    elevation
+                            );
+
+                } else {
+
+                    height = SEA_LEVEL;
                 }
 
 
-                /*
-                 * Pacific Northwest forest
-                 */
-                if (random.nextInt(40) == 0) {
+                height =
+                        Math.max(
+                                worldInfo.getMinHeight(),
+                                Math.min(
+                                        worldInfo.getMaxHeight() - 1,
+                                        height
+                                )
+                        );
 
-                    chunkData.setBlock(
-                            x,
-                            highest + 1,
-                            z,
-                            Material.SPRUCE_SAPLING
-                    );
+
+
+                /*
+                 * OCEAN
+                 */
+                if (water) {
+
+
+                    int oceanFloor =
+                            Math.min(
+                                    height,
+                                    SEA_LEVEL - 4
+                            );
+
+
+                    oceanFloor =
+                            Math.max(
+                                    worldInfo.getMinHeight(),
+                                    oceanFloor
+                            );
+
+
+                    for (int y = worldInfo.getMinHeight();
+                         y <= oceanFloor;
+                         y++) {
+
+
+                        if (y >= oceanFloor - 4) {
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.SAND
+                            );
+
+                        } else {
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.STONE
+                            );
+                        }
+                    }
+
+
+                    for (int y = oceanFloor + 1;
+                         y <= SEA_LEVEL;
+                         y++) {
+
+
+                        chunkData.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.WATER
+                        );
+                    }
+
+
+                    continue;
+                }
+
+
+
+                /*
+                 * LAND
+                 */
+                for (int y = worldInfo.getMinHeight();
+                     y <= height;
+                     y++) {
+
+
+                    if (y == height) {
+
+
+                        if (road) {
+
+
+                            chunkData.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.GRAY_CONCRETE
+                            );
+
+
+                        } else {
+
+
+                            /*
+                             * BEACHES
+                             */
+                            if (height <= SEA_LEVEL + 2) {
+
+                                chunkData.setBlock(
+                                        x,
+                                        y,
+                                        z,
+                                        Material.SAND
+                                );
+
+                            } else {
+
+                                chunkData.setBlock(
+                                        x,
+                                        y,
+                                        z,
+                                        Material.GRASS_BLOCK
+                                );
+                            }
+                        }
+
+
+
+                    } else if (y >= height - 4) {
+
+
+                        chunkData.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.DIRT
+                        );
+
+
+                    } else {
+
+
+                        chunkData.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.STONE
+                        );
+                    }
+                }
+
+
+
+                /*
+                 * BASIC VEGETATION
+                 *
+                 * Avoid roads and beaches.
+                 */
+                if (!road
+                        && height > SEA_LEVEL + 5) {
+
+
+                    int chance =
+                            random.nextInt(100);
+
+
+                    if (chance < 8) {
+
+
+                        chunkData.setBlock(
+                                x,
+                                height + 1,
+                                z,
+                                Material.TALL_GRASS
+                        );
+
+
+                    } else if (chance == 99) {
+
+
+                        chunkData.setBlock(
+                                x,
+                                height + 1,
+                                z,
+                                Material.SPRUCE_SAPLING
+                        );
+                    }
                 }
             }
         }
