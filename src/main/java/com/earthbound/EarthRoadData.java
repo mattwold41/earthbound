@@ -12,32 +12,25 @@ import java.nio.charset.StandardCharsets;
 public final class EarthRoadData {
 
     /*
-     * Guemes Island / Anacortes geographic bounds.
+     * Guemes / Anacortes test area.
      */
     private static final double WEST = -122.70;
     private static final double SOUTH = 48.47;
     private static final double EAST = -122.55;
     private static final double NORTH = 48.60;
 
-    /*
-     * Road-mask resolution.
-     */
     private static final int MASK_WIDTH = 1024;
     private static final int MASK_HEIGHT = 1024;
 
     /*
-     * EarthBound road-width standards.
-     *
-     * Interstate / Freeway = 10 blocks
-     * Highway              = 8 blocks
-     * Local / City Street  = 6 blocks
+     * EarthBound target road widths.
      */
     public static final int FREEWAY_WIDTH = 10;
     public static final int HIGHWAY_WIDTH = 8;
     public static final int LOCAL_WIDTH = 6;
 
     /*
-     * Download reliability.
+     * Download retry settings.
      */
     private static final int MAX_DOWNLOAD_ATTEMPTS = 3;
 
@@ -48,25 +41,33 @@ public final class EarthRoadData {
     private static final long RETRY_DELAY_MS = 3000L;
 
     /*
-     * Census TIGERweb Transportation service.
+     * Current Census TIGERweb Transportation service.
+     *
+     * Relevant layers:
+     *
+     * 2 = Primary Roads
+     * 6 = Secondary Roads
+     * 8 = Local Roads
      */
     private static final String ROAD_SERVICE =
             "https://tigerweb.geo.census.gov/arcgis/rest/services/"
                     + "TIGERweb/Transportation/MapServer";
 
     /*
-     * Road data stored in memory.
+     * Separate masks allow EarthBound to
+     * distinguish road classes.
      */
-    private static boolean[][] roadMask;
+    private static boolean[][] primaryMask;
+
+    private static boolean[][] secondaryMask;
+
+    private static boolean[][] localMask;
 
     private static boolean loaded = false;
 
     private EarthRoadData() {
     }
 
-    /*
-     * EarthBound road classifications.
-     */
     public enum RoadType {
 
         NONE(0),
@@ -89,27 +90,90 @@ public final class EarthRoadData {
     }
 
     /*
-     * Load the Guemes / Anacortes road mask.
-     *
-     * If TIGERweb temporarily fails,
-     * EarthBound automatically retries.
+     * Load all three road classes.
      */
     public static synchronized boolean loadGuemesRoadMask() {
 
-        if (loaded && roadMask != null) {
+        if (loaded
+                && primaryMask != null
+                && secondaryMask != null
+                && localMask != null) {
+
             return true;
         }
+
+        System.out.println(
+                "[EarthBound] Loading classified road data..."
+        );
+
+        primaryMask =
+                downloadLayerWithRetry(
+                        2,
+                        "primary roads"
+                );
+
+        secondaryMask =
+                downloadLayerWithRetry(
+                        6,
+                        "secondary roads"
+                );
+
+        localMask =
+                downloadLayerWithRetry(
+                        8,
+                        "local roads"
+                );
+
+        if (primaryMask == null
+                || secondaryMask == null
+                || localMask == null) {
+
+            loaded = false;
+
+            System.out.println(
+                    "[EarthBound] Classified road data could not "
+                            + "be completely loaded."
+            );
+
+            return false;
+        }
+
+        loaded = true;
+
+        System.out.println(
+                "[EarthBound] Classified Guemes/Anacortes "
+                        + "road data loaded!"
+        );
+
+        System.out.println(
+                "[EarthBound] Road widths configured: "
+                        + "freeway="
+                        + FREEWAY_WIDTH
+                        + ", highway="
+                        + HIGHWAY_WIDTH
+                        + ", local="
+                        + LOCAL_WIDTH
+        );
+
+        return true;
+    }
+
+    /*
+     * Download one TIGERweb layer,
+     * automatically retrying failures.
+     */
+    private static boolean[][] downloadLayerWithRetry(
+            int layer,
+            String layerName) {
 
         for (int attempt = 1;
              attempt <= MAX_DOWNLOAD_ATTEMPTS;
              attempt++) {
 
             System.out.println(
-                    "[EarthBound] Downloading Guemes road mask..."
-            );
-
-            System.out.println(
-                    "[EarthBound] Road download attempt "
+                    "[EarthBound] Downloading "
+                            + layerName
+                            + " - attempt "
                             + attempt
                             + " of "
                             + MAX_DOWNLOAD_ATTEMPTS
@@ -117,47 +181,42 @@ public final class EarthRoadData {
 
             try {
 
-                boolean success =
-                        downloadRoadMask();
+                boolean[][] mask =
+                        downloadLayer(
+                                layer,
+                                layerName
+                        );
 
-                if (success) {
+                if (mask != null) {
 
-                    loaded = true;
-
-                    System.out.println(
-                            "[EarthBound] Road widths configured: "
-                                    + "freeway="
-                                    + FREEWAY_WIDTH
-                                    + ", highway="
-                                    + HIGHWAY_WIDTH
-                                    + ", local="
-                                    + LOCAL_WIDTH
-                    );
-
-                    return true;
+                    return mask;
                 }
 
             } catch (Exception exception) {
 
                 System.out.println(
-                        "[EarthBound] Road download attempt "
+                        "[EarthBound] "
+                                + layerName
+                                + " attempt "
                                 + attempt
                                 + " failed: "
-                                + exception.getClass().getSimpleName()
+                                + exception
+                                .getClass()
+                                .getSimpleName()
                                 + ": "
-                                + exception.getMessage()
+                                + exception
+                                .getMessage()
                 );
             }
 
-            /*
-             * Wait before another attempt.
-             */
             if (attempt < MAX_DOWNLOAD_ATTEMPTS) {
 
                 System.out.println(
                         "[EarthBound] Waiting "
                                 + (RETRY_DELAY_MS / 1000)
-                                + " seconds before retrying roads..."
+                                + " seconds before retrying "
+                                + layerName
+                                + "..."
                 );
 
                 try {
@@ -170,35 +229,20 @@ public final class EarthRoadData {
 
                     Thread.currentThread().interrupt();
 
-                    System.out.println(
-                            "[EarthBound] Road retry interrupted."
-                    );
-
-                    break;
+                    return null;
                 }
             }
         }
 
-        /*
-         * All attempts failed.
-         */
-        roadMask = null;
-        loaded = false;
-
-        System.out.println(
-                "[EarthBound] Guemes road mask could not be loaded "
-                        + "after "
-                        + MAX_DOWNLOAD_ATTEMPTS
-                        + " attempts."
-        );
-
-        return false;
+        return null;
     }
 
     /*
-     * Performs one download attempt.
+     * Download a single TIGERweb road layer.
      */
-    private static boolean downloadRoadMask()
+    private static boolean[][] downloadLayer(
+            int layer,
+            String layerName)
             throws Exception {
 
         String bbox =
@@ -219,7 +263,9 @@ public final class EarthRoadData {
                         + ","
                         + MASK_HEIGHT
                         + "&layers="
-                        + encode("show:2,6,8")
+                        + encode(
+                                "show:" + layer
+                        )
                         + "&transparent=true"
                         + "&format=png32"
                         + "&f=image";
@@ -259,11 +305,13 @@ public final class EarthRoadData {
             if (responseCode != 200) {
 
                 System.out.println(
-                        "[EarthBound] Road service returned HTTP "
+                        "[EarthBound] "
+                                + layerName
+                                + " returned HTTP "
                                 + responseCode
                 );
 
-                return false;
+                return null;
             }
 
             BufferedImage image;
@@ -280,13 +328,15 @@ public final class EarthRoadData {
             if (image == null) {
 
                 System.out.println(
-                        "[EarthBound] Could not decode road mask image."
+                        "[EarthBound] Could not decode "
+                                + layerName
+                                + " image."
                 );
 
-                return false;
+                return null;
             }
 
-            boolean[][] newMask =
+            boolean[][] mask =
                     new boolean[
                             image.getHeight()
                             ][
@@ -316,7 +366,7 @@ public final class EarthRoadData {
                     boolean road =
                             alpha > 20;
 
-                    newMask[y][x] =
+                    mask[y][x] =
                             road;
 
                     if (road) {
@@ -325,11 +375,10 @@ public final class EarthRoadData {
                 }
             }
 
-            roadMask =
-                    newMask;
-
             System.out.println(
-                    "[EarthBound] Guemes road mask loaded: "
+                    "[EarthBound] "
+                            + layerName
+                            + " loaded: "
                             + image.getWidth()
                             + "x"
                             + image.getHeight()
@@ -337,7 +386,7 @@ public final class EarthRoadData {
                             + roadPixels
             );
 
-            return true;
+            return mask;
 
         } finally {
 
@@ -346,35 +395,60 @@ public final class EarthRoadData {
     }
 
     /*
-     * Get the road classification at
-     * a real-world coordinate.
+     * Determine road class.
      *
-     * For this first phase, roads detected
-     * in the Guemes / Anacortes mask are
-     * classified as LOCAL.
+     * Priority matters:
      *
-     * Later we will separate Highway 20
-     * and freeways such as I-5.
+     * Primary beats secondary.
+     * Secondary beats local.
      */
     public static RoadType getRoadType(
             double latitude,
             double longitude) {
 
-        if (!isRawRoad(
+        if (!loaded) {
+            return RoadType.NONE;
+        }
+
+        /*
+         * Primary roads.
+         */
+        if (isOnMask(
+                primaryMask,
                 latitude,
                 longitude
         )) {
 
-            return RoadType.NONE;
+            return RoadType.FREEWAY;
         }
 
-        return RoadType.LOCAL;
+        /*
+         * Secondary roads.
+         */
+        if (isOnMask(
+                secondaryMask,
+                latitude,
+                longitude
+        )) {
+
+            return RoadType.HIGHWAY;
+        }
+
+        /*
+         * Local streets.
+         */
+        if (isOnMask(
+                localMask,
+                latitude,
+                longitude
+        )) {
+
+            return RoadType.LOCAL;
+        }
+
+        return RoadType.NONE;
     }
 
-    /*
-     * Compatibility method used by
-     * other EarthBound code.
-     */
     public static boolean isRoad(
             double latitude,
             double longitude) {
@@ -385,10 +459,6 @@ public final class EarthRoadData {
         ) != RoadType.NONE;
     }
 
-    /*
-     * Return the configured width for
-     * the road at this coordinate.
-     */
     public static int getRoadWidth(
             double latitude,
             double longitude) {
@@ -400,21 +470,18 @@ public final class EarthRoadData {
     }
 
     /*
-     * Check the downloaded TIGERweb mask.
+     * Test a latitude/longitude against
+     * one particular road-class mask.
      */
-    private static boolean isRawRoad(
+    private static boolean isOnMask(
+            boolean[][] mask,
             double latitude,
             double longitude) {
 
-        if (!loaded
-                || roadMask == null) {
-
+        if (mask == null) {
             return false;
         }
 
-        /*
-         * Outside our current data area.
-         */
         if (longitude < WEST
                 || longitude > EAST
                 || latitude < SOUTH
@@ -423,17 +490,10 @@ public final class EarthRoadData {
             return false;
         }
 
-        /*
-         * Convert longitude to image X.
-         */
         double xFraction =
                 (longitude - WEST)
                         / (EAST - WEST);
 
-        /*
-         * Image Y runs downward while
-         * latitude runs northward.
-         */
         double yFraction =
                 (NORTH - latitude)
                         / (NORTH - SOUTH);
@@ -441,24 +501,20 @@ public final class EarthRoadData {
         int x =
                 (int) Math.round(
                         xFraction
-                                * (roadMask[0].length - 1)
+                                * (mask[0].length - 1)
                 );
 
         int y =
                 (int) Math.round(
                         yFraction
-                                * (roadMask.length - 1)
+                                * (mask.length - 1)
                 );
 
-        /*
-         * Keep coordinates safely inside
-         * the downloaded image.
-         */
         x =
                 Math.max(
                         0,
                         Math.min(
-                                roadMask[0].length - 1,
+                                mask[0].length - 1,
                                 x
                         )
                 );
@@ -467,27 +523,22 @@ public final class EarthRoadData {
                 Math.max(
                         0,
                         Math.min(
-                                roadMask.length - 1,
+                                mask.length - 1,
                                 y
                         )
                 );
 
-        return roadMask[y][x];
+        return mask[y][x];
     }
 
-    /*
-     * Returns true after road data
-     * has successfully loaded.
-     */
     public static boolean isLoaded() {
 
         return loaded
-                && roadMask != null;
+                && primaryMask != null
+                && secondaryMask != null
+                && localMask != null;
     }
 
-    /*
-     * Encode TIGERweb URL parameters.
-     */
     private static String encode(
             String value) {
 
