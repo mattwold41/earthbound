@@ -35,9 +35,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * Load the Guemes USGS elevation raster
-         * BEFORE Minecraft begins generating
-         * EarthBound terrain.
+         * Load the Guemes USGS elevation raster.
          */
         if (!EarthTerrainLoader.isGuemesTerrainLoaded()) {
 
@@ -65,15 +63,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * Load the Guemes land/water mask
-         * BEFORE Minecraft begins generating
-         * EarthBound terrain.
-         *
-         * This downloads ONE 512 x 512
-         * hydrography image.
-         *
-         * It does NOT make an Internet
-         * request for every Minecraft block.
+         * Load the Guemes water/coastline mask.
          */
         if (!EarthWaterData.isLoaded()) {
 
@@ -95,6 +85,39 @@ public class EarthBound extends JavaPlugin {
                 getLogger().warning(
                         "Guemes water mask could not be loaded. "
                                 + "Terrain will generate without ocean masking."
+                );
+            }
+        }
+
+
+        /*
+         * Load the Guemes road mask.
+         *
+         * EarthRoadData downloads the road image once,
+         * converts it into a local mask, and then
+         * EarthGenerator can read that mask without
+         * making Internet requests for individual blocks.
+         */
+        if (!EarthRoadData.isLoaded()) {
+
+            getLogger().info(
+                    "Loading Guemes road mask before world generation..."
+            );
+
+            boolean roadsLoaded =
+                    EarthRoadData.loadGuemesRoadMask();
+
+            if (roadsLoaded) {
+
+                getLogger().info(
+                        "Guemes road mask loaded and ready for generation!"
+                );
+
+            } else {
+
+                getLogger().warning(
+                        "Guemes road mask could not be loaded. "
+                                + "Terrain will generate without roads."
                 );
             }
         }
