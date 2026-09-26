@@ -11,24 +11,14 @@ import java.nio.charset.StandardCharsets;
 
 public final class EarthRoadData {
 
-    // Guemes Island Phase 1 geographic bounds.
     private static final double WEST = -122.70;
     private static final double SOUTH = 48.47;
     private static final double EAST = -122.55;
     private static final double NORTH = 48.60;
 
-    // Resolution of the downloaded TIGERweb road image.
     private static final int MASK_WIDTH = 1024;
     private static final int MASK_HEIGHT = 1024;
 
-    /*
-     * U.S. Census Bureau TIGERweb Transportation service.
-     *
-     * Layers used:
-     * 2 = Primary Roads
-     * 6 = Secondary Roads
-     * 8 = Local Roads
-     */
     private static final String ROAD_SERVICE =
             "https://tigerweb.geo.census.gov/arcgis/rest/services/"
                     + "TIGERweb/Transportation/MapServer";
@@ -39,10 +29,6 @@ public final class EarthRoadData {
     private EarthRoadData() {
     }
 
-    /**
-     * Downloads the Guemes Island road image and converts
-     * the visible road pixels into a local boolean mask.
-     */
     public static synchronized boolean loadGuemesRoadMask() {
 
         if (loaded && roadMask != null) {
@@ -64,8 +50,7 @@ public final class EarthRoadData {
             String request =
                     ROAD_SERVICE
                             + "/export"
-                            + "?bbox="
-                            + encode(bbox)
+                            + "?bbox=" + encode(bbox)
                             + "&bboxSR=4326"
                             + "&imageSR=4326"
                             + "&size="
@@ -95,8 +80,7 @@ public final class EarthRoadData {
             int responseCode =
                     connection.getResponseCode();
 
-            if (responseCode
-                    != HttpURLConnection.HTTP_OK) {
+            if (responseCode != 200) {
 
                 System.out.println(
                         "[EarthBound] Road service returned HTTP "
@@ -104,7 +88,6 @@ public final class EarthRoadData {
                 );
 
                 connection.disconnect();
-
                 return false;
             }
 
@@ -123,7 +106,7 @@ public final class EarthRoadData {
             if (image == null) {
 
                 System.out.println(
-                        "[EarthBound] Could not decode road mask image."
+                        "[EarthBound] Could not decode road mask."
                 );
 
                 return false;
@@ -152,12 +135,6 @@ public final class EarthRoadData {
                     int alpha =
                             (argb >>> 24) & 0xFF;
 
-                    /*
-                     * Transparent background means no road.
-                     *
-                     * Visible pixels from the TIGERweb
-                     * transportation layers become roads.
-                     */
                     boolean road =
                             alpha > 20;
 
@@ -170,11 +147,8 @@ public final class EarthRoadData {
                 }
             }
 
-            roadMask =
-                    newMask;
-
-            loaded =
-                    true;
+            roadMask = newMask;
+            loaded = true;
 
             System.out.println(
                     "[EarthBound] Guemes road mask loaded: "
@@ -203,10 +177,6 @@ public final class EarthRoadData {
         }
     }
 
-    /**
-     * Checks whether a real-world latitude/longitude
-     * falls on a road in the downloaded road mask.
-     */
     public static boolean isRoad(
             double latitude,
             double longitude) {
@@ -215,10 +185,6 @@ public final class EarthRoadData {
             return false;
         }
 
-        /*
-         * Ignore coordinates outside the
-         * current Guemes Island data area.
-         */
         if (longitude < WEST
                 || longitude > EAST
                 || latitude < SOUTH
@@ -227,18 +193,10 @@ public final class EarthRoadData {
             return false;
         }
 
-        /*
-         * Convert longitude into the horizontal
-         * position in the road image.
-         */
         double xFraction =
                 (longitude - WEST)
                         / (EAST - WEST);
 
-        /*
-         * Image Y coordinates increase downward,
-         * while latitude increases northward.
-         */
         double yFraction =
                 (NORTH - latitude)
                         / (NORTH - SOUTH);
@@ -255,10 +213,6 @@ public final class EarthRoadData {
                                 * (roadMask.length - 1)
                 );
 
-        /*
-         * Keep the lookup safely inside
-         * the road-mask image.
-         */
         x =
                 Math.max(
                         0,
@@ -278,62 +232,18 @@ public final class EarthRoadData {
                 );
 
         /*
-         * ROAD WIDTH
-         *
-         * Radius 0 means EarthBound does not
-         * artificially expand the TIGERweb
-         * road pixels.
-         *
-         * The previous radius of 2 made
-         * Guemes roads much too wide.
+         * No extra road expansion.
+         * This keeps the Guemes roads narrower.
          */
-        int radius = 0;
-
-        for (int offsetY = -radius;
-             offsetY <= radius;
-             offsetY++) {
-
-            for (int offsetX = -radius;
-                 offsetX <= radius;
-                 offsetX++) {
-
-                int sampleX =
-                        x + offsetX;
-
-                int sampleY =
-                        y + offsetY;
-
-                if (sampleX < 0
-                        || sampleX >= roadMask[0].length
-                        || sampleY < 0
-                        || sampleY >= roadMask.length) {
-
-                    continue;
-                }
-
-                if (roadMask[sampleY][sampleX]) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return roadMask[y][x];
     }
 
-    /**
-     * Returns true after the Guemes
-     * road mask has successfully loaded.
-     */
     public static boolean isLoaded() {
 
         return loaded
                 && roadMask != null;
     }
 
-    /**
-     * URL-encodes values used in
-     * the TIGERweb request.
-     */
     private static String encode(
             String value) {
 
