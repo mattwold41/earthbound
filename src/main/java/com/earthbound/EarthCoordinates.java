@@ -31,10 +31,14 @@ public class EarthCoordinates {
     /*
      * EarthBound horizontal scale.
      *
-     * 1 Minecraft block = 1 real-world meter.
+     * 1 Minecraft block = 2 real-world meters.
+     * EarthBound scale = 1:2.
+     *
+     * This value can be changed later if
+     * EarthBound moves to another scale.
      */
     private static final double METERS_PER_BLOCK =
-            1.0;
+            2.0;
 
     private EarthCoordinates() {
     }
