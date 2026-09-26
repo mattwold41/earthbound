@@ -5,28 +5,28 @@ public class EarthCoordinates {
     /*
      * EarthBound geographic anchor.
      *
-     * Guemes Island - south side ferry terminal.
+     * Guemes Island ferry landing.
      *
      * Minecraft:
-     * X = -624
-     * Z = -544
+     * X = -660
+     * Z = -446
      *
      * Real Earth:
-     * Latitude  = 48.528523
-     * Longitude = -122.625106
+     * Latitude  = 48.528160
+     * Longitude = -122.624600
      */
 
     private static final double START_LAT =
-            48.528523;
+            48.528160;
 
     private static final double START_LON =
-            -122.625106;
+            -122.624600;
 
     private static final int START_X =
-            -624;
+            -660;
 
     private static final int START_Z =
-            -544;
+            -446;
 
     /*
      * EarthBound horizontal scale.
