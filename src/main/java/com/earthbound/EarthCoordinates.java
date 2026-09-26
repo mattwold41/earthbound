@@ -1,255 +1,126 @@
 package com.earthbound;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URI;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+public class EarthCoordinates {
 
-public final class EarthRoadData {
+    /*
+     * EarthBound geographic anchor.
+     *
+     * Guemes Island Ferry Terminal
+     * Center of road at ferry terminal.
+     *
+     * Minecraft:
+     * X = -624
+     * Z = -544
+     *
+     * Real Earth:
+     * Latitude  = 48.5285202
+     * Longitude = -122.6246908
+     */
 
-    private static final double WEST = -122.70;
-    private static final double SOUTH = 48.47;
-    private static final double EAST = -122.55;
-    private static final double NORTH = 48.60;
+    private static final double START_LAT =
+            48.5285202;
 
-    private static final int MASK_WIDTH = 1024;
-    private static final int MASK_HEIGHT = 1024;
+    private static final double START_LON =
+            -122.6246908;
 
-    private static final String ROAD_SERVICE =
-            "https://tigerweb.geo.census.gov/arcgis/rest/services/"
-                    + "TIGERweb/Transportation/MapServer";
+    private static final int START_X =
+            -624;
 
-    private static boolean[][] roadMask;
-    private static boolean loaded = false;
+    private static final int START_Z =
+            -544;
 
-    private EarthRoadData() {
+    /*
+     * EarthBound horizontal scale:
+     *
+     * 1 Minecraft block = 2 real-world meters.
+     *
+     * This is a 1:2 horizontal scale.
+     */
+    private static final double METERS_PER_BLOCK =
+            2.0;
+
+    private EarthCoordinates() {
     }
 
-    public static synchronized boolean loadGuemesRoadMask() {
-
-        if (loaded && roadMask != null) {
-            return true;
-        }
-
-        try {
-
-            System.out.println(
-                    "[EarthBound] Downloading Guemes road mask..."
-            );
-
-            String bbox =
-                    WEST + ","
-                            + SOUTH + ","
-                            + EAST + ","
-                            + NORTH;
-
-            String request =
-                    ROAD_SERVICE
-                            + "/export"
-                            + "?bbox=" + encode(bbox)
-                            + "&bboxSR=4326"
-                            + "&imageSR=4326"
-                            + "&size="
-                            + MASK_WIDTH
-                            + ","
-                            + MASK_HEIGHT
-                            + "&layers="
-                            + encode("show:2,6,8")
-                            + "&transparent=true"
-                            + "&format=png32"
-                            + "&f=image";
-
-            URL url =
-                    URI.create(request).toURL();
-
-            HttpURLConnection connection =
-                    (HttpURLConnection) url.openConnection();
-
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(30000);
-
-            connection.setRequestProperty(
-                    "User-Agent",
-                    "EarthBound-Minecraft/0.1.0"
-            );
-
-            int responseCode =
-                    connection.getResponseCode();
-
-            if (responseCode != 200) {
-
-                System.out.println(
-                        "[EarthBound] Road service returned HTTP "
-                                + responseCode
-                );
-
-                connection.disconnect();
-                return false;
-            }
-
-            BufferedImage image;
-
-            try (InputStream input =
-                         connection.getInputStream()) {
-
-                image = ImageIO.read(input);
-
-            } finally {
-
-                connection.disconnect();
-            }
-
-            if (image == null) {
-
-                System.out.println(
-                        "[EarthBound] Could not decode road mask."
-                );
-
-                return false;
-            }
-
-            boolean[][] newMask =
-                    new boolean[
-                            image.getHeight()
-                            ][
-                            image.getWidth()
-                            ];
-
-            int roadPixels = 0;
-
-            for (int y = 0;
-                 y < image.getHeight();
-                 y++) {
-
-                for (int x = 0;
-                     x < image.getWidth();
-                     x++) {
-
-                    int argb =
-                            image.getRGB(x, y);
-
-                    int alpha =
-                            (argb >>> 24) & 0xFF;
-
-                    boolean road =
-                            alpha > 20;
-
-                    newMask[y][x] =
-                            road;
-
-                    if (road) {
-                        roadPixels++;
-                    }
-                }
-            }
-
-            roadMask = newMask;
-            loaded = true;
-
-            System.out.println(
-                    "[EarthBound] Guemes road mask loaded: "
-                            + image.getWidth()
-                            + "x"
-                            + image.getHeight()
-                            + ", road pixels="
-                            + roadPixels
-            );
-
-            return true;
-
-        } catch (Exception exception) {
-
-            System.out.println(
-                    "[EarthBound] Failed to load Guemes road mask: "
-                            + exception.getMessage()
-            );
-
-            exception.printStackTrace();
-
-            roadMask = null;
-            loaded = false;
-
-            return false;
-        }
-    }
-
-    public static boolean isRoad(
-            double latitude,
-            double longitude) {
-
-        if (!loaded || roadMask == null) {
-            return false;
-        }
-
-        if (longitude < WEST
-                || longitude > EAST
-                || latitude < SOUTH
-                || latitude > NORTH) {
-
-            return false;
-        }
-
-        double xFraction =
-                (longitude - WEST)
-                        / (EAST - WEST);
-
-        double yFraction =
-                (NORTH - latitude)
-                        / (NORTH - SOUTH);
-
-        int x =
-                (int) Math.round(
-                        xFraction
-                                * (roadMask[0].length - 1)
-                );
-
-        int y =
-                (int) Math.round(
-                        yFraction
-                                * (roadMask.length - 1)
-                );
-
-        x =
-                Math.max(
-                        0,
-                        Math.min(
-                                roadMask[0].length - 1,
-                                x
-                        )
-                );
-
-        y =
-                Math.max(
-                        0,
-                        Math.min(
-                                roadMask.length - 1,
-                                y
-                        )
-                );
+    /*
+     * Convert Minecraft X/Z
+     * into real-world latitude.
+     */
+    public static double getLatitude(
+            int x,
+            int z) {
 
         /*
-         * No extra road expansion.
-         * This keeps the Guemes roads narrower.
+         * Minecraft Z decreases as
+         * we travel north.
          */
-        return roadMask[y][x];
+        double metersNorth =
+                (START_Z - z)
+                        * METERS_PER_BLOCK;
+
+        double latitudeChange =
+                metersNorth
+                        / 111320.0;
+
+        return START_LAT
+                + latitudeChange;
     }
 
-    public static boolean isLoaded() {
+    /*
+     * Convert Minecraft X/Z
+     * into real-world longitude.
+     */
+    public static double getLongitude(
+            int x,
+            int z) {
 
-        return loaded
-                && roadMask != null;
+        /*
+         * Minecraft X increases as
+         * we travel east.
+         */
+        double metersEast =
+                (x - START_X)
+                        * METERS_PER_BLOCK;
+
+        double metersPerLongitudeDegree =
+                111320.0
+                        * Math.cos(
+                                Math.toRadians(
+                                        START_LAT
+                                )
+                        );
+
+        double longitudeChange =
+                metersEast
+                        / metersPerLongitudeDegree;
+
+        return START_LON
+                + longitudeChange;
     }
 
-    private static String encode(
-            String value) {
+    /*
+     * Compatibility method used by
+     * EarthLocation.java.
+     */
+    public static double minecraftToLatitude(
+            int z) {
 
-        return URLEncoder.encode(
-                value,
-                StandardCharsets.UTF_8
+        return getLatitude(
+                START_X,
+                z
+        );
+    }
+
+    /*
+     * Compatibility method used by
+     * EarthLocation.java.
+     */
+    public static double minecraftToLongitude(
+            int x) {
+
+        return getLongitude(
+                x,
+                START_Z
         );
     }
 }
