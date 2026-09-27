@@ -23,9 +23,11 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         if (!announced) {
-            getLogger().info(
-                    "EARTHBOUND REAL TERRAIN GENERATOR ACTIVE"
+
+            System.out.println(
+                    "=== EARTHBOUND REAL TERRAIN GENERATOR ACTIVE ==="
             );
+
             announced = true;
         }
 
@@ -39,10 +41,6 @@ public class EarthGenerator extends ChunkGenerator {
                 int worldZ = chunkZ * 16 + z;
 
 
-                /*
-                 * Convert Minecraft position
-                 * to Earth coordinates
-                 */
                 double latitude =
                         EarthCoordinates.getLatitude(
                                 worldX,
@@ -57,28 +55,37 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
 
-
-                /*
-                 * Get real elevation
-                 */
                 Double elevation =
-                        EarthTerrainLoader.getElevation(
+                        EarthTerrainLoader.getGuemesElevation(
                                 latitude,
                                 longitude
                         );
 
 
+                boolean water =
+                        EarthWaterData.isWater(
+                                latitude,
+                                longitude
+                        );
+
+
+                boolean road =
+                        EarthRoadData.isRoad(
+                                latitude,
+                                longitude
+                        );
+
 
                 int height;
 
 
-                if (elevation != null) {
+                if (elevation != null
+                        && Double.isFinite(elevation)) {
 
                     height =
-                            EarthElevation
-                                    .getMinecraftHeight(
-                                            elevation
-                                    );
+                            EarthElevation.getMinecraftHeight(
+                                    elevation
+                            );
 
                 } else {
 
@@ -86,10 +93,6 @@ public class EarthGenerator extends ChunkGenerator {
                 }
 
 
-
-                /*
-                 * Keep world height safe
-                 */
                 height =
                         Math.max(
                                 worldInfo.getMinHeight(),
@@ -100,22 +103,13 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
 
-
                 /*
-                 * Water
+                 * WATER
                  */
-                boolean water =
-                        EarthWaterData.isWater(
-                                latitude,
-                                longitude
-                        );
-
-
 
                 if (water) {
 
-
-                    int floor =
+                    int oceanFloor =
                             Math.min(
                                     height,
                                     SEA_LEVEL - 5
@@ -124,12 +118,11 @@ public class EarthGenerator extends ChunkGenerator {
 
                     for (
                             int y = worldInfo.getMinHeight();
-                            y <= floor;
+                            y <= oceanFloor;
                             y++
                     ) {
 
-
-                        if (y >= floor - 3) {
+                        if (y >= oceanFloor - 3) {
 
                             chunkData.setBlock(
                                     x,
@@ -150,9 +143,8 @@ public class EarthGenerator extends ChunkGenerator {
                     }
 
 
-
                     for (
-                            int y = floor + 1;
+                            int y = oceanFloor + 1;
                             y <= SEA_LEVEL;
                             y++
                     ) {
@@ -172,8 +164,9 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Land
+                 * LAND
                  */
+
                 for (
                         int y = worldInfo.getMinHeight();
                         y <= height;
@@ -182,13 +175,6 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                     if (y == height) {
-
-
-                        boolean road =
-                                EarthRoadData.isRoad(
-                                        latitude,
-                                        longitude
-                                );
 
 
                         if (road) {
