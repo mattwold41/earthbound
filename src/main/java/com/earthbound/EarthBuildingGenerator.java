@@ -1,18 +1,10 @@
 package com.earthbound;
 
+import org.bukkit.Material;
+import org.bukkit.generator.ChunkGenerator.ChunkData;
+
 public class EarthBuildingGenerator {
 
-    /*
-     * EarthBound building system.
-     *
-     * Buildings are stored using real-world
-     * latitude and longitude instead of
-     * permanent Minecraft X/Z coordinates.
-     *
-     * This allows EarthBound to reposition
-     * buildings if the horizontal map scale
-     * changes in the future.
-     */
 
     private EarthBuildingGenerator() {
     }
@@ -22,12 +14,6 @@ public class EarthBuildingGenerator {
      * =====================================================
      * GUEMES ISLAND GENERAL STORE
      * =====================================================
-     *
-     * EarthBound's first scale-independent
-     * real-world building.
-     *
-     * Geographic location is always the
-     * source of truth.
      */
 
     public static final double
@@ -40,17 +26,7 @@ public class EarthBuildingGenerator {
 
 
     /*
-     * Playable Minecraft building footprint.
-     *
-     * The geographic map itself is 1:2,
-     * but buildings do NOT have to be
-     * physically shrunk to half size.
-     *
-     * This keeps doors, rooms, windows,
-     * porches, and interiors usable.
-     *
-     * We can fine-tune these dimensions
-     * when we construct the actual store.
+     * Playable building dimensions.
      */
     private static final int
             GUEMES_STORE_WIDTH =
@@ -61,27 +37,11 @@ public class EarthBuildingGenerator {
             16;
 
 
-    /*
-     * Small amount of extra leveled ground
-     * around the building.
-     *
-     * We intentionally keep this small so
-     * the nearby shoreline and road are not
-     * flattened unnecessarily.
-     */
     private static final int
             FOUNDATION_MARGIN =
             2;
 
 
-    /*
-     * Returns the Minecraft X coordinate
-     * for the center of the General Store.
-     *
-     * This is calculated from real-world
-     * longitude every time instead of being
-     * permanently hard-coded.
-     */
     public static int
     getGuemesStoreX() {
 
@@ -92,13 +52,6 @@ public class EarthBuildingGenerator {
     }
 
 
-    /*
-     * Returns the Minecraft Z coordinate
-     * for the center of the General Store.
-     *
-     * This is calculated from real-world
-     * latitude every time.
-     */
     public static int
     getGuemesStoreZ() {
 
@@ -109,21 +62,18 @@ public class EarthBuildingGenerator {
     }
 
 
-    /*
-     * Returns true when a Minecraft block
-     * is inside the General Store's main
-     * building footprint.
-     */
     public static boolean
     isInsideGuemesStore(
             int worldX,
-            int worldZ) {
+            int worldZ
+    ) {
 
         int storeX =
                 getGuemesStoreX();
 
         int storeZ =
                 getGuemesStoreZ();
+
 
         int halfWidth =
                 GUEMES_STORE_WIDTH / 2;
@@ -131,32 +81,26 @@ public class EarthBuildingGenerator {
         int halfLength =
                 GUEMES_STORE_LENGTH / 2;
 
-        return worldX >=
-                storeX - halfWidth
-                && worldX <=
-                storeX + halfWidth
-                && worldZ >=
-                storeZ - halfLength
-                && worldZ <=
-                storeZ + halfLength;
+
+        return worldX >= storeX - halfWidth
+                && worldX <= storeX + halfWidth
+                && worldZ >= storeZ - halfLength
+                && worldZ <= storeZ + halfLength;
     }
 
 
-    /*
-     * Returns true when a block is inside
-     * the small foundation-preparation area
-     * surrounding the General Store.
-     */
     public static boolean
     isInsideGuemesStoreFoundation(
             int worldX,
-            int worldZ) {
+            int worldZ
+    ) {
 
         int storeX =
                 getGuemesStoreX();
 
         int storeZ =
                 getGuemesStoreZ();
+
 
         int halfWidth =
                 GUEMES_STORE_WIDTH / 2
@@ -166,25 +110,14 @@ public class EarthBuildingGenerator {
                 GUEMES_STORE_LENGTH / 2
                         + FOUNDATION_MARGIN;
 
-        return worldX >=
-                storeX - halfWidth
-                && worldX <=
-                storeX + halfWidth
-                && worldZ >=
-                storeZ - halfLength
-                && worldZ <=
-                storeZ + halfLength;
+
+        return worldX >= storeX - halfWidth
+                && worldX <= storeX + halfWidth
+                && worldZ >= storeZ - halfLength
+                && worldZ <= storeZ + halfLength;
     }
 
 
-    /*
-     * Returns the real-world elevation
-     * underneath the center of the store.
-     *
-     * EarthTerrainLoader already has the
-     * USGS raster in memory, so this does
-     * not make a new Internet request.
-     */
     public static Double
     getGuemesStoreElevation() {
 
@@ -196,19 +129,12 @@ public class EarthBuildingGenerator {
     }
 
 
-    /*
-     * Calculates the Minecraft Y level
-     * for the General Store foundation.
-     *
-     * The same EarthBound vertical scaling
-     * used by the surrounding terrain is
-     * used here.
-     */
     public static int
     getGuemesStoreGroundY() {
 
         Double elevation =
                 getGuemesStoreElevation();
+
 
         if (elevation == null
                 || !Double.isFinite(
@@ -216,7 +142,9 @@ public class EarthBuildingGenerator {
                 )) {
 
             return 63;
+
         }
+
 
         return EarthElevation
                 .getMinecraftHeight(
@@ -226,11 +154,362 @@ public class EarthBuildingGenerator {
 
 
     /*
-     * Useful diagnostic description.
+     * =====================================================
+     * STORE GENERATION
+     * =====================================================
      *
-     * Later we can expose this through an
-     * EarthBound admin/debug command.
+     * Called for each generated chunk.
+     *
+     * Every block is checked using WORLD
+     * coordinates, so the building can cross
+     * chunk boundaries safely.
      */
+    public static void
+    generateGuemesStore(
+            ChunkData chunk,
+            int chunkX,
+            int chunkZ
+    ) {
+
+
+        int groundY =
+                getGuemesStoreGroundY();
+
+
+        int storeX =
+                getGuemesStoreX();
+
+        int storeZ =
+                getGuemesStoreZ();
+
+
+        int minX =
+                storeX
+                        - GUEMES_STORE_WIDTH / 2;
+
+        int maxX =
+                storeX
+                        + GUEMES_STORE_WIDTH / 2;
+
+        int minZ =
+                storeZ
+                        - GUEMES_STORE_LENGTH / 2;
+
+        int maxZ =
+                storeZ
+                        + GUEMES_STORE_LENGTH / 2;
+
+
+        /*
+         * Check every horizontal block
+         * belonging to this chunk.
+         */
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
+
+
+                int worldX =
+                        chunkX * 16
+                                + localX;
+
+                int worldZ =
+                        chunkZ * 16
+                                + localZ;
+
+
+                if (worldX < minX
+                        || worldX > maxX
+                        || worldZ < minZ
+                        || worldZ > maxZ) {
+
+                    continue;
+
+                }
+
+
+                /*
+                 * FOUNDATION / FLOOR
+                 */
+                chunk.setBlock(
+                        localX,
+                        groundY,
+                        localZ,
+                        Material.STONE_BRICKS
+                );
+
+
+                chunk.setBlock(
+                        localX,
+                        groundY + 1,
+                        localZ,
+                        Material.SPRUCE_PLANKS
+                );
+
+
+                /*
+                 * Determine exterior walls.
+                 */
+                boolean westWall =
+                        worldX == minX;
+
+                boolean eastWall =
+                        worldX == maxX;
+
+                boolean northWall =
+                        worldZ == minZ;
+
+                boolean southWall =
+                        worldZ == maxZ;
+
+
+                boolean exterior =
+                        westWall
+                                || eastWall
+                                || northWall
+                                || southWall;
+
+
+                /*
+                 * WALLS
+                 */
+                if (exterior) {
+
+
+                    for (int y =
+                         groundY + 2;
+                         y <= groundY + 6;
+                         y++) {
+
+
+                        chunk.setBlock(
+                                localX,
+                                y,
+                                localZ,
+                                Material.SPRUCE_PLANKS
+                        );
+
+                    }
+
+                }
+
+
+                /*
+                 * FRONT WINDOWS
+                 *
+                 * Front of store is treated
+                 * as the south side.
+                 */
+                if (southWall) {
+
+
+                    int relativeX =
+                            worldX - minX;
+
+
+                    boolean window =
+                            (relativeX >= 3
+                                    && relativeX <= 7)
+                                    ||
+                                    (relativeX >= 17
+                                            && relativeX <= 21);
+
+
+                    if (window) {
+
+
+                        chunk.setBlock(
+                                localX,
+                                groundY + 3,
+                                localZ,
+                                Material.GLASS
+                        );
+
+
+                        chunk.setBlock(
+                                localX,
+                                groundY + 4,
+                                localZ,
+                                Material.GLASS
+                        );
+
+                    }
+
+                }
+
+
+                /*
+                 * FRONT DOUBLE DOOR OPENING
+                 */
+                if (southWall) {
+
+
+                    int relativeX =
+                            worldX - minX;
+
+
+                    if (relativeX == 11
+                            || relativeX == 12) {
+
+
+                        chunk.setBlock(
+                                localX,
+                                groundY + 2,
+                                localZ,
+                                Material.AIR
+                        );
+
+
+                        chunk.setBlock(
+                                localX,
+                                groundY + 3,
+                                localZ,
+                                Material.AIR
+                        );
+
+                    }
+
+                }
+
+
+                /*
+                 * LOWER ROOF
+                 */
+                chunk.setBlock(
+                        localX,
+                        groundY + 7,
+                        localZ,
+                        Material.DARK_OAK_PLANKS
+                );
+
+            }
+
+        }
+
+
+        /*
+         * Add the taller center section.
+         */
+        generateStoreUpperSection(
+                chunk,
+                chunkX,
+                chunkZ,
+                groundY,
+                storeX,
+                storeZ
+        );
+
+    }
+
+
+    /*
+     * Taller central portion that gives
+     * the General Store its recognizable
+     * stepped roof/profile.
+     */
+    private static void
+    generateStoreUpperSection(
+            ChunkData chunk,
+            int chunkX,
+            int chunkZ,
+            int groundY,
+            int storeX,
+            int storeZ
+    ) {
+
+
+        int upperMinX =
+                storeX - 5;
+
+        int upperMaxX =
+                storeX + 5;
+
+        int upperMinZ =
+                storeZ - 4;
+
+        int upperMaxZ =
+                storeZ + 4;
+
+
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
+
+
+                int worldX =
+                        chunkX * 16
+                                + localX;
+
+                int worldZ =
+                        chunkZ * 16
+                                + localZ;
+
+
+                if (worldX < upperMinX
+                        || worldX > upperMaxX
+                        || worldZ < upperMinZ
+                        || worldZ > upperMaxZ) {
+
+                    continue;
+
+                }
+
+
+                boolean exterior =
+                        worldX == upperMinX
+                                || worldX == upperMaxX
+                                || worldZ == upperMinZ
+                                || worldZ == upperMaxZ;
+
+
+                if (exterior) {
+
+
+                    chunk.setBlock(
+                            localX,
+                            groundY + 8,
+                            localZ,
+                            Material.SPRUCE_PLANKS
+                    );
+
+
+                    chunk.setBlock(
+                            localX,
+                            groundY + 9,
+                            localZ,
+                            Material.SPRUCE_PLANKS
+                    );
+
+                }
+
+
+                /*
+                 * Upper dark roof.
+                 */
+                chunk.setBlock(
+                        localX,
+                        groundY + 10,
+                        localZ,
+                        Material.DARK_OAK_PLANKS
+                );
+
+            }
+
+        }
+
+    }
+
+
     public static String
     getGuemesStoreLocationInfo() {
 
@@ -244,4 +523,5 @@ public class EarthBuildingGenerator {
                 + ", z="
                 + getGuemesStoreZ();
     }
+
 }
