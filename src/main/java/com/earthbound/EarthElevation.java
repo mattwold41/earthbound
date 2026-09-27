@@ -6,6 +6,33 @@ public class EarthElevation {
     }
 
 
+    /*
+     * Returns the elevation for a Minecraft
+     * X/Z coordinate.
+     *
+     * This keeps EarthCommand and EarthLocation
+     * compatible with the terrain system.
+     */
+    public static double getElevation(
+            double x,
+            double z
+    ) {
+
+        return EarthTerrainLoader.getGuemesElevation(
+                x,
+                z
+        );
+    }
+
+
+    /*
+     * Converts real-world elevation in meters
+     * into Minecraft Y height.
+     *
+     * Low elevations keep high detail.
+     * Taller mountains are progressively
+     * compressed to stay below build limit.
+     */
     public static int getMinecraftHeight(
             double elevationMeters
     ) {
