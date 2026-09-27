@@ -48,8 +48,8 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Convert this Minecraft block
-                 * into its real Earth location.
+                 * Convert Minecraft coordinates
+                 * into real Earth coordinates.
                  */
                 double latitude =
                         EarthCoordinates.minecraftToLatitude(
@@ -64,9 +64,8 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Ask the real Census hydrography
-                 * polygons whether this location
-                 * is water.
+                 * Check the real Census
+                 * hydrography polygons.
                  */
                 boolean water =
                         EarthWaterData.isWater(
@@ -77,10 +76,6 @@ public class EarthGenerator extends ChunkGenerator {
 
                 /*
                  * WATER
-                 *
-                 * Build a simple seabed and fill
-                 * the ocean up to Minecraft
-                 * sea level.
                  */
                 if (water) {
 
@@ -164,10 +159,6 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
 
-                /*
-                 * Convert real-world elevation
-                 * into Minecraft height.
-                 */
                 int height =
                         EarthElevation.getMinecraftHeight(
                                 elevation
@@ -175,7 +166,23 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Generate land terrain.
+                 * Determine whether this block
+                 * lies on a real road.
+                 */
+                EarthRoadData.RoadType roadType =
+                        EarthRoadData.getRoadType(
+                                latitude,
+                                longitude
+                        );
+
+
+                boolean road =
+                        roadType
+                                != EarthRoadData.RoadType.NONE;
+
+
+                /*
+                 * Generate terrain.
                  */
                 for (int y = 0;
                      y <= height;
@@ -185,12 +192,35 @@ public class EarthGenerator extends ChunkGenerator {
                     if (y == height) {
 
 
-                        chunk.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.GRASS_BLOCK
-                        );
+                        if (road) {
+
+
+                            /*
+                             * Temporary road surface.
+                             *
+                             * Later we can give different
+                             * road classes different
+                             * materials and smoothing.
+                             */
+                            chunk.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.GRAY_CONCRETE
+                            );
+
+
+                        } else {
+
+
+                            chunk.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.GRASS_BLOCK
+                            );
+
+                        }
 
 
                     } else if (
