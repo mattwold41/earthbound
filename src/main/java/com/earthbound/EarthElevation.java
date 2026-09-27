@@ -1,82 +1,135 @@
 package com.earthbound;
 
-
 public class EarthElevation {
 
-
-    public static double getElevation(
-            double x,
-            double z
-    ) {
-
-
-        double latitude =
-                EarthCoordinates.minecraftToLatitude(
-                        (int) z
-                );
-
-
-        double longitude =
-                EarthCoordinates.minecraftToLongitude(
-                        (int) x
-                );
-
-
-        System.out.println(
-                "Earth location: lat="
-                + latitude
-                + " lon="
-                + longitude
-        );
-
-
-        /*
-         * Temporary terrain model.
-         * Smooth Guemes Island style hills.
-         */
-
-
-        double largeHill =
-                Math.sin(x / 120.0)
-                * Math.cos(z / 120.0)
-                * 25;
-
-
-        double smallHill =
-                Math.sin(x / 35.0)
-                * Math.cos(z / 35.0)
-                * 8;
-
-
-        double shoreline =
-                15;
-
-
-        return shoreline
-                + largeHill
-                + smallHill;
-
+    private EarthElevation() {
     }
-
 
 
     public static int getMinecraftHeight(
             double elevationMeters
     ) {
 
+        if (elevationMeters <= 0.0) {
+            return 63;
+        }
 
-        int seaLevel = 64;
+        double minecraftHeight;
 
+        if (elevationMeters <= 50.0) {
 
-        double verticalScale = 2.0;
+            minecraftHeight =
+                    63 + elevationMeters;
 
+        } else if (elevationMeters <= 100.0) {
 
-        return seaLevel
-                + (int)Math.round(
-                        elevationMeters
-                        / verticalScale
-                );
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            50, 100,
+                            113, 153
+                    );
 
+        } else if (elevationMeters <= 250.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            100, 250,
+                            153, 180
+                    );
+
+        } else if (elevationMeters <= 500.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            250, 500,
+                            180, 200
+                    );
+
+        } else if (elevationMeters <= 1000.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            500, 1000,
+                            200, 220
+                    );
+
+        } else if (elevationMeters <= 2000.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            1000, 2000,
+                            220, 240
+                    );
+
+        } else if (elevationMeters <= 3286.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            2000, 3286,
+                            240, 258
+                    );
+
+        } else if (elevationMeters <= 4392.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            3286, 4392,
+                            258, 270
+                    );
+
+        } else if (elevationMeters <= 6000.0) {
+
+            minecraftHeight =
+                    interpolate(
+                            elevationMeters,
+                            4392, 6000,
+                            270, 288
+                    );
+
+        } else {
+
+            double limitedElevation =
+                    Math.min(
+                            elevationMeters,
+                            8848.86
+                    );
+
+            minecraftHeight =
+                    interpolate(
+                            limitedElevation,
+                            6000, 8848.86,
+                            288, 315
+                    );
+        }
+
+        return Math.min(
+                (int) Math.round(minecraftHeight),
+                315
+        );
     }
 
+
+    private static double interpolate(
+            double value,
+            double inputMin,
+            double inputMax,
+            double outputMin,
+            double outputMax
+    ) {
+
+        double percentage =
+                (value - inputMin)
+                        / (inputMax - inputMin);
+
+        return outputMin
+                + percentage
+                * (outputMax - outputMin);
+    }
 }
