@@ -12,9 +12,6 @@ public class EarthGenerator extends ChunkGenerator {
 
     /*
      * Radius used to smooth road elevation.
-     *
-     * 2 means we sample a 5 x 5 area
-     * around each road block.
      */
     private static final int ROAD_SMOOTH_RADIUS = 2;
 
@@ -189,9 +186,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Smooth the terrain underneath
-                 * roads using nearby real USGS
-                 * elevation samples.
+                 * Smooth road elevation.
                  */
                 if (road) {
 
@@ -200,6 +195,30 @@ public class EarthGenerator extends ChunkGenerator {
                                     worldX,
                                     worldZ
                             );
+
+                }
+
+
+                /*
+                 * If we are near the General Store,
+                 * level the terrain to the store's
+                 * foundation height.
+                 */
+                if (EarthBuildingGenerator
+                        .isInsideGuemesStoreFoundation(
+                                worldX,
+                                worldZ
+                        )) {
+
+                    height =
+                            EarthBuildingGenerator
+                                    .getGuemesStoreGroundY();
+
+                    /*
+                     * Do not draw a road through
+                     * the building foundation.
+                     */
+                    road = false;
 
                 }
 
@@ -269,6 +288,21 @@ public class EarthGenerator extends ChunkGenerator {
             }
 
         }
+
+
+        /*
+         * =================================================
+         * REAL-WORLD BUILDINGS
+         * =================================================
+         *
+         * Terrain is generated first.
+         * Buildings are placed afterward.
+         */
+        EarthBuildingGenerator.generateGuemesStore(
+                chunk,
+                chunkX,
+                chunkZ
+        );
 
 
         return chunk;
