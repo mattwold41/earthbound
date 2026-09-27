@@ -1,71 +1,58 @@
 package com.earthbound;
 
-import org.bukkit.generator.ChunkGenerator;
-import org.bukkit.generator.WorldInfo;
+public class EarthTerrainLoader {
 
-import java.util.Random;
-
-public class EarthGenerator extends ChunkGenerator {
+    private static boolean loaded = false;
 
 
-    public EarthGenerator() {
+    public static void loadGuemesTerrainTile() {
 
-        EarthTerrainLoader.loadGuemesTerrainTile();
+        if (loaded) {
+            return;
+        }
 
+        System.out.println("=== Loading Guemes terrain data ===");
+
+        /*
+         * Temporary terrain loader.
+         * Later this will read USGS elevation files.
+         */
+
+        loaded = true;
     }
 
 
-    @Override
-    public void generateNoise(
-            WorldInfo worldInfo,
-            Random random,
-            int chunkX,
-            int chunkZ,
-            ChunkData data) {
+    public static boolean isGuemesTerrainLoaded() {
+
+        return loaded;
+    }
 
 
-        for (int x = 0; x < 16; x++) {
-
-            for (int z = 0; z < 16; z++) {
-
-
-                int blockX = chunkX * 16 + x;
-                int blockZ = chunkZ * 16 + z;
+    public static double getGuemesElevation(
+            double latitude,
+            double longitude) {
 
 
-                double elevation =
-                        EarthTerrainLoader.getGuemesElevation(
-                                blockX,
-                                blockZ
-                        );
+        if (!loaded) {
 
+            return 50.0;
 
-                int height = (int)elevation;
-
-
-                for (int y = 0; y <= height; y++) {
-
-                    if (y == height) {
-
-                        data.setBlock(
-                                x,
-                                y,
-                                z,
-                                org.bukkit.Material.GRASS_BLOCK
-                        );
-
-                    } else {
-
-                        data.setBlock(
-                                x,
-                                y,
-                                z,
-                                org.bukkit.Material.DIRT
-                        );
-
-                    }
-                }
-            }
         }
+
+
+        /*
+         * Temporary hills.
+         * This confirms elevation generation works.
+         */
+
+        double hill =
+                Math.sin(latitude * 100)
+                *
+                Math.cos(longitude * 100)
+                *
+                40;
+
+
+        return 50.0 + hill;
     }
 }
