@@ -37,9 +37,6 @@ public class EarthBound extends JavaPlugin {
 
         /*
          * Load real vector water polygons.
-         *
-         * This provides the coastline and
-         * surrounding water for Guemes Island.
          */
         boolean waterLoaded =
                 EarthWaterData.loadGuemesWaterMask();
@@ -55,6 +52,29 @@ public class EarthBound extends JavaPlugin {
 
             getLogger().warning(
                     "Guemes water polygons did not load!"
+            );
+
+        }
+
+
+        /*
+         * Load real Census TIGERweb
+         * road centerlines.
+         */
+        boolean roadsLoaded =
+                EarthRoadData.loadGuemesRoadMask();
+
+
+        if (roadsLoaded) {
+
+            getLogger().info(
+                    "Real Guemes road centerlines loaded successfully!"
+            );
+
+        } else {
+
+            getLogger().warning(
+                    "Guemes road centerlines did not load!"
             );
 
         }
