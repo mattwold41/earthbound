@@ -1,27 +1,27 @@
 package com.earthbound;
 
+import org.bukkit.Material;
 import org.bukkit.generator.ChunkGenerator;
-import org.bukkit.generator.WorldInfo;
+import org.bukkit.World;
+import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 import java.util.Random;
 
 public class EarthGenerator extends ChunkGenerator {
 
 
-    public EarthGenerator() {
-
-        EarthTerrainLoader.loadGuemesTerrainTile();
-
-    }
-
-
     @Override
-    public void generateNoise(
-            WorldInfo worldInfo,
+    public ChunkData generateChunkData(
+            World world,
             Random random,
             int chunkX,
             int chunkZ,
-            ChunkData data) {
+            BiomeGrid biome
+    ) {
+
+
+        ChunkData chunk =
+                createChunkData(world);
 
 
         for (int x = 0; x < 16; x++) {
@@ -29,8 +29,11 @@ public class EarthGenerator extends ChunkGenerator {
             for (int z = 0; z < 16; z++) {
 
 
-                int blockX = chunkX * 16 + x;
-                int blockZ = chunkZ * 16 + z;
+                int blockX =
+                        chunkX * 16 + x;
+
+                int blockZ =
+                        chunkZ * 16 + z;
 
 
                 double elevation =
@@ -40,32 +43,45 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
 
-                int height = (int)elevation;
+                int height =
+                        (int)elevation;
 
 
                 for (int y = 0; y <= height; y++) {
 
+
                     if (y == height) {
 
-                        data.setBlock(
+                        chunk.setBlock(
                                 x,
                                 y,
                                 z,
-                                org.bukkit.Material.GRASS_BLOCK
+                                Material.GRASS_BLOCK
+                        );
+
+                    } else if (y > height - 4) {
+
+                        chunk.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.DIRT
                         );
 
                     } else {
 
-                        data.setBlock(
+                        chunk.setBlock(
                                 x,
                                 y,
                                 z,
-                                org.bukkit.Material.DIRT
+                                Material.STONE
                         );
-
                     }
                 }
             }
         }
+
+
+        return chunk;
     }
 }
