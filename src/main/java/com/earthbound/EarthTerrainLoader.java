@@ -4,6 +4,7 @@ public class EarthTerrainLoader {
 
     private static boolean loaded = false;
 
+
     public static void loadGuemesTerrainTile() {
 
         System.out.println(
@@ -11,9 +12,9 @@ public class EarthTerrainLoader {
         );
 
         /*
-         * Temporary elevation test data.
-         * We will connect the USGS raster back after
-         * the generator compiles correctly.
+         * Temporary terrain system.
+         * This confirms that elevation is reaching
+         * the generator before we reconnect USGS data.
          */
 
         loaded = true;
@@ -33,14 +34,20 @@ public class EarthTerrainLoader {
 
         if (!loaded) {
 
+            System.out.println(
+                    "Terrain data not loaded"
+            );
+
             return null;
         }
 
 
         /*
-         * Temporary terrain shape test.
-         * This gives hills so we can confirm
-         * elevation is working.
+         * Temporary elevation model.
+         *
+         * Creates hills and valleys so we can
+         * verify the terrain generator is using
+         * elevation correctly.
          */
 
         double hill =
@@ -51,6 +58,20 @@ public class EarthTerrainLoader {
                 50;
 
 
-        return 50.0 + hill;
+        double elevation =
+                50.0 + hill;
+
+
+        System.out.println(
+                "Elevation: "
+                + latitude
+                + ", "
+                + longitude
+                + " = "
+                + elevation
+        );
+
+
+        return elevation;
     }
 }
