@@ -11,11 +11,14 @@ public class EarthTerrainLoader {
             return;
         }
 
-        System.out.println("=== Loading Guemes terrain data ===");
+        System.out.println(
+                "=== Loading Guemes terrain data ==="
+        );
 
         /*
          * Temporary terrain loader.
-         * Later this will read USGS elevation files.
+         * This will later be replaced with
+         * real USGS elevation data.
          */
 
         loaded = true;
@@ -35,24 +38,48 @@ public class EarthTerrainLoader {
 
         if (!loaded) {
 
-            return 50.0;
+            return 45.0;
 
         }
 
 
         /*
-         * Temporary hills.
-         * This confirms elevation generation works.
+         * Smooth temporary terrain.
+         *
+         * Lower values = flatter land
+         * Higher values = bigger hills
+         *
+         * Designed to look more like
+         * San Juan Islands instead of spikes.
          */
 
-        double hill =
-                Math.sin(latitude * 100)
+
+        double largeHills =
+                Math.sin(latitude * 0.5)
                 *
-                Math.cos(longitude * 100)
+                Math.cos(longitude * 0.5)
                 *
-                40;
+                15;
 
 
-        return 50.0 + hill;
+        double smallHills =
+                Math.sin(latitude * 2.0)
+                *
+                Math.cos(longitude * 2.0)
+                *
+                3;
+
+
+        double baseElevation =
+                45.0;
+
+
+        double elevation =
+                baseElevation
+                + largeHills
+                + smallHills;
+
+
+        return elevation;
     }
 }
