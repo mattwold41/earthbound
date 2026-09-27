@@ -1,26 +1,24 @@
 package com.earthbound;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.awt.image.Raster;
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.nio.file.Files;
+
 public class EarthTerrainDownloader {
 
-    /*
-     * USGS 3DEP elevation service.
-     *
-     * This class will be responsible for loading
-     * real-world elevation data before Minecraft
-     * generates terrain.
-     */
     public static final String USGS_3DEP_SERVICE =
             "https://elevation.nationalmap.gov/"
             + "arcgis/rest/services/"
             + "3DEPElevation/ImageServer";
 
 
-    /*
-     * Guemes Island terrain bounds.
-     *
-     * These coordinates cover Guemes Island
-     * and a small surrounding area.
-     */
     public static final double WEST =
             -122.70;
 
@@ -34,9 +32,6 @@ public class EarthTerrainDownloader {
             48.60;
 
 
-    /*
-     * Size of the elevation tile.
-     */
     public static final int TILE_WIDTH =
             512;
 
@@ -44,38 +39,339 @@ public class EarthTerrainDownloader {
             512;
 
 
+    private static double[][] elevationData;
+
+    private static boolean loaded = false;
+
+
     private EarthTerrainDownloader() {
     }
 
 
-    /*
-     * Starts loading the Guemes elevation tile.
-     *
-     * The actual raster download and decoding
-     * will be added in the next step.
-     */
     public static void loadGuemesIsland() {
 
         System.out.println(
-                "=== Preparing real USGS Guemes terrain ==="
+                "=== Loading real USGS Guemes elevation ==="
         );
 
-        System.out.println(
-                "Bounds: "
-                + WEST
-                + ", "
-                + SOUTH
-                + " to "
-                + EAST
-                + ", "
-                + NORTH
-        );
+        try {
 
-        System.out.println(
-                "Elevation tile size: "
-                + TILE_WIDTH
-                + "x"
-                + TILE_HEIGHT
-        );
+            File terrainFolder =
+                    new File(
+                            "plugins/EarthBound/terrain"
+                    );
+
+            if (!terrainFolder.exists()) {
+
+                terrainFolder.mkdirs();
+
+            }
+
+
+            File elevationFile =
+                    new File(
+                            terrainFolder,
+                            "guemes-elevation.tif"
+                    );
+
+
+            if (!elevationFile.exists()) {
+
+                downloadElevationTile(
+                        elevationFile
+                );
+
+            } else {
+
+                System.out.println(
+                        "Using cached Guemes elevation tile."
+                );
+
+            }
+
+
+            readElevationTile(
+                    elevationFile
+            );
+
+
+            loaded = true;
+
+
+            System.out.println(
+                    "=== Guemes USGS elevation loaded ==="
+            );
+
+
+            System.out.println(
+                    "Raster size: "
+                    + TILE_WIDTH
+                    + "x"
+                    + TILE_HEIGHT
+            );
+
+
+            System.out.println(
+                    "Center elevation sample: "
+                    + elevationData[
+                            TILE_HEIGHT / 2
+                            ][
+                            TILE_WIDTH / 2
+                            ]
+                    + " meters"
+            );
+
+
+        } catch (Exception exception) {
+
+            loaded = false;
+
+            System.err.println(
+                    "Failed to load Guemes USGS elevation."
+            );
+
+            exception.printStackTrace();
+
+        }
+
     }
+
+
+    private static void downloadElevationTile(
+            File destination
+    ) throws Exception {
+
+
+        String url =
+                USGS_3DEP_SERVICE
+                + "/exportImage"
+                + "?bbox="
+                + WEST
+                + ","
+                + SOUTH
+                + ","
+                + EAST
+                + ","
+                + NORTH
+                + "&bboxSR=4326"
+                + "&imageSR=4326"
+                + "&size="
+                + TILE_WIDTH
+                + ","
+                + TILE_HEIGHT
+                + "&format=tiff"
+                + "&pixelType=F32"
+                + "&interpolation=RSP_BilinearInterpolation"
+                + "&f=image";
+
+
+        System.out.println(
+                "Downloading Guemes elevation from USGS..."
+        );
+
+
+        HttpURLConnection connection =
+                (HttpURLConnection)
+                        URI.create(url)
+                                .toURL()
+                                .openConnection();
+
+
+        connection.setRequestMethod(
+                "GET"
+        );
+
+        connection.setConnectTimeout(
+                30000
+        );
+
+        connection.setReadTimeout(
+                60000
+        );
+
+        connection.setRequestProperty(
+                "User-Agent",
+                "EarthBound-Minecraft/0.1.0"
+        );
+
+
+        int responseCode =
+                connection.getResponseCode();
+
+
+        if (responseCode != 200) {
+
+            throw new IllegalStateException(
+                    "USGS returned HTTP "
+                    + responseCode
+            );
+
+        }
+
+
+        try (
+                InputStream input =
+                        new BufferedInputStream(
+                                connection.getInputStream()
+                        );
+
+                FileOutputStream output =
+                        new FileOutputStream(
+                                destination
+                        )
+        ) {
+
+            input.transferTo(
+                    output
+            );
+
+        } finally {
+
+            connection.disconnect();
+
+        }
+
+
+        System.out.println(
+                "USGS elevation download complete."
+        );
+
+
+        System.out.println(
+                "Downloaded "
+                + Files.size(
+                        destination.toPath()
+                )
+                + " bytes."
+        );
+
+    }
+
+
+    private static void readElevationTile(
+            File elevationFile
+    ) throws Exception {
+
+
+        BufferedImage image =
+                ImageIO.read(
+                        elevationFile
+                );
+
+
+        if (image == null) {
+
+            throw new IllegalStateException(
+                    "TIFF elevation image could not be decoded."
+            );
+
+        }
+
+
+        Raster raster =
+                image.getRaster();
+
+
+        int width =
+                raster.getWidth();
+
+        int height =
+                raster.getHeight();
+
+
+        elevationData =
+                new double[height][width];
+
+
+        for (int y = 0; y < height; y++) {
+
+            for (int x = 0; x < width; x++) {
+
+                elevationData[y][x] =
+                        raster.getSampleDouble(
+                                x,
+                                y,
+                                0
+                        );
+
+            }
+
+        }
+
+    }
+
+
+    public static boolean isLoaded() {
+
+        return loaded
+                && elevationData != null;
+
+    }
+
+
+    public static double getElevation(
+            double latitude,
+            double longitude
+    ) {
+
+
+        if (!isLoaded()) {
+
+            return 0.0;
+
+        }
+
+
+        double xPercent =
+                (longitude - WEST)
+                / (EAST - WEST);
+
+
+        double yPercent =
+                (NORTH - latitude)
+                / (NORTH - SOUTH);
+
+
+        xPercent =
+                Math.max(
+                        0.0,
+                        Math.min(
+                                1.0,
+                                xPercent
+                        )
+                );
+
+
+        yPercent =
+                Math.max(
+                        0.0,
+                        Math.min(
+                                1.0,
+                                yPercent
+                        )
+                );
+
+
+        int pixelX =
+                (int) Math.round(
+                        xPercent
+                        * (elevationData[0].length - 1)
+                );
+
+
+        int pixelY =
+                (int) Math.round(
+                        yPercent
+                        * (elevationData.length - 1)
+                );
+
+
+        return elevationData[
+                pixelY
+                ][
+                pixelX
+                ];
+
+    }
+
 }
