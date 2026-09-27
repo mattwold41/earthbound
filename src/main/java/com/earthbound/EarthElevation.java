@@ -6,34 +6,29 @@ import java.util.Map;
 public class EarthElevation {
 
     /*
-     * Stores elevation results.
+     * Simple elevation cache.
      *
-     * Key = Minecraft X,Z
-     * Value = elevation meters
+     * Later this will hold real USGS elevation tiles.
+     * For now it prevents repeated calculations.
      */
     private static final Map<String, Double> elevationCache =
             new HashMap<>();
 
 
     /*
-     * Gets elevation for EarthBound terrain.
+     * Main terrain elevation method.
+     *
+     * All terrain generators call this.
      */
     public static double getElevation(
             double x,
             double z
     ) {
 
-        int blockX = (int) x;
-        int blockZ = (int) z;
-
-
         String key =
-                blockX + "," + blockZ;
+                ((int)x) + ":" + ((int)z);
 
 
-        /*
-         * Check cache first.
-         */
         if (elevationCache.containsKey(key)) {
 
             return elevationCache.get(key);
@@ -41,83 +36,97 @@ public class EarthElevation {
         }
 
 
-        /*
-         * Convert Minecraft position
-         * into Earth coordinates.
-         */
         double latitude =
                 EarthCoordinates.minecraftToLatitude(
-                        blockZ
+                        (int) z
                 );
 
 
         double longitude =
                 EarthCoordinates.minecraftToLongitude(
-                        blockX
+                        (int) x
                 );
 
 
-        double elevationMeters =
+        /*
+         * Debug removed.
+         *
+         * Do NOT print every block.
+         */
+
+
+        double elevation =
                 getUSGSElevation(
                         latitude,
                         longitude
                 );
 
 
-        /*
-         * Save result.
-         */
         elevationCache.put(
                 key,
-                elevationMeters
+                elevation
         );
 
 
-        return elevationMeters;
+        return elevation;
     }
 
 
 
     /*
-     * USGS elevation lookup.
+     * Temporary elevation source.
      *
-     * Temporary until we load
-     * real elevation tiles.
+     * Replace later with
+     * Guemes Island elevation tiles.
      */
     private static double getUSGSElevation(
             double latitude,
             double longitude
     ) {
 
+
         /*
-         * Temporary test height.
+         * Current test terrain.
          *
-         * Replace later with
-         * real USGS tile data.
+         * Sea level.
          */
-        return 20.0;
+        return 0.0;
+
     }
 
 
 
     /*
-     * Converts real Earth elevation
-     * into Minecraft height.
+     * Converts meters to Minecraft height.
      */
     public static int getMinecraftHeight(
             double elevationMeters
     ) {
 
+
         int seaLevel = 64;
+
 
         double verticalScale = 1.5;
 
 
         return seaLevel
-                + (int) Math.round(
+                + (int)Math.round(
                         elevationMeters
                                 / verticalScale
                 );
+
+    }
+
+
+
+    /*
+     * Clears cache if needed.
+     */
+    public static void clearCache() {
+
+        elevationCache.clear();
+
     }
 
 }
