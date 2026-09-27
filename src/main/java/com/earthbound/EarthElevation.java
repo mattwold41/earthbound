@@ -1,158 +1,119 @@
 package com.earthbound;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-
 public class EarthElevation {
 
 
+    /*
+     * Gets elevation for EarthBound terrain.
+     *
+     * This is the central elevation system.
+     * All terrain generators should use this.
+     */
     public static double getElevation(
-            double longitude,
-            double latitude
+            double x,
+            double z
     ) {
 
-        try {
 
-            String requestUrl =
-                    "https://epqs.nationalmap.gov/v1/json"
-                    + "?x=" + longitude
-                    + "&y=" + latitude
-                    + "&units=Meters"
-                    + "&wkid=4326"
-                    + "&includeDate=false";
+        // Convert Minecraft position
+        // into Earth coordinates
 
-
-            System.out.println(
-                    "[EarthBound] Requesting elevation: "
-                    + requestUrl
-            );
-
-
-            URL url = new URL(requestUrl);
-
-
-            HttpURLConnection connection =
-                    (HttpURLConnection) url.openConnection();
-
-
-            connection.setRequestMethod("GET");
-            connection.setConnectTimeout(5000);
-            connection.setReadTimeout(5000);
-
-
-            int responseCode =
-                    connection.getResponseCode();
-
-
-            System.out.println(
-                    "[EarthBound] USGS response code: "
-                    + responseCode
-            );
-
-
-            BufferedReader reader =
-                    new BufferedReader(
-                            new InputStreamReader(
-                                    connection.getInputStream()
-                            )
-                    );
-
-
-            StringBuilder response =
-                    new StringBuilder();
-
-
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-
-                response.append(line);
-
-            }
-
-
-            reader.close();
-
-
-            String json =
-                    response.toString();
-
-
-            System.out.println(
-                    "[EarthBound] USGS response: "
-                    + json
-            );
-
-
-            String key =
-                    "\"value\":";
-
-
-            int index =
-                    json.indexOf(key);
-
-
-            if (index != -1) {
-
-                int start =
-                        index + key.length();
-
-
-                int end =
-                        json.indexOf(
-                                ",",
-                                start
-                        );
-
-
-                if (end == -1) {
-
-                    end =
-                            json.indexOf(
-                                    "}",
-                                    start
-                            );
-                }
-
-
-                double elevation =
-                        Double.parseDouble(
-                                json.substring(
-                                        start,
-                                        end
-                                ).trim()
-                        );
-
-
-                System.out.println(
-                        "[EarthBound] Real elevation: "
-                        + elevation
-                        + " meters"
+        double latitude =
+                EarthCoordinates.minecraftToLatitude(
+                        (int) z
                 );
 
 
-                return elevation;
-            }
+        double longitude =
+                EarthCoordinates.minecraftToLongitude(
+                        (int) x
+                );
 
 
-            System.out.println(
-                    "[EarthBound] Could not find elevation value."
-            );
+        /*
+         * Temporary fallback:
+         *
+         * If USGS lookup is unavailable,
+         * keep terrain near sea level.
+         *
+         * Later this can be replaced
+         * with cached elevation tiles.
+         */
+
+        double elevationMeters =
+                getUSGSElevation(
+                        latitude,
+                        longitude
+                );
 
 
-        } catch (Exception e) {
+        return elevationMeters;
+    }
 
 
-            System.out.println(
-                    "[EarthBound] Elevation error: "
-                    + e.getMessage()
-            );
 
-        }
+    /*
+     * USGS elevation lookup.
+     *
+     * Placeholder connection point.
+     *
+     * Later this will use cached
+     * Guemes Island elevation data
+     * instead of requesting every block.
+     */
+    private static double getUSGSElevation(
+            double latitude,
+            double longitude
+    ) {
 
+
+        /*
+         * Current safe test value.
+         *
+         * Prevents terrain generation
+         * from crashing while the
+         * elevation database is built.
+         */
 
         return 0.0;
     }
+
+
+
+    /*
+     * Converts real Earth elevation
+     * into Minecraft terrain height.
+     *
+     * Minecraft sea level = 63/64
+     */
+    public static int getMinecraftHeight(
+            double elevationMeters
+    ) {
+
+
+        int seaLevel = 64;
+
+
+        /*
+         * Vertical compression.
+         *
+         * Real mountains are too tall
+         * if converted 1:1.
+         *
+         * Example:
+         * Mount Baker:
+         * 3286m / 1.5 ≈ 2190 blocks
+         *
+         * This keeps terrain playable.
+         */
+        double verticalScale = 1.5;
+
+
+        return seaLevel
+                + (int) Math.round(
+                        elevationMeters
+                                / verticalScale
+                );
+    }
+
 }
