@@ -7,11 +7,18 @@ import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 import java.util.Random;
 
+
 public class EarthGenerator extends ChunkGenerator {
 
+
     public EarthGenerator() {
-        System.out.println("=== EARTHBOUND REAL TERRAIN GENERATOR ACTIVE ===");
+
+        System.out.println(
+                "=== EARTHBOUND REAL TERRAIN GENERATOR ACTIVE ==="
+        );
+
     }
+
 
 
     @Override
@@ -23,14 +30,26 @@ public class EarthGenerator extends ChunkGenerator {
             BiomeGrid biome
     ) {
 
-        ChunkData chunk = createChunkData(world);
 
-        for (int x = 0; x < 16; x++) {
+        ChunkData chunk =
+                createChunkData(world);
 
-            for (int z = 0; z < 16; z++) {
 
-                int worldX = chunkX * 16 + x;
-                int worldZ = chunkZ * 16 + z;
+
+        for(int x = 0; x < 16; x++) {
+
+
+            for(int z = 0; z < 16; z++) {
+
+
+                int worldX =
+                        chunkX * 16 + x;
+
+
+                int worldZ =
+                        chunkZ * 16 + z;
+
+
 
                 double elevation =
                         EarthTerrainLoader.getGuemesElevation(
@@ -38,12 +57,20 @@ public class EarthGenerator extends ChunkGenerator {
                                 worldZ
                         );
 
-                int height = (int) elevation;
 
 
-                for (int y = 0; y <= height; y++) {
+                int height =
+                        EarthElevation.getMinecraftHeight(
+                                elevation
+                        );
 
-                    if (y == height) {
+
+
+                for(int y = 0; y <= height; y++) {
+
+
+                    if(y == height) {
+
 
                         chunk.setBlock(
                                 x,
@@ -52,7 +79,9 @@ public class EarthGenerator extends ChunkGenerator {
                                 Material.GRASS_BLOCK
                         );
 
-                    } else if (y > height - 4) {
+
+                    } else if(y > height - 4) {
+
 
                         chunk.setBlock(
                                 x,
@@ -61,7 +90,9 @@ public class EarthGenerator extends ChunkGenerator {
                                 Material.DIRT
                         );
 
+
                     } else {
+
 
                         chunk.setBlock(
                                 x,
@@ -69,11 +100,18 @@ public class EarthGenerator extends ChunkGenerator {
                                 z,
                                 Material.STONE
                         );
+
                     }
+
                 }
+
             }
+
         }
 
+
         return chunk;
+
     }
+
 }
