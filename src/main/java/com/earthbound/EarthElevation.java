@@ -1,5 +1,6 @@
 package com.earthbound;
 
+
 public class EarthElevation {
 
 
@@ -9,36 +10,51 @@ public class EarthElevation {
     ) {
 
 
+        double latitude =
+                EarthCoordinates.minecraftToLatitude(
+                        (int) z
+                );
+
+
+        double longitude =
+                EarthCoordinates.minecraftToLongitude(
+                        (int) x
+                );
+
+
+        System.out.println(
+                "Earth location: lat="
+                + latitude
+                + " lon="
+                + longitude
+        );
+
+
         /*
-         * Test terrain for Guemes Island.
+         * Temporary Guemes Island terrain test.
          *
-         * Creates hills so we know
-         * the generator is working.
-         *
-         * Later this is replaced
-         * with real USGS elevation data.
+         * This proves the generator works
+         * before adding the full USGS database.
          */
 
 
-        double hill1 =
-                Math.sin(x * 0.02)
-                * 20;
+        double distance =
+                Math.sqrt(
+                        (x * x) +
+                        (z * z)
+                );
 
 
-        double hill2 =
-                Math.cos(z * 0.015)
-                * 15;
+        double hills =
+                Math.sin(distance / 40.0)
+                * 25;
 
 
-        double hill3 =
-                Math.sin((x + z) * 0.01)
-                * 10;
+        double base =
+                80;
 
 
-        return 30
-                + hill1
-                + hill2
-                + hill3;
+        return base + hills;
 
     }
 
@@ -52,15 +68,14 @@ public class EarthElevation {
         int seaLevel = 64;
 
 
-        double verticalScale = 1.5;
+        double verticalScale = 2.0;
 
 
-        return seaLevel
-                + (int)Math.round(
-                        elevationMeters
-                        / verticalScale
+        return seaLevel +
+                (int)Math.round(
+                        elevationMeters /
+                        verticalScale
                 );
-
     }
 
 }
