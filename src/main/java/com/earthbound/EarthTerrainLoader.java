@@ -4,21 +4,21 @@ public class EarthTerrainLoader {
 
     private static boolean loaded = false;
 
+    // Guemes Island approximate elevation settings
+    private static final double SEA_LEVEL = 62.0;
 
     public static void loadGuemesTerrainTile() {
 
-        if (loaded) {
-            return;
-        }
-
         System.out.println(
-                "=== Loading Guemes terrain data ==="
+                "=== Loading Guemes Island elevation data ==="
         );
 
         /*
-         * Temporary terrain loader.
-         * This will later be replaced with
-         * real USGS elevation data.
+         * Phase 1:
+         * Guemes Island terrain model.
+         *
+         * Later this will be replaced with
+         * USGS elevation raster data.
          */
 
         loaded = true;
@@ -32,54 +32,47 @@ public class EarthTerrainLoader {
 
 
     public static double getGuemesElevation(
-            double latitude,
-            double longitude) {
+            double x,
+            double z) {
 
 
         if (!loaded) {
-
-            return 45.0;
-
+            return SEA_LEVEL;
         }
 
 
         /*
-         * Smooth temporary terrain.
+         * Guemes Island terrain shape.
          *
-         * Lower values = flatter land
-         * Higher values = bigger hills
-         *
-         * Designed to look more like
-         * San Juan Islands instead of spikes.
+         * Uses real-world style elevation:
+         * - shoreline near sea level
+         * - rolling island hills
+         * - higher center areas
          */
 
 
-        double largeHills =
-                Math.sin(latitude * 0.5)
+        double distance =
+                Math.sqrt(
+                        Math.pow(x / 300.0, 2) +
+                        Math.pow(z / 300.0, 2)
+                );
+
+
+        double hills =
+                Math.sin(x * 0.02)
                 *
-                Math.cos(longitude * 0.5)
+                Math.cos(z * 0.02)
                 *
-                15;
+                12;
 
 
-        double smallHills =
-                Math.sin(latitude * 2.0)
-                *
-                Math.cos(longitude * 2.0)
-                *
-                3;
+        double island =
+                Math.max(
+                        0,
+                        80 - (distance * 25)
+                );
 
 
-        double baseElevation =
-                45.0;
-
-
-        double elevation =
-                baseElevation
-                + largeHills
-                + smallHills;
-
-
-        return elevation;
+        return SEA_LEVEL + island + hills;
     }
 }
