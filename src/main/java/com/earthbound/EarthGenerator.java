@@ -1,13 +1,17 @@
 package com.earthbound;
 
 import org.bukkit.Material;
-import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.World;
+import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 import java.util.Random;
 
 public class EarthGenerator extends ChunkGenerator {
+
+    public EarthGenerator() {
+        System.out.println("=== EARTHBOUND REAL TERRAIN GENERATOR ACTIVE ===");
+    }
 
 
     @Override
@@ -19,36 +23,27 @@ public class EarthGenerator extends ChunkGenerator {
             BiomeGrid biome
     ) {
 
-
-        ChunkData chunk =
-                createChunkData(world);
-
+        ChunkData chunk = createChunkData(world);
 
         for (int x = 0; x < 16; x++) {
 
             for (int z = 0; z < 16; z++) {
 
-
-                int blockX =
-                        chunkX * 16 + x;
-
-                int blockZ =
-                        chunkZ * 16 + z;
+                int worldX = chunkX * 16 + x;
+                int worldZ = chunkZ * 16 + z;
 
 
                 double elevation =
                         EarthTerrainLoader.getGuemesElevation(
-                                blockX,
-                                blockZ
+                                worldX,
+                                worldZ
                         );
 
 
-                int height =
-                        (int)elevation;
+                int height = (int) elevation;
 
 
                 for (int y = 0; y <= height; y++) {
-
 
                     if (y == height) {
 
@@ -80,7 +75,6 @@ public class EarthGenerator extends ChunkGenerator {
                 }
             }
         }
-
 
         return chunk;
     }
