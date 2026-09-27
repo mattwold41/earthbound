@@ -3,6 +3,7 @@ version: 0.1.0
 main: com.earthbound.EarthBound
 load: STARTUP
 api-version: '26.2'
+generator: com.earthbound.EarthGenerator
 
 commands:
   earth:
