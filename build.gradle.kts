@@ -32,12 +32,17 @@ tasks {
     jar {
         archiveBaseName.set("EarthBound")
 
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        duplicatesStrategy =
+            DuplicatesStrategy.EXCLUDE
 
-        from({
-            configurations.runtimeClasspath.get().collect {
-                it.isDirectory() ? it : zipTree(it)
+        from(
+            configurations.runtimeClasspath.get().map {
+                if (it.isDirectory) {
+                    it
+                } else {
+                    zipTree(it)
+                }
             }
-        })
+        )
     }
 }
