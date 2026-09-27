@@ -15,9 +15,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * Load the real USGS Guemes Island
-         * elevation raster before terrain
-         * generation begins.
+         * Load real USGS elevation data.
          */
         EarthTerrainDownloader.loadGuemesIsland();
 
@@ -32,6 +30,31 @@ public class EarthBound extends JavaPlugin {
 
             getLogger().warning(
                     "USGS Guemes elevation did not load!"
+            );
+
+        }
+
+
+        /*
+         * Load real vector water polygons.
+         *
+         * This provides the coastline and
+         * surrounding water for Guemes Island.
+         */
+        boolean waterLoaded =
+                EarthWaterData.loadGuemesWaterMask();
+
+
+        if (waterLoaded) {
+
+            getLogger().info(
+                    "Real Guemes water polygons loaded successfully!"
+            );
+
+        } else {
+
+            getLogger().warning(
+                    "Guemes water polygons did not load!"
             );
 
         }
