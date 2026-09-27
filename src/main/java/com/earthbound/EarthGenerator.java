@@ -10,6 +10,15 @@ import java.util.Random;
 public class EarthGenerator extends ChunkGenerator {
 
 
+    /*
+     * Radius used to smooth road elevation.
+     *
+     * 2 means we sample a 5 x 5 area
+     * around each road block.
+     */
+    private static final int ROAD_SMOOTH_RADIUS = 2;
+
+
     public EarthGenerator() {
 
         System.out.println(
@@ -64,7 +73,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Check the real Census
+                 * Check real Census
                  * hydrography polygons.
                  */
                 boolean water =
@@ -148,8 +157,6 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * LAND
-                 *
                  * Get real USGS elevation.
                  */
                 double elevation =
@@ -166,8 +173,8 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Determine whether this block
-                 * lies on a real road.
+                 * Check whether this location
+                 * is part of a real road.
                  */
                 EarthRoadData.RoadType roadType =
                         EarthRoadData.getRoadType(
@@ -179,6 +186,22 @@ public class EarthGenerator extends ChunkGenerator {
                 boolean road =
                         roadType
                                 != EarthRoadData.RoadType.NONE;
+
+
+                /*
+                 * Smooth the terrain underneath
+                 * roads using nearby real USGS
+                 * elevation samples.
+                 */
+                if (road) {
+
+                    height =
+                            getSmoothedRoadHeight(
+                                    worldX,
+                                    worldZ
+                            );
+
+                }
 
 
                 /*
@@ -195,13 +218,6 @@ public class EarthGenerator extends ChunkGenerator {
                         if (road) {
 
 
-                            /*
-                             * Temporary road surface.
-                             *
-                             * Later we can give different
-                             * road classes different
-                             * materials and smoothing.
-                             */
                             chunk.setBlock(
                                     x,
                                     y,
@@ -256,6 +272,61 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         return chunk;
+
+    }
+
+
+    /*
+     * Average nearby real elevations so
+     * roads are less bumpy while still
+     * following the surrounding terrain.
+     */
+    private int getSmoothedRoadHeight(
+            int worldX,
+            int worldZ
+    ) {
+
+
+        double totalElevation = 0.0;
+
+        int samples = 0;
+
+
+        for (int offsetX = -ROAD_SMOOTH_RADIUS;
+             offsetX <= ROAD_SMOOTH_RADIUS;
+             offsetX++) {
+
+
+            for (int offsetZ = -ROAD_SMOOTH_RADIUS;
+                 offsetZ <= ROAD_SMOOTH_RADIUS;
+                 offsetZ++) {
+
+
+                double sampleElevation =
+                        EarthTerrainLoader.getGuemesElevation(
+                                worldX + offsetX,
+                                worldZ + offsetZ
+                        );
+
+
+                totalElevation +=
+                        sampleElevation;
+
+
+                samples++;
+
+            }
+
+        }
+
+
+        double averageElevation =
+                totalElevation / samples;
+
+
+        return EarthElevation.getMinecraftHeight(
+                averageElevation
+        );
 
     }
 
