@@ -16,6 +16,8 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.+")
+
+    implementation("com.twelvemonkeys.imageio:imageio-tiff:3.15.2")
 }
 
 java {
@@ -29,5 +31,13 @@ tasks {
 
     jar {
         archiveBaseName.set("EarthBound")
+
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+        from({
+            configurations.runtimeClasspath.get().collect {
+                it.isDirectory() ? it : zipTree(it)
+            }
+        })
     }
 }
