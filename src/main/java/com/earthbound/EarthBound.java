@@ -1,5 +1,6 @@
 package com.earthbound;
 
+import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class EarthBound extends JavaPlugin {
@@ -8,51 +9,25 @@ public class EarthBound extends JavaPlugin {
     @Override
     public void onEnable() {
 
-        getLogger().info(
-                "EarthBound enabled!"
-        );
+        getLogger().info("EarthBound enabled!");
+        getLogger().info("EarthBound systems loaded!");
 
-
-        getServer()
-                .getPluginManager()
-                .registerEvents(
-                        new EarthTreeListener(),
-                        this
-                );
-
-
-        if (getCommand("earth") != null) {
-
-            getCommand("earth")
-                    .setExecutor(
-                            new EarthCommand()
-                    );
-        }
-
-
-        getLogger().info(
-                "EarthBound systems loaded!"
-        );
     }
 
 
-
     @Override
-    public void onDisable() {
-
-        getLogger().info(
-                "EarthBound disabled!"
-        );
-    }
-
-
-
-    @Override
-    public EarthGenerator getDefaultWorldGenerator(
+    public ChunkGenerator getDefaultWorldGenerator(
             String worldName,
-            String id) {
+            String id
+    ) {
 
+        getLogger().info(
+                "Loading EarthBound terrain generator for "
+                        + worldName
+        );
 
         return new EarthGenerator();
+
     }
+
 }
