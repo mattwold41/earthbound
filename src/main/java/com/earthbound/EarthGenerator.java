@@ -19,7 +19,6 @@ public class EarthGenerator extends ChunkGenerator {
     }
 
 
-
     @Override
     public ChunkData generateChunkData(
             World world,
@@ -32,7 +31,6 @@ public class EarthGenerator extends ChunkGenerator {
 
         ChunkData chunk =
                 createChunkData(world);
-
 
 
         for (int x = 0; x < 16; x++) {
@@ -49,7 +47,116 @@ public class EarthGenerator extends ChunkGenerator {
                         chunkZ * 16 + z;
 
 
+                /*
+                 * Convert this Minecraft block
+                 * into its real Earth location.
+                 */
+                double latitude =
+                        EarthCoordinates.minecraftToLatitude(
+                                worldZ
+                        );
 
+
+                double longitude =
+                        EarthCoordinates.minecraftToLongitude(
+                                worldX
+                        );
+
+
+                /*
+                 * Ask the real Census hydrography
+                 * polygons whether this location
+                 * is water.
+                 */
+                boolean water =
+                        EarthWaterData.isWater(
+                                latitude,
+                                longitude
+                        );
+
+
+                /*
+                 * WATER
+                 *
+                 * Build a simple seabed and fill
+                 * the ocean up to Minecraft
+                 * sea level.
+                 */
+                if (water) {
+
+
+                    int seaFloor =
+                            EarthWaterData.SEA_LEVEL - 8;
+
+
+                    for (int y = 0;
+                         y <= seaFloor;
+                         y++) {
+
+
+                        if (y == seaFloor) {
+
+
+                            chunk.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.SAND
+                            );
+
+
+                        } else if (
+                                y > seaFloor - 4
+                        ) {
+
+
+                            chunk.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.GRAVEL
+                            );
+
+
+                        } else {
+
+
+                            chunk.setBlock(
+                                    x,
+                                    y,
+                                    z,
+                                    Material.STONE
+                            );
+
+                        }
+
+                    }
+
+
+                    for (int y = seaFloor + 1;
+                         y <= EarthWaterData.SEA_LEVEL;
+                         y++) {
+
+
+                        chunk.setBlock(
+                                x,
+                                y,
+                                z,
+                                Material.WATER
+                        );
+
+                    }
+
+
+                    continue;
+                }
+
+
+                /*
+                 * LAND
+                 *
+                 * Get real USGS elevation.
+                 */
                 double elevation =
                         EarthTerrainLoader.getGuemesElevation(
                                 worldX,
@@ -57,9 +164,8 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
 
-
                 /*
-                 * Convert real-world meters
+                 * Convert real-world elevation
                  * into Minecraft height.
                  */
                 int height =
@@ -68,11 +174,12 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
 
-
                 /*
-                 * Generate terrain blocks.
+                 * Generate land terrain.
                  */
-                for (int y = 0; y <= height; y++) {
+                for (int y = 0;
+                     y <= height;
+                     y++) {
 
 
                     if (y == height) {
@@ -86,7 +193,9 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
 
-                    } else if (y > height - 4) {
+                    } else if (
+                            y > height - 4
+                    ) {
 
 
                         chunk.setBlock(
@@ -110,7 +219,6 @@ public class EarthGenerator extends ChunkGenerator {
                     }
 
                 }
-
 
             }
 
