@@ -7,7 +7,6 @@ import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 import java.util.Random;
 
-
 public class EarthGenerator extends ChunkGenerator {
 
 
@@ -36,10 +35,10 @@ public class EarthGenerator extends ChunkGenerator {
 
 
 
-        for(int x = 0; x < 16; x++) {
+        for (int x = 0; x < 16; x++) {
 
 
-            for(int z = 0; z < 16; z++) {
+            for (int z = 0; z < 16; z++) {
 
 
                 int worldX =
@@ -59,6 +58,10 @@ public class EarthGenerator extends ChunkGenerator {
 
 
 
+                /*
+                 * Convert real-world meters
+                 * into Minecraft height.
+                 */
                 int height =
                         EarthElevation.getMinecraftHeight(
                                 elevation
@@ -66,10 +69,13 @@ public class EarthGenerator extends ChunkGenerator {
 
 
 
-                for(int y = 0; y <= height; y++) {
+                /*
+                 * Generate terrain blocks.
+                 */
+                for (int y = 0; y <= height; y++) {
 
 
-                    if(y == height) {
+                    if (y == height) {
 
 
                         chunk.setBlock(
@@ -80,7 +86,7 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
 
-                    } else if(y > height - 4) {
+                    } else if (y > height - 4) {
 
 
                         chunk.setBlock(
@@ -104,6 +110,7 @@ public class EarthGenerator extends ChunkGenerator {
                     }
 
                 }
+
 
             }
 
