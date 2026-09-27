@@ -1,50 +1,76 @@
 package com.earthbound;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class EarthElevation {
+
+    /*
+     * Stores elevation results.
+     *
+     * Key = Minecraft X,Z
+     * Value = elevation meters
+     */
+    private static final Map<String, Double> elevationCache =
+            new HashMap<>();
 
 
     /*
      * Gets elevation for EarthBound terrain.
-     *
-     * This is the central elevation system.
-     * All terrain generators should use this.
      */
     public static double getElevation(
             double x,
             double z
     ) {
 
+        int blockX = (int) x;
+        int blockZ = (int) z;
 
-        // Convert Minecraft position
-        // into Earth coordinates
 
+        String key =
+                blockX + "," + blockZ;
+
+
+        /*
+         * Check cache first.
+         */
+        if (elevationCache.containsKey(key)) {
+
+            return elevationCache.get(key);
+
+        }
+
+
+        /*
+         * Convert Minecraft position
+         * into Earth coordinates.
+         */
         double latitude =
                 EarthCoordinates.minecraftToLatitude(
-                        (int) z
+                        blockZ
                 );
 
 
         double longitude =
                 EarthCoordinates.minecraftToLongitude(
-                        (int) x
+                        blockX
                 );
 
-
-        /*
-         * Temporary fallback:
-         *
-         * If USGS lookup is unavailable,
-         * keep terrain near sea level.
-         *
-         * Later this can be replaced
-         * with cached elevation tiles.
-         */
 
         double elevationMeters =
                 getUSGSElevation(
                         latitude,
                         longitude
                 );
+
+
+        /*
+         * Save result.
+         */
+        elevationCache.put(
+                key,
+                elevationMeters
+        );
 
 
         return elevationMeters;
@@ -55,57 +81,35 @@ public class EarthElevation {
     /*
      * USGS elevation lookup.
      *
-     * Placeholder connection point.
-     *
-     * Later this will use cached
-     * Guemes Island elevation data
-     * instead of requesting every block.
+     * Temporary until we load
+     * real elevation tiles.
      */
     private static double getUSGSElevation(
             double latitude,
             double longitude
     ) {
 
-
         /*
-         * Current safe test value.
+         * Temporary test height.
          *
-         * Prevents terrain generation
-         * from crashing while the
-         * elevation database is built.
+         * Replace later with
+         * real USGS tile data.
          */
-
-        return 0.0;
+        return 20.0;
     }
 
 
 
     /*
      * Converts real Earth elevation
-     * into Minecraft terrain height.
-     *
-     * Minecraft sea level = 63/64
+     * into Minecraft height.
      */
     public static int getMinecraftHeight(
             double elevationMeters
     ) {
 
-
         int seaLevel = 64;
 
-
-        /*
-         * Vertical compression.
-         *
-         * Real mountains are too tall
-         * if converted 1:1.
-         *
-         * Example:
-         * Mount Baker:
-         * 3286m / 1.5 ≈ 2190 blocks
-         *
-         * This keeps terrain playable.
-         */
         double verticalScale = 1.5;
 
 
