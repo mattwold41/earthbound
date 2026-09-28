@@ -10,37 +10,36 @@ public class EarthBuildingGenerator {
 
     /*
      * GUEMES ISLAND GENERAL STORE
-     *
-     * Real-world approximate location.
      */
     public static final double GUEMES_STORE_LATITUDE = 48.529460;
     public static final double GUEMES_STORE_LONGITUDE = -122.624110;
 
     /*
-     * Rotated store footprint.
-     *
-     * X = 16 blocks
-     * Z = 24 blocks
+     * Approved store footprint.
      */
     private static final int GUEMES_STORE_SIZE_X = 16;
     private static final int GUEMES_STORE_SIZE_Z = 24;
 
     /*
-     * Small flat area immediately around the building.
+     * Small flat foundation around the building.
      */
     private static final int FOUNDATION_MARGIN = 2;
 
     /*
-     * IMPORTANT:
+     * Approved fixed ground height.
      *
-     * The General Store is intentionally fixed at Y=65.
-     *
-     * Sea level is Y=63, so this puts the waterfront
-     * building close to the surrounding shoreline instead
-     * of allowing USGS elevation scaling to create a
-     * giant hill underneath it.
+     * DO NOT calculate this from USGS elevation.
+     * The General Store sits at Y=65.
      */
     private static final int GUEMES_STORE_GROUND_Y = 65;
+
+    /*
+     * NEW:
+     *
+     * Gives EarthGenerator 32 blocks around the store
+     * for the gentler terrain transition.
+     */
+    private static final int STORE_BLEND_MARGIN = 32;
 
     public static int getGuemesStoreX() {
 
@@ -57,7 +56,7 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * Actual building footprint.
+     * Actual store footprint.
      */
     public static boolean isInsideGuemesStore(
             int worldX,
@@ -80,7 +79,7 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * Flat foundation immediately around the building.
+     * Flat foundation immediately around the store.
      */
     public static boolean isInsideGuemesStoreFoundation(
             int worldX,
@@ -105,8 +104,10 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * Larger area used by EarthGenerator to blend the
-     * Y=65 store platform back into natural terrain.
+     * Large terrain-blending area.
+     *
+     * EarthGenerator now uses a 32-block transition,
+     * so this must also be 32.
      */
     public static boolean isInsideGuemesStoreBlendArea(
             int worldX,
@@ -116,15 +117,13 @@ public class EarthBuildingGenerator {
         int storeX = getGuemesStoreX();
         int storeZ = getGuemesStoreZ();
 
-        int blendMargin = 14;
-
         int halfX =
                 GUEMES_STORE_SIZE_X / 2
-                        + blendMargin;
+                        + STORE_BLEND_MARGIN;
 
         int halfZ =
                 GUEMES_STORE_SIZE_Z / 2
-                        + blendMargin;
+                        + STORE_BLEND_MARGIN;
 
         return worldX >= storeX - halfX
                 && worldX <= storeX + halfX
@@ -133,7 +132,9 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * Kept for compatibility and location information.
+     * Real USGS elevation remains available for
+     * information/debugging, but it does NOT control
+     * the store's Y position.
      */
     public static Double getGuemesStoreElevation() {
 
@@ -144,7 +145,7 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * FIXED STORE GROUND HEIGHT.
+     * APPROVED STORE HEIGHT.
      */
     public static int getGuemesStoreGroundY() {
 
@@ -154,7 +155,7 @@ public class EarthBuildingGenerator {
     /*
      * Distance from the outside edge of the store.
      *
-     * EarthGenerator uses this value for terrain blending.
+     * EarthGenerator uses this for terrain blending.
      */
     public static double getDistanceFromGuemesStore(
             int worldX,
@@ -191,17 +192,15 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * Generate the Guemes Island General Store.
+     * Generate the General Store.
      *
-     * IMPORTANT ORIENTATION CHANGE:
+     * APPROVED ORIENTATION:
      *
-     * The previous test had the entrance on the east side.
+     * Front/entrance = WEST
+     * Porch          = WEST
+     * Rear           = EAST
      *
-     * This version rotates that orientation 180 degrees.
-     *
-     * Entrance = WEST side
-     * Porch    = WEST side
-     * Rear     = EAST side
+     * Do not rotate this again.
      */
     public static void generateGuemesStore(
             ChunkData chunk,
@@ -262,7 +261,7 @@ public class EarthBuildingGenerator {
                 }
 
                 /*
-                 * Clear space above the building.
+                 * Clear building space.
                  */
                 for (int y = groundY + 1;
                      y <= groundY + 13;
@@ -333,12 +332,7 @@ public class EarthBuildingGenerator {
                 }
 
                 /*
-                 * WEST WALL
-                 *
-                 * This is now the FRONT of the store.
-                 *
-                 * This is the 180-degree rotation from
-                 * the previous test version.
+                 * WEST WALL = APPROVED FRONT.
                  */
                 if (westWall) {
 
@@ -397,7 +391,7 @@ public class EarthBuildingGenerator {
                 }
 
                 /*
-                 * Side windows.
+                 * North/south side windows.
                  */
                 if (northWall
                         || southWall) {
@@ -429,9 +423,6 @@ public class EarthBuildingGenerator {
             }
         }
 
-        /*
-         * Main roof.
-         */
         generateMainRoof(
                 chunk,
                 chunkX,
@@ -441,12 +432,6 @@ public class EarthBuildingGenerator {
                 storeZ
         );
 
-        /*
-         * Raised rear/center roof.
-         *
-         * This section is also moved to the opposite
-         * side because of the 180-degree rotation.
-         */
         generateCenterRoof(
                 chunk,
                 chunkX,
@@ -456,9 +441,6 @@ public class EarthBuildingGenerator {
                 storeZ
         );
 
-        /*
-         * Porch now appears on WEST side.
-         */
         generateWestPorch(
                 chunk,
                 chunkX,
@@ -470,9 +452,7 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * MAIN ROOF
-     *
-     * Long ridge continues north/south.
+     * Main roof.
      */
     private static void generateMainRoof(
             ChunkData chunk,
@@ -553,12 +533,9 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * RAISED ROOF SECTION
+     * Raised rear roof.
      *
-     * Previous version placed this toward the west.
-     *
-     * Since we're rotating the store 180 degrees,
-     * this section is now toward the EAST/rear.
+     * Rear is EAST in the approved orientation.
      */
     private static void generateCenterRoof(
             ChunkData chunk,
@@ -648,12 +625,7 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * WEST PORCH
-     *
-     * The previous version used an east-side porch.
-     *
-     * This moves the complete porch to the opposite
-     * side of the store.
+     * Approved WEST porch.
      */
     private static void generateWestPorch(
             ChunkData chunk,
@@ -725,7 +697,7 @@ public class EarthBuildingGenerator {
                 );
 
                 /*
-                 * Posts on the outside edge.
+                 * Porch posts.
                  */
                 boolean outsideEdge =
                         worldX == porchMaxX;
