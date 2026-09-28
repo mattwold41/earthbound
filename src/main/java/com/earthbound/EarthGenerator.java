@@ -121,35 +121,18 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Start with untouched real USGS terrain.
-                 */
-                int terrainHeight =
-                        naturalHeight;
-
-
-                /*
                  * =================================================
-                 * AREA A - RESIDENTIAL TERRAIN GRADING
+                 * NATURAL EARTH TERRAIN
                  * =================================================
                  *
-                 * Area A gently reshapes its development area while
-                 * preserving the surrounding real USGS terrain.
+                 * Keep the real USGS-generated land.
+                 *
+                 * Area A does NOT raise, flatten, compress,
+                 * or grade this terrain.
                  */
 
-                if (EarthResidentialGenerator
-                        .isInsideTerrainBlendArea(
-                                worldX,
-                                worldZ
-                        )) {
-
-                    terrainHeight =
-                            EarthResidentialGenerator
-                                    .getGradedTerrainHeight(
-                                            worldX,
-                                            worldZ,
-                                            naturalHeight
-                                    );
-                }
+                int terrainHeight =
+                        naturalHeight;
 
 
                 /*
@@ -195,10 +178,6 @@ public class EarthGenerator extends ChunkGenerator {
 
                         /*
                          * Existing approved store transition.
-                         *
-                         * Use naturalHeight here so the approved
-                         * store terrain remains independent from
-                         * Area A.
                          */
                         double blend =
                                 distance
@@ -295,23 +274,9 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Area A has its own controlled neighborhood road.
-                 *
-                 * Disable the global real-road overlay inside
-                 * the Area A grading zone so a TIGER road cannot
-                 * cut through the test neighborhood at a different
-                 * elevation.
+                 * Real roads follow their existing
+                 * EarthBound road smoothing system.
                  */
-                if (EarthResidentialGenerator
-                        .isInsideTerrainBlendArea(
-                                worldX,
-                                worldZ
-                        )) {
-
-                    road = false;
-                }
-
-
                 if (road) {
 
                     terrainHeight =
@@ -361,8 +326,10 @@ public class EarthGenerator extends ChunkGenerator {
          * AREA A - RESIDENTIAL TEST BLOCK
          * ========================================================
          *
-         * Road + sidewalks + eight test properties are placed
-         * after the newly graded terrain has been generated.
+         * Area A now sits directly on the existing
+         * natural USGS-generated land.
+         *
+         * It does NOT modify the terrain underneath it.
          */
 
         EarthResidentialGenerator.generate(
@@ -466,9 +433,6 @@ public class EarthGenerator extends ChunkGenerator {
             int localZ
     ) {
 
-        /*
-         * EarthWaterData exposes SEA_LEVEL directly.
-         */
         int seaLevel =
                 EarthWaterData.SEA_LEVEL;
 
