@@ -1,25 +1,41 @@
 package com.earthbound;
 
-
 public class EarthTerrainLoader {
+
+    /*
+     * ============================================================
+     * EARTHBOUND TERRAIN LOADER
+     * ============================================================
+     *
+     * Receives REAL latitude and longitude coordinates
+     * from EarthGenerator.
+     *
+     * IMPORTANT:
+     *
+     * Do NOT convert latitude or longitude to integers.
+     *
+     * The decimal portions are necessary because they identify
+     * different locations inside the USGS elevation raster.
+     * ============================================================
+     */
+
+
+    private EarthTerrainLoader() {
+    }
 
 
     /*
      * Loads the Guemes Island terrain data.
      *
-     * Later this will load larger terrain
-     * files automatically as EarthBound expands.
+     * The actual USGS elevation raster is managed by
+     * EarthTerrainDownloader.
      */
     public static void loadGuemesTerrainTile() {
-
 
         System.out.println(
                 "=== Loading Guemes Island terrain ==="
         );
-
-
     }
-
 
 
     /*
@@ -27,43 +43,48 @@ public class EarthTerrainLoader {
      */
     public static boolean isGuemesTerrainLoaded() {
 
-
         return true;
-
-
     }
-
 
 
     /*
-     * Gets elevation for the terrain generator.
+     * ============================================================
+     * GET GUEMES ELEVATION
+     * ============================================================
      *
-     * EarthGenerator calls this method.
+     * EarthGenerator sends:
      *
-     * Flow:
+     * latitude
+     * longitude
      *
-     * EarthGenerator
-     *       |
-     *       v
-     * EarthTerrainLoader
-     *       |
-     *       v
-     * GuemesElevation
+     * directly into this method.
      *
+     * We pass those SAME decimal coordinates directly
+     * to the USGS terrain raster.
+     *
+     * Example:
+     *
+     * 48.528160
+     * -122.624600
+     *
+     * must remain:
+     *
+     * 48.528160
+     * -122.624600
+     *
+     * They must NOT become:
+     *
+     * 48
+     * -122
      */
     public static double getGuemesElevation(
-            double x,
-            double z
+            double latitude,
+            double longitude
     ) {
 
-
-        return GuemesElevation.getElevation(
-                (int) x,
-                (int) z
+        return EarthTerrainDownloader.getElevation(
+                latitude,
+                longitude
         );
-
-
     }
-
-
 }
