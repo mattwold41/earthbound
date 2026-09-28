@@ -16,7 +16,7 @@ public class EarthResidentialGenerator {
      * - Establishes the residential district.
      * - Creates a small neighborhood road.
      * - Creates 8 individual test house plots.
-     * - Adds plot corner markers so placement is easy to inspect.
+     * - Adds plot markers so placement is easy to inspect.
      *
      * Later versions will add:
      * - Procedural houses
@@ -36,9 +36,6 @@ public class EarthResidentialGenerator {
      * Temporary center of Residential Test Block A.
      *
      * This can be moved after our first in-game inspection.
-     *
-     * We intentionally keep the district separate from the
-     * General Store/spawn area.
      */
     private static final int CENTER_X = -900;
     private static final int CENTER_Z = -150;
@@ -71,15 +68,17 @@ public class EarthResidentialGenerator {
 
 
     /*
-     * Number of plots on each side of the road.
+     * Four plots north of the road
+     * and four plots south of the road.
      *
-     * 4 north + 4 south = 8 test properties.
+     * Total = 8 properties.
      */
     private static final int PLOTS_PER_SIDE = 4;
 
 
     /*
-     * Materials used for the first placement test.
+     * Temporary materials used to make the
+     * residential test area easy to see.
      */
     private static final Material ROAD_MATERIAL =
             Material.GRAY_CONCRETE;
@@ -115,7 +114,8 @@ public class EarthResidentialGenerator {
 
 
         /*
-         * Skip chunks nowhere near Area A.
+         * Ignore chunks that are nowhere near
+         * the Residential Test Block.
          */
         if (chunkMaxX < CENTER_X - DISTRICT_HALF_WIDTH
                 || chunkMinX > CENTER_X + DISTRICT_HALF_WIDTH
@@ -126,6 +126,9 @@ public class EarthResidentialGenerator {
         }
 
 
+        /*
+         * Generate the neighborhood road first.
+         */
         generateNeighborhoodRoad(
                 chunkData,
                 chunkMinX,
@@ -133,6 +136,9 @@ public class EarthResidentialGenerator {
         );
 
 
+        /*
+         * Then generate the eight test plots.
+         */
         generateHousePlots(
                 chunkData,
                 chunkMinX,
@@ -148,8 +154,8 @@ public class EarthResidentialGenerator {
      *
      * The first test road runs east/west through Area A.
      *
-     * We place it on top of the existing EarthBound terrain rather
-     * than creating a giant flat platform.
+     * It follows the EarthBound terrain rather than creating
+     * a giant artificial platform.
      */
 
     private static void generateNeighborhoodRoad(
@@ -165,6 +171,9 @@ public class EarthResidentialGenerator {
                 CENTER_X + DISTRICT_HALF_WIDTH;
 
 
+        /*
+         * Main road surface.
+         */
         for (int worldX = roadStartX;
              worldX <= roadEndX;
              worldX++) {
@@ -181,6 +190,7 @@ public class EarthResidentialGenerator {
                         chunkMinX,
                         chunkMinZ
                 )) {
+
                     continue;
                 }
 
@@ -206,7 +216,7 @@ public class EarthResidentialGenerator {
 
 
         /*
-         * Sidewalk along both sides of the neighborhood road.
+         * Sidewalk along both sides of the road.
          */
         int northSidewalkZ =
                 CENTER_Z + ROAD_HALF_WIDTH + 1;
@@ -228,6 +238,7 @@ public class EarthResidentialGenerator {
                     SIDEWALK_MATERIAL
             );
 
+
             placeSurfaceBlock(
                     chunkData,
                     chunkMinX,
@@ -245,12 +256,20 @@ public class EarthResidentialGenerator {
      * HOUSE PLOTS
      * ============================================================
      *
-     * Four plots north of the road.
-     * Four plots south of the road.
+     * Four properties are placed on the north side.
+     * Four properties are placed on the south side.
      *
-     * For Version 1 we mark the four corners of each property.
-     * This lets us inspect spacing and terrain before houses are
-     * generated.
+     * Version 1 only marks the boundaries.
+     *
+     * This allows us to inspect:
+     *
+     * - location
+     * - terrain
+     * - spacing
+     * - road position
+     * - property sizes
+     *
+     * before generating actual houses.
      */
 
     private static void generateHousePlots(
@@ -270,7 +289,8 @@ public class EarthResidentialGenerator {
 
 
         /*
-         * North row.
+         * North row begins several blocks
+         * beyond the north sidewalk.
          */
         int northPlotMinZ =
                 CENTER_Z
@@ -279,7 +299,8 @@ public class EarthResidentialGenerator {
 
 
         /*
-         * South row.
+         * South row ends several blocks
+         * beyond the south sidewalk.
          */
         int southPlotMaxZ =
                 CENTER_Z
@@ -295,18 +316,21 @@ public class EarthResidentialGenerator {
              plot < PLOTS_PER_SIDE;
              plot++) {
 
+
             int minX =
                     firstPlotX
                             + plot
                             * (PLOT_WIDTH + PLOT_SPACING);
+
 
             int maxX =
                     minX + PLOT_WIDTH;
 
 
             /*
-             * North property.
+             * NORTH PROPERTY
              */
+
             int northMinZ =
                     northPlotMinZ;
 
@@ -326,8 +350,9 @@ public class EarthResidentialGenerator {
 
 
             /*
-             * South property.
+             * SOUTH PROPERTY
              */
+
             int southMinZ =
                     southPlotMinZ;
 
@@ -350,8 +375,14 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * PLOT MARKERS
+     * PROPERTY MARKERS
      * ============================================================
+     *
+     * Yellow concrete outlines each test property.
+     *
+     * These are temporary development markers.
+     * They can be removed when the actual residential
+     * neighborhood is generated.
      */
 
     private static void markPlot(
@@ -364,10 +395,14 @@ public class EarthResidentialGenerator {
             int maxZ
     ) {
 
+
         /*
-         * Outline the property with yellow blocks.
+         * North and south boundaries.
          */
-        for (int x = minX; x <= maxX; x++) {
+        for (int x = minX;
+             x <= maxX;
+             x++) {
+
 
             placeSurfaceBlock(
                     chunkData,
@@ -377,6 +412,7 @@ public class EarthResidentialGenerator {
                     minZ,
                     PLOT_MARKER
             );
+
 
             placeSurfaceBlock(
                     chunkData,
@@ -389,7 +425,13 @@ public class EarthResidentialGenerator {
         }
 
 
-        for (int z = minZ; z <= maxZ; z++) {
+        /*
+         * East and west boundaries.
+         */
+        for (int z = minZ;
+             z <= maxZ;
+             z++) {
+
 
             placeSurfaceBlock(
                     chunkData,
@@ -399,6 +441,7 @@ public class EarthResidentialGenerator {
                     z,
                     PLOT_MARKER
             );
+
 
             placeSurfaceBlock(
                     chunkData,
@@ -414,11 +457,11 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * TERRAIN HEIGHT
+     * EARTHBOUND TERRAIN HEIGHT
      * ============================================================
      *
-     * Uses the same real Earth elevation system already powering
-     * Guemes Island.
+     * Uses the SAME real USGS elevation system as
+     * the rest of EarthBound.
      */
 
     private static int getSurfaceHeight(
@@ -426,11 +469,17 @@ public class EarthResidentialGenerator {
             int worldZ
     ) {
 
+
+        /*
+         * Convert Minecraft coordinates back
+         * into real Earth latitude/longitude.
+         */
         double latitude =
                 EarthCoordinates.getLatitude(
                         worldX,
                         worldZ
                 );
+
 
         double longitude =
                 EarthCoordinates.getLongitude(
@@ -439,6 +488,9 @@ public class EarthResidentialGenerator {
                 );
 
 
+        /*
+         * Read the real USGS elevation.
+         */
         double elevationMeters =
                 EarthTerrainLoader.getGuemesElevation(
                         latitude,
@@ -446,7 +498,14 @@ public class EarthResidentialGenerator {
                 );
 
 
-        return EarthElevation.minecraftY(
+        /*
+         * Convert real-world meters into the
+         * EarthBound Minecraft Y scale.
+         *
+         * This is the correct method from
+         * EarthElevation.java.
+         */
+        return EarthElevation.getMinecraftHeight(
                 elevationMeters
         );
     }
@@ -454,7 +513,7 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * BLOCK HELPERS
+     * SURFACE BLOCK HELPER
      * ============================================================
      */
 
@@ -467,12 +526,14 @@ public class EarthResidentialGenerator {
             Material material
     ) {
 
+
         if (!belongsToChunk(
                 worldX,
                 worldZ,
                 chunkMinX,
                 chunkMinZ
         )) {
+
             return;
         }
 
@@ -496,6 +557,12 @@ public class EarthResidentialGenerator {
     }
 
 
+    /*
+     * ============================================================
+     * CHUNK CHECK
+     * ============================================================
+     */
+
     private static boolean belongsToChunk(
             int worldX,
             int worldZ,
@@ -510,6 +577,12 @@ public class EarthResidentialGenerator {
     }
 
 
+    /*
+     * ============================================================
+     * WORLD BLOCK -> CHUNK BLOCK
+     * ============================================================
+     */
+
     private static void setWorldBlock(
             ChunkData chunkData,
             int chunkMinX,
@@ -520,12 +593,21 @@ public class EarthResidentialGenerator {
             Material material
     ) {
 
+
+        /*
+         * Protect against invalid Y coordinates.
+         */
         if (y < chunkData.getMinHeight()
                 || y >= chunkData.getMaxHeight()) {
+
             return;
         }
 
 
+        /*
+         * Convert world coordinates into
+         * local chunk coordinates.
+         */
         int localX =
                 worldX - chunkMinX;
 
@@ -533,6 +615,9 @@ public class EarthResidentialGenerator {
                 worldZ - chunkMinZ;
 
 
+        /*
+         * Extra safety check.
+         */
         if (localX < 0
                 || localX > 15
                 || localZ < 0
@@ -542,6 +627,9 @@ public class EarthResidentialGenerator {
         }
 
 
+        /*
+         * Place the block.
+         */
         chunkData.setBlock(
                 localX,
                 y,
