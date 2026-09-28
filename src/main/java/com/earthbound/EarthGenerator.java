@@ -121,14 +121,44 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * =================================================
-                 * GENERAL STORE TERRAIN BLEND
-                 * =================================================
+                 * Start with untouched real USGS terrain.
                  */
-
                 int terrainHeight =
                         naturalHeight;
 
+
+                /*
+                 * =================================================
+                 * AREA A - RESIDENTIAL TERRAIN GRADING
+                 * =================================================
+                 *
+                 * Area A gently reshapes its development area while
+                 * preserving the surrounding real USGS terrain.
+                 */
+
+                if (EarthResidentialGenerator
+                        .isInsideTerrainBlendArea(
+                                worldX,
+                                worldZ
+                        )) {
+
+                    terrainHeight =
+                            EarthResidentialGenerator
+                                    .getGradedTerrainHeight(
+                                            worldX,
+                                            worldZ,
+                                            naturalHeight
+                                    );
+                }
+
+
+                /*
+                 * =================================================
+                 * GENERAL STORE TERRAIN BLEND
+                 * =================================================
+                 *
+                 * Keep the existing approved General Store system.
+                 */
 
                 if (EarthBuildingGenerator
                         .isInsideGuemesStoreBlendArea(
@@ -164,7 +194,11 @@ public class EarthGenerator extends ChunkGenerator {
                     } else {
 
                         /*
-                         * Existing store terrain transition.
+                         * Existing approved store transition.
+                         *
+                         * Use naturalHeight here so the approved
+                         * store terrain remains independent from
+                         * Area A.
                          */
                         double blend =
                                 distance
@@ -260,6 +294,24 @@ public class EarthGenerator extends ChunkGenerator {
                 }
 
 
+                /*
+                 * Area A has its own controlled neighborhood road.
+                 *
+                 * Disable the global real-road overlay inside
+                 * the Area A grading zone so a TIGER road cannot
+                 * cut through the test neighborhood at a different
+                 * elevation.
+                 */
+                if (EarthResidentialGenerator
+                        .isInsideTerrainBlendArea(
+                                worldX,
+                                worldZ
+                        )) {
+
+                    road = false;
+                }
+
+
                 if (road) {
 
                     terrainHeight =
@@ -296,6 +348,7 @@ public class EarthGenerator extends ChunkGenerator {
          *
          * Do not rotate.
          */
+
         EarthBuildingGenerator.generateGuemesStore(
                 chunkData,
                 chunkX,
@@ -308,12 +361,10 @@ public class EarthGenerator extends ChunkGenerator {
          * AREA A - RESIDENTIAL TEST BLOCK
          * ========================================================
          *
-         * This connects the new:
-         *
-         * EarthResidentialGenerator.java
-         *
-         * to the EarthBound world generator.
+         * Road + sidewalks + eight test properties are placed
+         * after the newly graded terrain has been generated.
          */
+
         EarthResidentialGenerator.generate(
                 chunkData,
                 chunkX,
