@@ -10,21 +10,13 @@ public class EarthResidentialGenerator {
      * EARTHBOUND - GUEMES RESIDENTIAL TEST BLOCK
      * ============================================================
      *
-     * Area A from the Guemes Island test-area plan.
+     * Area A
      *
-     * VERSION 1:
-     * - Establishes the residential district.
-     * - Creates a small neighborhood road.
-     * - Creates 8 individual test house plots.
-     * - Adds plot markers so placement is easy to inspect.
-     *
-     * Later versions will add:
-     * - Procedural houses
-     * - Furnished interiors
-     * - NPC residents
-     * - Property ownership
-     * - Buying/selling
-     * - Remodeling permissions
+     * VERSION 2:
+     * - Keeps the neighborhood road.
+     * - Keeps sidewalks.
+     * - Keeps 8 test house plots.
+     * - Adds terrain grading information for EarthGenerator.
      *
      * IMPORTANT:
      * This class does NOT modify the General Store.
@@ -33,19 +25,24 @@ public class EarthResidentialGenerator {
 
 
     /*
-     * Temporary center of Residential Test Block A.
-     *
-     * This can be moved after our first in-game inspection.
+     * Temporary Area A center.
      */
     private static final int CENTER_X = -900;
     private static final int CENTER_Z = -150;
 
 
     /*
-     * Neighborhood dimensions.
+     * Main neighborhood dimensions.
      */
     private static final int DISTRICT_HALF_WIDTH = 45;
     private static final int DISTRICT_HALF_LENGTH = 55;
+
+
+    /*
+     * Extra distance outside Area A used for
+     * gradual terrain blending.
+     */
+    private static final int TERRAIN_BLEND_MARGIN = 24;
 
 
     /*
@@ -55,30 +52,16 @@ public class EarthResidentialGenerator {
 
 
     /*
-     * House plot dimensions.
+     * House plots.
      */
     private static final int PLOT_WIDTH = 16;
     private static final int PLOT_DEPTH = 20;
-
-
-    /*
-     * Distance between neighboring plots.
-     */
     private static final int PLOT_SPACING = 4;
-
-
-    /*
-     * Four plots north of the road
-     * and four plots south of the road.
-     *
-     * Total = 8 properties.
-     */
     private static final int PLOTS_PER_SIDE = 4;
 
 
     /*
-     * Temporary materials used to make the
-     * residential test area easy to see.
+     * Development materials.
      */
     private static final Material ROAD_MATERIAL =
             Material.GRAY_CONCRETE;
@@ -90,13 +73,288 @@ public class EarthResidentialGenerator {
             Material.YELLOW_CONCRETE;
 
 
+    /*
+     * The neighborhood uses the real USGS height
+     * at its center as its reference elevation.
+     *
+     * This is NOT hard-coded to an artificial Y level.
+     */
+    private static final int DISTRICT_BASE_Y =
+            getNaturalSurfaceHeight(
+                    CENTER_X,
+                    CENTER_Z
+            );
+
+
     private EarthResidentialGenerator() {
     }
 
 
     /*
      * ============================================================
-     * MAIN GENERATION METHOD
+     * TERRAIN GRADING API
+     * ============================================================
+     *
+     * EarthGenerator will use these methods BEFORE
+     * placing the surface blocks.
+     */
+
+
+    public static boolean isInsideTerrainBlendArea(
+            int worldX,
+            int worldZ
+    ) {
+
+        return worldX >=
+                CENTER_X
+                        - DISTRICT_HALF_WIDTH
+                        - TERRAIN_BLEND_MARGIN
+
+                && worldX <=
+                CENTER_X
+                        + DISTRICT_HALF_WIDTH
+                        + TERRAIN_BLEND_MARGIN
+
+                && worldZ >=
+                CENTER_Z
+                        - DISTRICT_HALF_LENGTH
+                        - TERRAIN_BLEND_MARGIN
+
+                && worldZ <=
+                CENTER_Z
+                        + DISTRICT_HALF_LENGTH
+                        + TERRAIN_BLEND_MARGIN;
+    }
+
+
+    public static boolean isInsideDistrict(
+            int worldX,
+            int worldZ
+    ) {
+
+        return worldX >=
+                CENTER_X - DISTRICT_HALF_WIDTH
+
+                && worldX <=
+                CENTER_X + DISTRICT_HALF_WIDTH
+
+                && worldZ >=
+                CENTER_Z - DISTRICT_HALF_LENGTH
+
+                && worldZ <=
+                CENTER_Z + DISTRICT_HALF_LENGTH;
+    }
+
+
+    /*
+     * Returns the terrain height Area A wants.
+     *
+     * Inside the neighborhood we gently reduce
+     * the natural terrain variation instead of
+     * forcing the whole neighborhood onto one
+     * giant flat platform.
+     *
+     * Outside the neighborhood, the terrain
+     * gradually transitions back to untouched
+     * USGS terrain.
+     */
+    public static int getGradedTerrainHeight(
+            int worldX,
+            int worldZ,
+            int naturalHeight
+    ) {
+
+        if (!isInsideTerrainBlendArea(
+                worldX,
+                worldZ
+        )) {
+
+            return naturalHeight;
+        }
+
+
+        /*
+         * --------------------------------------------------------
+         * INSIDE AREA A
+         * --------------------------------------------------------
+         */
+
+        if (isInsideDistrict(
+                worldX,
+                worldZ
+        )) {
+
+            /*
+             * Preserve a little natural variation.
+             *
+             * This prevents Area A from looking like
+             * a completely artificial flat platform.
+             */
+            int difference =
+                    naturalHeight
+                            - DISTRICT_BASE_Y;
+
+
+            /*
+             * Reduce the terrain difference to 25%.
+             */
+            int softenedDifference =
+                    (int) Math.round(
+                            difference * 0.25
+                    );
+
+
+            /*
+             * Limit the remaining variation.
+             */
+            softenedDifference =
+                    Math.max(
+                            -4,
+                            Math.min(
+                                    4,
+                                    softenedDifference
+                            )
+                    );
+
+
+            return DISTRICT_BASE_Y
+                    + softenedDifference;
+        }
+
+
+        /*
+         * --------------------------------------------------------
+         * OUTSIDE AREA A - BLEND BACK TO USGS
+         * --------------------------------------------------------
+         */
+
+        int distanceX = 0;
+
+        if (worldX <
+                CENTER_X - DISTRICT_HALF_WIDTH) {
+
+            distanceX =
+                    (CENTER_X
+                            - DISTRICT_HALF_WIDTH)
+                            - worldX;
+
+        } else if (worldX >
+                CENTER_X + DISTRICT_HALF_WIDTH) {
+
+            distanceX =
+                    worldX
+                            - (CENTER_X
+                            + DISTRICT_HALF_WIDTH);
+        }
+
+
+        int distanceZ = 0;
+
+        if (worldZ <
+                CENTER_Z - DISTRICT_HALF_LENGTH) {
+
+            distanceZ =
+                    (CENTER_Z
+                            - DISTRICT_HALF_LENGTH)
+                            - worldZ;
+
+        } else if (worldZ >
+                CENTER_Z + DISTRICT_HALF_LENGTH) {
+
+            distanceZ =
+                    worldZ
+                            - (CENTER_Z
+                            + DISTRICT_HALF_LENGTH);
+        }
+
+
+        double distance =
+                Math.sqrt(
+                        (double) distanceX * distanceX
+                                + (double) distanceZ * distanceZ
+                );
+
+
+        double blend =
+                distance
+                        / TERRAIN_BLEND_MARGIN;
+
+
+        blend =
+                Math.max(
+                        0.0,
+                        Math.min(
+                                1.0,
+                                blend
+                        )
+                );
+
+
+        /*
+         * Smoothstep gives us a gentler transition.
+         */
+        double smoothBlend =
+                blend
+                        * blend
+                        * (3.0 - 2.0 * blend);
+
+
+        /*
+         * Terrain height at the Area A edge.
+         */
+        int edgeHeight =
+                getDistrictHeightFromNatural(
+                        naturalHeight
+                );
+
+
+        double result =
+                edgeHeight
+                        + (naturalHeight - edgeHeight)
+                        * smoothBlend;
+
+
+        return (int) Math.round(result);
+    }
+
+
+    /*
+     * Applies the same softened terrain rule used
+     * inside the district.
+     */
+    private static int getDistrictHeightFromNatural(
+            int naturalHeight
+    ) {
+
+        int difference =
+                naturalHeight
+                        - DISTRICT_BASE_Y;
+
+
+        int softenedDifference =
+                (int) Math.round(
+                        difference * 0.25
+                );
+
+
+        softenedDifference =
+                Math.max(
+                        -4,
+                        Math.min(
+                                4,
+                                softenedDifference
+                        )
+                );
+
+
+        return DISTRICT_BASE_Y
+                + softenedDifference;
+    }
+
+
+    /*
+     * ============================================================
+     * MAIN PHYSICAL GENERATION
      * ============================================================
      */
 
@@ -106,29 +364,38 @@ public class EarthResidentialGenerator {
             int chunkZ
     ) {
 
-        int chunkMinX = chunkX << 4;
-        int chunkMinZ = chunkZ << 4;
+        int chunkMinX =
+                chunkX << 4;
 
-        int chunkMaxX = chunkMinX + 15;
-        int chunkMaxZ = chunkMinZ + 15;
+        int chunkMinZ =
+                chunkZ << 4;
+
+        int chunkMaxX =
+                chunkMinX + 15;
+
+        int chunkMaxZ =
+                chunkMinZ + 15;
 
 
         /*
-         * Ignore chunks that are nowhere near
-         * the Residential Test Block.
+         * Ignore chunks nowhere near Area A.
          */
-        if (chunkMaxX < CENTER_X - DISTRICT_HALF_WIDTH
-                || chunkMinX > CENTER_X + DISTRICT_HALF_WIDTH
-                || chunkMaxZ < CENTER_Z - DISTRICT_HALF_LENGTH
-                || chunkMinZ > CENTER_Z + DISTRICT_HALF_LENGTH) {
+        if (chunkMaxX <
+                CENTER_X - DISTRICT_HALF_WIDTH
+
+                || chunkMinX >
+                CENTER_X + DISTRICT_HALF_WIDTH
+
+                || chunkMaxZ <
+                CENTER_Z - DISTRICT_HALF_LENGTH
+
+                || chunkMinZ >
+                CENTER_Z + DISTRICT_HALF_LENGTH) {
 
             return;
         }
 
 
-        /*
-         * Generate the neighborhood road first.
-         */
         generateNeighborhoodRoad(
                 chunkData,
                 chunkMinX,
@@ -136,9 +403,6 @@ public class EarthResidentialGenerator {
         );
 
 
-        /*
-         * Then generate the eight test plots.
-         */
         generateHousePlots(
                 chunkData,
                 chunkMinX,
@@ -151,11 +415,6 @@ public class EarthResidentialGenerator {
      * ============================================================
      * NEIGHBORHOOD ROAD
      * ============================================================
-     *
-     * The first test road runs east/west through Area A.
-     *
-     * It follows the EarthBound terrain rather than creating
-     * a giant artificial platform.
      */
 
     private static void generateNeighborhoodRoad(
@@ -172,7 +431,7 @@ public class EarthResidentialGenerator {
 
 
         /*
-         * Main road surface.
+         * Road.
          */
         for (int worldX = roadStartX;
              worldX <= roadEndX;
@@ -180,7 +439,8 @@ public class EarthResidentialGenerator {
 
             for (int worldZ =
                  CENTER_Z - ROAD_HALF_WIDTH;
-                 worldZ <= CENTER_Z + ROAD_HALF_WIDTH;
+                 worldZ <=
+                         CENTER_Z + ROAD_HALF_WIDTH;
                  worldZ++) {
 
 
@@ -196,7 +456,7 @@ public class EarthResidentialGenerator {
 
 
                 int surfaceY =
-                        getSurfaceHeight(
+                        getAreaSurfaceHeight(
                                 worldX,
                                 worldZ
                         );
@@ -216,13 +476,25 @@ public class EarthResidentialGenerator {
 
 
         /*
-         * Sidewalk along both sides of the road.
+         * ========================================================
+         * SIDEWALKS
+         * ========================================================
+         *
+         * Keep this style.
+         *
+         * This is the sidewalk appearance approved
+         * during the first Area A visual test.
          */
+
         int northSidewalkZ =
-                CENTER_Z + ROAD_HALF_WIDTH + 1;
+                CENTER_Z
+                        + ROAD_HALF_WIDTH
+                        + 1;
 
         int southSidewalkZ =
-                CENTER_Z - ROAD_HALF_WIDTH - 1;
+                CENTER_Z
+                        - ROAD_HALF_WIDTH
+                        - 1;
 
 
         for (int worldX = roadStartX;
@@ -255,21 +527,6 @@ public class EarthResidentialGenerator {
      * ============================================================
      * HOUSE PLOTS
      * ============================================================
-     *
-     * Four properties are placed on the north side.
-     * Four properties are placed on the south side.
-     *
-     * Version 1 only marks the boundaries.
-     *
-     * This allows us to inspect:
-     *
-     * - location
-     * - terrain
-     * - spacing
-     * - road position
-     * - property sizes
-     *
-     * before generating actual houses.
      */
 
     private static void generateHousePlots(
@@ -285,27 +542,21 @@ public class EarthResidentialGenerator {
 
 
         int firstPlotX =
-                CENTER_X - (totalWidth / 2);
+                CENTER_X
+                        - (totalWidth / 2);
 
 
-        /*
-         * North row begins several blocks
-         * beyond the north sidewalk.
-         */
         int northPlotMinZ =
                 CENTER_Z
                         + ROAD_HALF_WIDTH
                         + 5;
 
 
-        /*
-         * South row ends several blocks
-         * beyond the south sidewalk.
-         */
         int southPlotMaxZ =
                 CENTER_Z
                         - ROAD_HALF_WIDTH
                         - 5;
+
 
         int southPlotMinZ =
                 southPlotMaxZ
@@ -320,22 +571,25 @@ public class EarthResidentialGenerator {
             int minX =
                     firstPlotX
                             + plot
-                            * (PLOT_WIDTH + PLOT_SPACING);
+                            * (PLOT_WIDTH
+                            + PLOT_SPACING);
 
 
             int maxX =
-                    minX + PLOT_WIDTH;
+                    minX
+                            + PLOT_WIDTH;
 
 
             /*
-             * NORTH PROPERTY
+             * North property.
              */
 
             int northMinZ =
                     northPlotMinZ;
 
             int northMaxZ =
-                    northMinZ + PLOT_DEPTH;
+                    northMinZ
+                            + PLOT_DEPTH;
 
 
             markPlot(
@@ -350,15 +604,8 @@ public class EarthResidentialGenerator {
 
 
             /*
-             * SOUTH PROPERTY
+             * South property.
              */
-
-            int southMinZ =
-                    southPlotMinZ;
-
-            int southMaxZ =
-                    southPlotMaxZ;
-
 
             markPlot(
                     chunkData,
@@ -366,8 +613,8 @@ public class EarthResidentialGenerator {
                     chunkMinZ,
                     minX,
                     maxX,
-                    southMinZ,
-                    southMaxZ
+                    southPlotMinZ,
+                    southPlotMaxZ
             );
         }
     }
@@ -377,12 +624,6 @@ public class EarthResidentialGenerator {
      * ============================================================
      * PROPERTY MARKERS
      * ============================================================
-     *
-     * Yellow concrete outlines each test property.
-     *
-     * These are temporary development markers.
-     * They can be removed when the actual residential
-     * neighborhood is generated.
      */
 
     private static void markPlot(
@@ -395,14 +636,12 @@ public class EarthResidentialGenerator {
             int maxZ
     ) {
 
-
         /*
-         * North and south boundaries.
+         * North/south boundaries.
          */
         for (int x = minX;
              x <= maxX;
              x++) {
-
 
             placeSurfaceBlock(
                     chunkData,
@@ -426,12 +665,11 @@ public class EarthResidentialGenerator {
 
 
         /*
-         * East and west boundaries.
+         * East/west boundaries.
          */
         for (int z = minZ;
              z <= maxZ;
              z++) {
-
 
             placeSurfaceBlock(
                     chunkData,
@@ -457,23 +695,45 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * EARTHBOUND TERRAIN HEIGHT
+     * AREA A SURFACE HEIGHT
      * ============================================================
      *
-     * Uses the SAME real USGS elevation system as
-     * the rest of EarthBound.
+     * Once EarthGenerator is connected to the terrain
+     * grading API, this will match the actual generated
+     * terrain underneath the roads and plots.
      */
 
-    private static int getSurfaceHeight(
+    private static int getAreaSurfaceHeight(
             int worldX,
             int worldZ
     ) {
 
+        int naturalHeight =
+                getNaturalSurfaceHeight(
+                        worldX,
+                        worldZ
+                );
 
-        /*
-         * Convert Minecraft coordinates back
-         * into real Earth latitude/longitude.
-         */
+
+        return getGradedTerrainHeight(
+                worldX,
+                worldZ,
+                naturalHeight
+        );
+    }
+
+
+    /*
+     * ============================================================
+     * NATURAL USGS TERRAIN HEIGHT
+     * ============================================================
+     */
+
+    private static int getNaturalSurfaceHeight(
+            int worldX,
+            int worldZ
+    ) {
+
         double latitude =
                 EarthCoordinates.getLatitude(
                         worldX,
@@ -488,9 +748,6 @@ public class EarthResidentialGenerator {
                 );
 
 
-        /*
-         * Read the real USGS elevation.
-         */
         double elevationMeters =
                 EarthTerrainLoader.getGuemesElevation(
                         latitude,
@@ -498,13 +755,6 @@ public class EarthResidentialGenerator {
                 );
 
 
-        /*
-         * Convert real-world meters into the
-         * EarthBound Minecraft Y scale.
-         *
-         * This is the correct method from
-         * EarthElevation.java.
-         */
         return EarthElevation.getMinecraftHeight(
                 elevationMeters
         );
@@ -526,7 +776,6 @@ public class EarthResidentialGenerator {
             Material material
     ) {
 
-
         if (!belongsToChunk(
                 worldX,
                 worldZ,
@@ -539,7 +788,7 @@ public class EarthResidentialGenerator {
 
 
         int surfaceY =
-                getSurfaceHeight(
+                getAreaSurfaceHeight(
                         worldX,
                         worldZ
                 );
@@ -593,10 +842,6 @@ public class EarthResidentialGenerator {
             Material material
     ) {
 
-
-        /*
-         * Protect against invalid Y coordinates.
-         */
         if (y < chunkData.getMinHeight()
                 || y >= chunkData.getMaxHeight()) {
 
@@ -604,10 +849,6 @@ public class EarthResidentialGenerator {
         }
 
 
-        /*
-         * Convert world coordinates into
-         * local chunk coordinates.
-         */
         int localX =
                 worldX - chunkMinX;
 
@@ -615,9 +856,6 @@ public class EarthResidentialGenerator {
                 worldZ - chunkMinZ;
 
 
-        /*
-         * Extra safety check.
-         */
         if (localX < 0
                 || localX > 15
                 || localZ < 0
@@ -627,9 +865,6 @@ public class EarthResidentialGenerator {
         }
 
 
-        /*
-         * Place the block.
-         */
         chunkData.setBlock(
                 localX,
                 y,
