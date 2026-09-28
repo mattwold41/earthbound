@@ -8,68 +8,70 @@ public class EarthBuildingGenerator {
     private EarthBuildingGenerator() {
     }
 
-    // Real-world Guemes Island General Store location
+    /*
+     * GUEMES ISLAND GENERAL STORE
+     *
+     * Real-world approximate location.
+     */
     public static final double GUEMES_STORE_LATITUDE = 48.529460;
     public static final double GUEMES_STORE_LONGITUDE = -122.624110;
 
     /*
-     * ROTATED GENERAL STORE
+     * Rotated store footprint.
      *
-     * Previous footprint:
-     *   24 blocks X
-     *   16 blocks Z
-     *
-     * New footprint after 90-degree rotation:
-     *   16 blocks X
-     *   24 blocks Z
-     *
-     * Entrance/porch is on the EAST side.
+     * X = 16 blocks
+     * Z = 24 blocks
      */
     private static final int GUEMES_STORE_SIZE_X = 16;
     private static final int GUEMES_STORE_SIZE_Z = 24;
 
+    /*
+     * Small flat area immediately around the building.
+     */
     private static final int FOUNDATION_MARGIN = 2;
 
+    /*
+     * IMPORTANT:
+     *
+     * The General Store is intentionally fixed at Y=65.
+     *
+     * Sea level is Y=63, so this puts the waterfront
+     * building close to the surrounding shoreline instead
+     * of allowing USGS elevation scaling to create a
+     * giant hill underneath it.
+     */
+    private static final int GUEMES_STORE_GROUND_Y = 65;
+
     public static int getGuemesStoreX() {
+
         return EarthCoordinates.longitudeToMinecraftX(
                 GUEMES_STORE_LONGITUDE
         );
     }
 
     public static int getGuemesStoreZ() {
+
         return EarthCoordinates.latitudeToMinecraftZ(
                 GUEMES_STORE_LATITUDE
         );
     }
 
+    /*
+     * Actual building footprint.
+     */
     public static boolean isInsideGuemesStore(
             int worldX,
             int worldZ
     ) {
-        int storeX = getGuemesStoreX();
-        int storeZ = getGuemesStoreZ();
 
-        int halfX = GUEMES_STORE_SIZE_X / 2;
-        int halfZ = GUEMES_STORE_SIZE_Z / 2;
-
-        return worldX >= storeX - halfX
-                && worldX <= storeX + halfX
-                && worldZ >= storeZ - halfZ
-                && worldZ <= storeZ + halfZ;
-    }
-
-    public static boolean isInsideGuemesStoreFoundation(
-            int worldX,
-            int worldZ
-    ) {
         int storeX = getGuemesStoreX();
         int storeZ = getGuemesStoreZ();
 
         int halfX =
-                GUEMES_STORE_SIZE_X / 2 + FOUNDATION_MARGIN;
+                GUEMES_STORE_SIZE_X / 2;
 
         int halfZ =
-                GUEMES_STORE_SIZE_Z / 2 + FOUNDATION_MARGIN;
+                GUEMES_STORE_SIZE_Z / 2;
 
         return worldX >= storeX - halfX
                 && worldX <= storeX + halfX
@@ -78,23 +80,51 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * Larger area used by EarthGenerator to gradually blend
-     * the natural terrain into the store foundation.
+     * Flat foundation immediately around the building.
+     */
+    public static boolean isInsideGuemesStoreFoundation(
+            int worldX,
+            int worldZ
+    ) {
+
+        int storeX = getGuemesStoreX();
+        int storeZ = getGuemesStoreZ();
+
+        int halfX =
+                GUEMES_STORE_SIZE_X / 2
+                        + FOUNDATION_MARGIN;
+
+        int halfZ =
+                GUEMES_STORE_SIZE_Z / 2
+                        + FOUNDATION_MARGIN;
+
+        return worldX >= storeX - halfX
+                && worldX <= storeX + halfX
+                && worldZ >= storeZ - halfZ
+                && worldZ <= storeZ + halfZ;
+    }
+
+    /*
+     * Larger area used by EarthGenerator to blend the
+     * Y=65 store platform back into natural terrain.
      */
     public static boolean isInsideGuemesStoreBlendArea(
             int worldX,
             int worldZ
     ) {
+
         int storeX = getGuemesStoreX();
         int storeZ = getGuemesStoreZ();
 
         int blendMargin = 14;
 
         int halfX =
-                GUEMES_STORE_SIZE_X / 2 + blendMargin;
+                GUEMES_STORE_SIZE_X / 2
+                        + blendMargin;
 
         int halfZ =
-                GUEMES_STORE_SIZE_Z / 2 + blendMargin;
+                GUEMES_STORE_SIZE_Z / 2
+                        + blendMargin;
 
         return worldX >= storeX - halfX
                 && worldX <= storeX + halfX
@@ -102,51 +132,55 @@ public class EarthBuildingGenerator {
                 && worldZ <= storeZ + halfZ;
     }
 
+    /*
+     * Kept for compatibility and location information.
+     */
     public static Double getGuemesStoreElevation() {
+
         return EarthTerrainLoader.getGuemesElevation(
                 GUEMES_STORE_LATITUDE,
                 GUEMES_STORE_LONGITUDE
         );
     }
 
+    /*
+     * FIXED STORE GROUND HEIGHT.
+     */
     public static int getGuemesStoreGroundY() {
-        Double elevation = getGuemesStoreElevation();
 
-        if (elevation == null || !Double.isFinite(elevation)) {
-            return 63;
-        }
-
-        return EarthElevation.getMinecraftHeight(elevation);
+        return GUEMES_STORE_GROUND_Y;
     }
 
     /*
-     * Returns the distance outside the actual building footprint.
+     * Distance from the outside edge of the store.
      *
-     * 0 = underneath the building
-     * larger values = farther away from building
-     *
-     * EarthGenerator will use this to make a gradual terrain
-     * transition instead of a vertical rectangular pedestal.
+     * EarthGenerator uses this value for terrain blending.
      */
     public static double getDistanceFromGuemesStore(
             int worldX,
             int worldZ
     ) {
+
         int storeX = getGuemesStoreX();
         int storeZ = getGuemesStoreZ();
 
-        int halfX = GUEMES_STORE_SIZE_X / 2;
-        int halfZ = GUEMES_STORE_SIZE_Z / 2;
+        int halfX =
+                GUEMES_STORE_SIZE_X / 2;
+
+        int halfZ =
+                GUEMES_STORE_SIZE_Z / 2;
 
         int dx =
                 Math.max(
-                        Math.abs(worldX - storeX) - halfX,
+                        Math.abs(worldX - storeX)
+                                - halfX,
                         0
                 );
 
         int dz =
                 Math.max(
-                        Math.abs(worldZ - storeZ) - halfZ,
+                        Math.abs(worldZ - storeZ)
+                                - halfZ,
                         0
                 );
 
@@ -156,49 +190,79 @@ public class EarthBuildingGenerator {
         );
     }
 
+    /*
+     * Generate the Guemes Island General Store.
+     *
+     * IMPORTANT ORIENTATION CHANGE:
+     *
+     * The previous test had the entrance on the east side.
+     *
+     * This version rotates that orientation 180 degrees.
+     *
+     * Entrance = WEST side
+     * Porch    = WEST side
+     * Rear     = EAST side
+     */
     public static void generateGuemesStore(
             ChunkData chunk,
             int chunkX,
             int chunkZ
     ) {
-        int groundY = getGuemesStoreGroundY();
 
-        int storeX = getGuemesStoreX();
-        int storeZ = getGuemesStoreZ();
+        int groundY =
+                getGuemesStoreGroundY();
+
+        int storeX =
+                getGuemesStoreX();
+
+        int storeZ =
+                getGuemesStoreZ();
 
         int minX =
-                storeX - GUEMES_STORE_SIZE_X / 2;
+                storeX
+                        - GUEMES_STORE_SIZE_X / 2;
 
         int maxX =
-                storeX + GUEMES_STORE_SIZE_X / 2;
+                storeX
+                        + GUEMES_STORE_SIZE_X / 2;
 
         int minZ =
-                storeZ - GUEMES_STORE_SIZE_Z / 2;
+                storeZ
+                        - GUEMES_STORE_SIZE_Z / 2;
 
         int maxZ =
-                storeZ + GUEMES_STORE_SIZE_Z / 2;
+                storeZ
+                        + GUEMES_STORE_SIZE_Z / 2;
 
         /*
-         * MAIN BUILDING
+         * Main building.
          */
-        for (int localX = 0; localX < 16; localX++) {
-            for (int localZ = 0; localZ < 16; localZ++) {
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
 
                 int worldX =
-                        chunkX * 16 + localX;
+                        chunkX * 16
+                                + localX;
 
                 int worldZ =
-                        chunkZ * 16 + localZ;
+                        chunkZ * 16
+                                + localZ;
 
                 if (worldX < minX
                         || worldX > maxX
                         || worldZ < minZ
                         || worldZ > maxZ) {
+
                     continue;
                 }
 
                 /*
-                 * Clear space above building.
+                 * Clear space above the building.
                  */
                 for (int y = groundY + 1;
                      y <= groundY + 13;
@@ -213,7 +277,7 @@ public class EarthBuildingGenerator {
                 }
 
                 /*
-                 * Foundation and floor.
+                 * Foundation.
                  */
                 chunk.setBlock(
                         localX,
@@ -222,6 +286,9 @@ public class EarthBuildingGenerator {
                         Material.STONE_BRICKS
                 );
 
+                /*
+                 * Interior floor.
+                 */
                 chunk.setBlock(
                         localX,
                         groundY + 1,
@@ -266,15 +333,21 @@ public class EarthBuildingGenerator {
                 }
 
                 /*
-                 * EAST WALL
+                 * WEST WALL
                  *
-                 * This is now the main entrance side.
+                 * This is now the FRONT of the store.
+                 *
+                 * This is the 180-degree rotation from
+                 * the previous test version.
                  */
-                if (eastWall) {
+                if (westWall) {
 
                     int relativeZ =
                             worldZ - minZ;
 
+                    /*
+                     * Front windows.
+                     */
                     boolean southWindow =
                             relativeZ >= 3
                                     && relativeZ <= 6;
@@ -283,7 +356,8 @@ public class EarthBuildingGenerator {
                             relativeZ >= 17
                                     && relativeZ <= 20;
 
-                    if (southWindow || northWindow) {
+                    if (southWindow
+                            || northWindow) {
 
                         chunk.setBlock(
                                 localX,
@@ -301,7 +375,7 @@ public class EarthBuildingGenerator {
                     }
 
                     /*
-                     * Double entrance.
+                     * Main entrance.
                      */
                     if (relativeZ == 11
                             || relativeZ == 12) {
@@ -323,17 +397,19 @@ public class EarthBuildingGenerator {
                 }
 
                 /*
-                 * NORTH AND SOUTH WINDOWS
+                 * Side windows.
                  */
-                if (northWall || southWall) {
+                if (northWall
+                        || southWall) {
 
                     int relativeX =
                             worldX - minX;
 
                     if ((relativeX >= 3
                             && relativeX <= 5)
-                            || (relativeX >= 11
-                            && relativeX <= 13)) {
+                            ||
+                            (relativeX >= 11
+                                    && relativeX <= 13)) {
 
                         chunk.setBlock(
                                 localX,
@@ -353,6 +429,9 @@ public class EarthBuildingGenerator {
             }
         }
 
+        /*
+         * Main roof.
+         */
         generateMainRoof(
                 chunk,
                 chunkX,
@@ -362,6 +441,12 @@ public class EarthBuildingGenerator {
                 storeZ
         );
 
+        /*
+         * Raised rear/center roof.
+         *
+         * This section is also moved to the opposite
+         * side because of the 180-degree rotation.
+         */
         generateCenterRoof(
                 chunk,
                 chunkX,
@@ -371,7 +456,10 @@ public class EarthBuildingGenerator {
                 storeZ
         );
 
-        generateEastPorch(
+        /*
+         * Porch now appears on WEST side.
+         */
+        generateWestPorch(
                 chunk,
                 chunkX,
                 chunkZ,
@@ -384,8 +472,7 @@ public class EarthBuildingGenerator {
     /*
      * MAIN ROOF
      *
-     * Ridge now runs north/south because the building
-     * has been rotated 90 degrees.
+     * Long ridge continues north/south.
      */
     private static void generateMainRoof(
             ChunkData chunk,
@@ -395,42 +482,60 @@ public class EarthBuildingGenerator {
             int storeX,
             int storeZ
     ) {
+
         int minZ =
-                storeZ - GUEMES_STORE_SIZE_Z / 2 - 1;
+                storeZ
+                        - GUEMES_STORE_SIZE_Z / 2
+                        - 1;
 
         int maxZ =
-                storeZ + GUEMES_STORE_SIZE_Z / 2 + 1;
+                storeZ
+                        + GUEMES_STORE_SIZE_Z / 2
+                        + 1;
 
-        for (int localX = 0; localX < 16; localX++) {
-            for (int localZ = 0; localZ < 16; localZ++) {
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
 
                 int worldX =
-                        chunkX * 16 + localX;
+                        chunkX * 16
+                                + localX;
 
                 int worldZ =
-                        chunkZ * 16 + localZ;
+                        chunkZ * 16
+                                + localZ;
 
                 if (worldZ < minZ
                         || worldZ > maxZ) {
+
                     continue;
                 }
 
                 int distanceFromCenter =
-                        Math.abs(worldX - storeX);
+                        Math.abs(
+                                worldX - storeX
+                        );
 
                 int roofY;
 
                 if (distanceFromCenter <= 2) {
 
-                    roofY = groundY + 8;
+                    roofY =
+                            groundY + 8;
 
                 } else if (distanceFromCenter <= 5) {
 
-                    roofY = groundY + 7;
+                    roofY =
+                            groundY + 7;
 
                 } else if (distanceFromCenter <= 9) {
 
-                    roofY = groundY + 6;
+                    roofY =
+                            groundY + 6;
 
                 } else {
 
@@ -448,11 +553,12 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * RAISED CENTER / REAR ROOF
+     * RAISED ROOF SECTION
      *
-     * The entrance is on the east side.
-     * This raised section sits slightly toward
-     * the west/rear side of the building.
+     * Previous version placed this toward the west.
+     *
+     * Since we're rotating the store 180 degrees,
+     * this section is now toward the EAST/rear.
      */
     private static void generateCenterRoof(
             ChunkData chunk,
@@ -462,27 +568,42 @@ public class EarthBuildingGenerator {
             int storeX,
             int storeZ
     ) {
-        int centerX = storeX + 2;
 
-        int minZ = storeZ - 5;
-        int maxZ = storeZ + 5;
+        int centerX =
+                storeX - 2;
 
-        for (int localX = 0; localX < 16; localX++) {
-            for (int localZ = 0; localZ < 16; localZ++) {
+        int minZ =
+                storeZ - 5;
+
+        int maxZ =
+                storeZ + 5;
+
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
 
                 int worldX =
-                        chunkX * 16 + localX;
+                        chunkX * 16
+                                + localX;
 
                 int worldZ =
-                        chunkZ * 16 + localZ;
+                        chunkZ * 16
+                                + localZ;
 
                 if (worldZ < minZ
                         || worldZ > maxZ) {
+
                     continue;
                 }
 
                 int distance =
-                        Math.abs(worldX - centerX);
+                        Math.abs(
+                                worldX - centerX
+                        );
 
                 if (distance == 3) {
 
@@ -498,15 +619,18 @@ public class EarthBuildingGenerator {
 
                 if (distance <= 1) {
 
-                    roofY = groundY + 11;
+                    roofY =
+                            groundY + 11;
 
                 } else if (distance <= 2) {
 
-                    roofY = groundY + 10;
+                    roofY =
+                            groundY + 10;
 
                 } else if (distance <= 4) {
 
-                    roofY = groundY + 9;
+                    roofY =
+                            groundY + 9;
 
                 } else {
 
@@ -524,11 +648,14 @@ public class EarthBuildingGenerator {
     }
 
     /*
-     * EAST-SIDE COVERED PORCH
+     * WEST PORCH
      *
-     * This replaces the old south-facing porch.
+     * The previous version used an east-side porch.
+     *
+     * This moves the complete porch to the opposite
+     * side of the store.
      */
-    private static void generateEastPorch(
+    private static void generateWestPorch(
             ChunkData chunk,
             int chunkX,
             int chunkZ,
@@ -536,14 +663,16 @@ public class EarthBuildingGenerator {
             int storeX,
             int storeZ
     ) {
+
         int frontX =
-                storeX - GUEMES_STORE_SIZE_X / 2;
+                storeX
+                        + GUEMES_STORE_SIZE_X / 2;
 
         int porchMinX =
-                frontX - 4;
+                frontX + 1;
 
         int porchMaxX =
-                frontX - 1;
+                frontX + 4;
 
         int porchMinZ =
                 storeZ - 7;
@@ -551,19 +680,27 @@ public class EarthBuildingGenerator {
         int porchMaxZ =
                 storeZ + 7;
 
-        for (int localX = 0; localX < 16; localX++) {
-            for (int localZ = 0; localZ < 16; localZ++) {
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
 
                 int worldX =
-                        chunkX * 16 + localX;
+                        chunkX * 16
+                                + localX;
 
                 int worldZ =
-                        chunkZ * 16 + localZ;
+                        chunkZ * 16
+                                + localZ;
 
                 if (worldX < porchMinX
                         || worldX > porchMaxX
                         || worldZ < porchMinZ
                         || worldZ > porchMaxZ) {
+
                     continue;
                 }
 
@@ -588,10 +725,10 @@ public class EarthBuildingGenerator {
                 );
 
                 /*
-                 * Posts along outside edge.
+                 * Posts on the outside edge.
                  */
                 boolean outsideEdge =
-                        worldX == porchMinX;
+                        worldX == porchMaxX;
 
                 boolean post =
                         worldZ == porchMinZ
@@ -599,7 +736,8 @@ public class EarthBuildingGenerator {
                                 || worldZ == storeZ + 3
                                 || worldZ == porchMaxZ;
 
-                if (outsideEdge && post) {
+                if (outsideEdge
+                        && post) {
 
                     for (int y = groundY + 2;
                          y <= groundY + 5;
@@ -617,12 +755,21 @@ public class EarthBuildingGenerator {
         }
     }
 
+    /*
+     * Debug/location information.
+     */
     public static String getGuemesStoreLocationInfo() {
 
         return "Guemes General Store: "
-                + "lat=" + GUEMES_STORE_LATITUDE
-                + ", lon=" + GUEMES_STORE_LONGITUDE
-                + ", x=" + getGuemesStoreX()
-                + ", z=" + getGuemesStoreZ();
+                + "lat="
+                + GUEMES_STORE_LATITUDE
+                + ", lon="
+                + GUEMES_STORE_LONGITUDE
+                + ", x="
+                + getGuemesStoreX()
+                + ", y="
+                + getGuemesStoreGroundY()
+                + ", z="
+                + getGuemesStoreZ();
     }
 }
