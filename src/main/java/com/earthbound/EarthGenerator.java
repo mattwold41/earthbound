@@ -1,373 +1,416 @@
 package com.earthbound;
 
 import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
-public class EarthResidentialGenerator {
+import java.util.Random;
+
+public class EarthGenerator extends ChunkGenerator {
+
+    private static final int ROAD_SMOOTH_RADIUS = 2;
 
     /*
-     * ============================================================
-     * EARTHBOUND - GUEMES RESIDENTIAL TEST BLOCK
-     * ============================================================
-     *
-     * Area A from the Guemes Island test-area plan.
-     *
-     * VERSION 1:
-     * - Establishes the residential district.
-     * - Creates a small neighborhood road.
-     * - Creates 8 individual test house plots.
-     * - Adds plot markers so placement is easy to inspect.
-     *
-     * Later versions will add:
-     * - Procedural houses
-     * - Furnished interiors
-     * - NPC residents
-     * - Property ownership
-     * - Buying/selling
-     * - Remodeling permissions
-     *
-     * IMPORTANT:
-     * This class does NOT modify the General Store.
-     * ============================================================
+     * Keep the currently approved General Store
+     * terrain blending settings.
      */
+    private static final double STORE_BLEND_DISTANCE = 32.0;
+    private static final double STORE_SLOPE_RUN = 4.0;
 
 
-    /*
-     * Temporary center of Residential Test Block A.
-     *
-     * This can be moved after our first in-game inspection.
-     */
-    private static final int CENTER_X = -900;
-    private static final int CENTER_Z = -150;
+    public EarthGenerator() {
 
-
-    /*
-     * Neighborhood dimensions.
-     */
-    private static final int DISTRICT_HALF_WIDTH = 45;
-    private static final int DISTRICT_HALF_LENGTH = 55;
-
-
-    /*
-     * Internal neighborhood road.
-     */
-    private static final int ROAD_HALF_WIDTH = 3;
-
-
-    /*
-     * House plot dimensions.
-     */
-    private static final int PLOT_WIDTH = 16;
-    private static final int PLOT_DEPTH = 20;
-
-
-    /*
-     * Distance between neighboring plots.
-     */
-    private static final int PLOT_SPACING = 4;
-
-
-    /*
-     * Four plots north of the road
-     * and four plots south of the road.
-     *
-     * Total = 8 properties.
-     */
-    private static final int PLOTS_PER_SIDE = 4;
-
-
-    /*
-     * Temporary materials used to make the
-     * residential test area easy to see.
-     */
-    private static final Material ROAD_MATERIAL =
-            Material.GRAY_CONCRETE;
-
-    private static final Material SIDEWALK_MATERIAL =
-            Material.SMOOTH_STONE;
-
-    private static final Material PLOT_MARKER =
-            Material.YELLOW_CONCRETE;
-
-
-    private EarthResidentialGenerator() {
+        System.out.println(
+                "=== EARTHBOUND REAL TERRAIN GENERATOR ACTIVE ==="
+        );
     }
 
 
-    /*
-     * ============================================================
-     * MAIN GENERATION METHOD
-     * ============================================================
-     */
-
-    public static void generate(
-            ChunkData chunkData,
+    @Override
+    public ChunkData generateChunkData(
+            World world,
+            Random random,
             int chunkX,
-            int chunkZ
+            int chunkZ,
+            BiomeGrid biome
     ) {
 
-        int chunkMinX = chunkX << 4;
-        int chunkMinZ = chunkZ << 4;
+        ChunkData chunkData =
+                createChunkData(world);
 
-        int chunkMaxX = chunkMinX + 15;
-        int chunkMaxZ = chunkMinZ + 15;
+        int chunkMinX =
+                chunkX << 4;
 
-
-        /*
-         * Ignore chunks that are nowhere near
-         * the Residential Test Block.
-         */
-        if (chunkMaxX < CENTER_X - DISTRICT_HALF_WIDTH
-                || chunkMinX > CENTER_X + DISTRICT_HALF_WIDTH
-                || chunkMaxZ < CENTER_Z - DISTRICT_HALF_LENGTH
-                || chunkMinZ > CENTER_Z + DISTRICT_HALF_LENGTH) {
-
-            return;
-        }
+        int chunkMinZ =
+                chunkZ << 4;
 
 
         /*
-         * Generate the neighborhood road first.
+         * ========================================================
+         * BASE EARTH TERRAIN
+         * ========================================================
          */
-        generateNeighborhoodRoad(
-                chunkData,
-                chunkMinX,
-                chunkMinZ
-        );
+
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
+
+                int worldX =
+                        chunkMinX + localX;
+
+                int worldZ =
+                        chunkMinZ + localZ;
 
 
-        /*
-         * Then generate the eight test plots.
-         */
-        generateHousePlots(
-                chunkData,
-                chunkMinX,
-                chunkMinZ
-        );
-    }
+                /*
+                 * Convert Minecraft coordinates
+                 * to real Earth coordinates.
+                 */
+                double latitude =
+                        EarthCoordinates.getLatitude(
+                                worldX,
+                                worldZ
+                        );
 
-
-    /*
-     * ============================================================
-     * NEIGHBORHOOD ROAD
-     * ============================================================
-     *
-     * The first test road runs east/west through Area A.
-     *
-     * It follows the EarthBound terrain rather than creating
-     * a giant artificial platform.
-     */
-
-    private static void generateNeighborhoodRoad(
-            ChunkData chunkData,
-            int chunkMinX,
-            int chunkMinZ
-    ) {
-
-        int roadStartX =
-                CENTER_X - DISTRICT_HALF_WIDTH;
-
-        int roadEndX =
-                CENTER_X + DISTRICT_HALF_WIDTH;
-
-
-        /*
-         * Main road surface.
-         */
-        for (int worldX = roadStartX;
-             worldX <= roadEndX;
-             worldX++) {
-
-            for (int worldZ =
-                 CENTER_Z - ROAD_HALF_WIDTH;
-                 worldZ <= CENTER_Z + ROAD_HALF_WIDTH;
-                 worldZ++) {
-
-
-                if (!belongsToChunk(
-                        worldX,
-                        worldZ,
-                        chunkMinX,
-                        chunkMinZ
-                )) {
-
-                    continue;
-                }
-
-
-                int surfaceY =
-                        getSurfaceHeight(
+                double longitude =
+                        EarthCoordinates.getLongitude(
                                 worldX,
                                 worldZ
                         );
 
 
-                setWorldBlock(
+                /*
+                 * Read real USGS elevation.
+                 */
+                double elevationMeters =
+                        EarthTerrainLoader.getGuemesElevation(
+                                latitude,
+                                longitude
+                        );
+
+
+                int naturalHeight =
+                        EarthElevation.getMinecraftHeight(
+                                elevationMeters
+                        );
+
+
+                /*
+                 * =================================================
+                 * WATER
+                 * =================================================
+                 */
+
+                boolean water =
+                        EarthWaterData.isWater(
+                                latitude,
+                                longitude
+                        );
+
+
+                if (water) {
+
+                    generateWaterColumn(
+                            chunkData,
+                            localX,
+                            localZ
+                    );
+
+                    continue;
+                }
+
+
+                /*
+                 * =================================================
+                 * GENERAL STORE TERRAIN BLEND
+                 * =================================================
+                 */
+
+                int terrainHeight =
+                        naturalHeight;
+
+
+                if (EarthBuildingGenerator
+                        .isInsideGuemesStoreBlendArea(
+                                worldX,
+                                worldZ
+                        )) {
+
+                    int storeHeight =
+                            EarthBuildingGenerator
+                                    .getGuemesStoreGroundY();
+
+
+                    double distance =
+                            EarthBuildingGenerator
+                                    .getDistanceFromGuemesStore(
+                                            worldX,
+                                            worldZ
+                                    );
+
+
+                    /*
+                     * Keep the General Store foundation
+                     * completely flat at the approved Y=65.
+                     */
+                    if (EarthBuildingGenerator
+                            .isInsideGuemesStoreFoundationArea(
+                                    worldX,
+                                    worldZ
+                            )) {
+
+                        terrainHeight =
+                                storeHeight;
+
+                    } else {
+
+                        double blend =
+                                distance
+                                        / STORE_BLEND_DISTANCE;
+
+
+                        blend =
+                                Math.max(
+                                        0.0,
+                                        Math.min(
+                                                1.0,
+                                                blend
+                                        )
+                                );
+
+
+                        /*
+                         * Smoothstep transition.
+                         */
+                        double smoothBlend =
+                                blend
+                                        * blend
+                                        * (3.0
+                                        - 2.0
+                                        * blend);
+
+
+                        double blendedHeight =
+                                storeHeight
+                                        + (naturalHeight
+                                        - storeHeight)
+                                        * smoothBlend;
+
+
+                        /*
+                         * Keep the existing approved
+                         * slope protection.
+                         */
+                        int allowedDifference =
+                                Math.max(
+                                        1,
+                                        (int) Math.floor(
+                                                distance
+                                                        / STORE_SLOPE_RUN
+                                        )
+                                );
+
+
+                        int minimumHeight =
+                                storeHeight
+                                        - allowedDifference;
+
+                        int maximumHeight =
+                                storeHeight
+                                        + allowedDifference;
+
+
+                        terrainHeight =
+                                (int) Math.round(
+                                        blendedHeight
+                                );
+
+
+                        terrainHeight =
+                                Math.max(
+                                        minimumHeight,
+                                        Math.min(
+                                                maximumHeight,
+                                                terrainHeight
+                                        )
+                                );
+                    }
+                }
+
+
+                /*
+                 * =================================================
+                 * REAL ROADS
+                 * =================================================
+                 */
+
+                boolean road =
+                        EarthRoadData.isRoad(
+                                latitude,
+                                longitude
+                        );
+
+
+                /*
+                 * Don't allow a road to cut through
+                 * the General Store blend/foundation.
+                 */
+                if (EarthBuildingGenerator
+                        .isInsideGuemesStoreBlendArea(
+                                worldX,
+                                worldZ
+                        )) {
+
+                    road = false;
+                }
+
+
+                if (road) {
+
+                    terrainHeight =
+                            getSmoothedRoadHeight(
+                                    worldX,
+                                    worldZ
+                            );
+                }
+
+
+                /*
+                 * Generate the actual terrain column.
+                 */
+                generateLandColumn(
                         chunkData,
-                        chunkMinX,
-                        chunkMinZ,
-                        worldX,
-                        surfaceY,
-                        worldZ,
-                        ROAD_MATERIAL
+                        localX,
+                        localZ,
+                        terrainHeight,
+                        road
                 );
             }
         }
 
 
         /*
-         * Sidewalk along both sides of the road.
+         * ========================================================
+         * GUEMES GENERAL STORE
+         * ========================================================
+         *
+         * Do not change:
+         *
+         * Ground Y = 65
+         * Current orientation approved.
          */
-        int northSidewalkZ =
-                CENTER_Z + ROAD_HALF_WIDTH + 1;
-
-        int southSidewalkZ =
-                CENTER_Z - ROAD_HALF_WIDTH - 1;
-
-
-        for (int worldX = roadStartX;
-             worldX <= roadEndX;
-             worldX++) {
-
-            placeSurfaceBlock(
-                    chunkData,
-                    chunkMinX,
-                    chunkMinZ,
-                    worldX,
-                    northSidewalkZ,
-                    SIDEWALK_MATERIAL
-            );
+        EarthBuildingGenerator.generate(
+                chunkData,
+                chunkX,
+                chunkZ
+        );
 
 
-            placeSurfaceBlock(
-                    chunkData,
-                    chunkMinX,
-                    chunkMinZ,
-                    worldX,
-                    southSidewalkZ,
-                    SIDEWALK_MATERIAL
-            );
-        }
+        /*
+         * ========================================================
+         * AREA A - RESIDENTIAL TEST BLOCK
+         * ========================================================
+         *
+         * This calls the separate:
+         *
+         * EarthResidentialGenerator.java
+         *
+         * That file currently creates:
+         *
+         * - test neighborhood road
+         * - sidewalks
+         * - eight property plots
+         * - yellow property markers
+         */
+        EarthResidentialGenerator.generate(
+                chunkData,
+                chunkX,
+                chunkZ
+        );
+
+
+        return chunkData;
     }
 
 
     /*
      * ============================================================
-     * HOUSE PLOTS
+     * LAND
      * ============================================================
-     *
-     * Four properties are placed on the north side.
-     * Four properties are placed on the south side.
-     *
-     * Version 1 only marks the boundaries.
-     *
-     * This allows us to inspect:
-     *
-     * - location
-     * - terrain
-     * - spacing
-     * - road position
-     * - property sizes
-     *
-     * before generating actual houses.
      */
 
-    private static void generateHousePlots(
+    private void generateLandColumn(
             ChunkData chunkData,
-            int chunkMinX,
-            int chunkMinZ
+            int localX,
+            int localZ,
+            int surfaceY,
+            boolean road
     ) {
 
-        int totalWidth =
-                (PLOTS_PER_SIDE * PLOT_WIDTH)
-                        + ((PLOTS_PER_SIDE - 1)
-                        * PLOT_SPACING);
-
-
-        int firstPlotX =
-                CENTER_X - (totalWidth / 2);
+        int minHeight =
+                chunkData.getMinHeight();
 
 
         /*
-         * North row begins several blocks
-         * beyond the north sidewalk.
+         * Stone below the terrain.
          */
-        int northPlotMinZ =
-                CENTER_Z
-                        + ROAD_HALF_WIDTH
-                        + 5;
+        for (int y = minHeight;
+             y < surfaceY - 3;
+             y++) {
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.STONE
+            );
+        }
 
 
         /*
-         * South row ends several blocks
-         * beyond the south sidewalk.
+         * Dirt near the surface.
          */
-        int southPlotMaxZ =
-                CENTER_Z
-                        - ROAD_HALF_WIDTH
-                        - 5;
+        for (int y =
+             Math.max(
+                     minHeight,
+                     surfaceY - 3
+             );
+             y < surfaceY;
+             y++) {
 
-        int southPlotMinZ =
-                southPlotMaxZ
-                        - PLOT_DEPTH;
-
-
-        for (int plot = 0;
-             plot < PLOTS_PER_SIDE;
-             plot++) {
-
-
-            int minX =
-                    firstPlotX
-                            + plot
-                            * (PLOT_WIDTH + PLOT_SPACING);
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.DIRT
+            );
+        }
 
 
-            int maxX =
-                    minX + PLOT_WIDTH;
+        /*
+         * Surface block.
+         */
+        if (road) {
 
-
-            /*
-             * NORTH PROPERTY
-             */
-
-            int northMinZ =
-                    northPlotMinZ;
-
-            int northMaxZ =
-                    northMinZ + PLOT_DEPTH;
-
-
-            markPlot(
-                    chunkData,
-                    chunkMinX,
-                    chunkMinZ,
-                    minX,
-                    maxX,
-                    northMinZ,
-                    northMaxZ
+            chunkData.setBlock(
+                    localX,
+                    surfaceY,
+                    localZ,
+                    Material.GRAY_CONCRETE
             );
 
+        } else {
 
-            /*
-             * SOUTH PROPERTY
-             */
-
-            int southMinZ =
-                    southPlotMinZ;
-
-            int southMaxZ =
-                    southPlotMaxZ;
-
-
-            markPlot(
-                    chunkData,
-                    chunkMinX,
-                    chunkMinZ,
-                    minX,
-                    maxX,
-                    southMinZ,
-                    southMaxZ
+            chunkData.setBlock(
+                    localX,
+                    surfaceY,
+                    localZ,
+                    Material.GRASS_BLOCK
             );
         }
     }
@@ -375,81 +418,75 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * PROPERTY MARKERS
+     * WATER
      * ============================================================
-     *
-     * Yellow concrete outlines each test property.
-     *
-     * These are temporary development markers.
-     * They can be removed when the actual residential
-     * neighborhood is generated.
      */
 
-    private static void markPlot(
+    private void generateWaterColumn(
             ChunkData chunkData,
-            int chunkMinX,
-            int chunkMinZ,
-            int minX,
-            int maxX,
-            int minZ,
-            int maxZ
+            int localX,
+            int localZ
     ) {
 
+        int seaLevel =
+                EarthWaterData.getSeaLevel();
+
+        int seabed =
+                seaLevel - 8;
+
+        int minHeight =
+                chunkData.getMinHeight();
+
 
         /*
-         * North and south boundaries.
+         * Stone underneath seabed.
          */
-        for (int x = minX;
-             x <= maxX;
-             x++) {
+        for (int y = minHeight;
+             y < seabed - 3;
+             y++) {
 
-
-            placeSurfaceBlock(
-                    chunkData,
-                    chunkMinX,
-                    chunkMinZ,
-                    x,
-                    minZ,
-                    PLOT_MARKER
-            );
-
-
-            placeSurfaceBlock(
-                    chunkData,
-                    chunkMinX,
-                    chunkMinZ,
-                    x,
-                    maxZ,
-                    PLOT_MARKER
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.STONE
             );
         }
 
 
         /*
-         * East and west boundaries.
+         * Sandy seabed.
          */
-        for (int z = minZ;
-             z <= maxZ;
-             z++) {
+        for (int y =
+             Math.max(
+                     minHeight,
+                     seabed - 3
+             );
+             y <= seabed;
+             y++) {
 
-
-            placeSurfaceBlock(
-                    chunkData,
-                    chunkMinX,
-                    chunkMinZ,
-                    minX,
-                    z,
-                    PLOT_MARKER
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.SAND
             );
+        }
 
 
-            placeSurfaceBlock(
-                    chunkData,
-                    chunkMinX,
-                    chunkMinZ,
-                    maxX,
-                    z,
-                    PLOT_MARKER
+        /*
+         * Ocean water.
+         */
+        for (int y =
+             seabed + 1;
+             y <= seaLevel;
+             y++) {
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.WATER
             );
         }
     }
@@ -457,184 +494,107 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * EARTHBOUND TERRAIN HEIGHT
+     * ROAD HEIGHT SMOOTHING
      * ============================================================
-     *
-     * Uses the SAME real USGS elevation system as
-     * the rest of EarthBound.
      */
 
-    private static int getSurfaceHeight(
+    private int getSmoothedRoadHeight(
             int worldX,
             int worldZ
     ) {
 
+        double totalHeight =
+                0.0;
 
-        /*
-         * Convert Minecraft coordinates back
-         * into real Earth latitude/longitude.
-         */
-        double latitude =
-                EarthCoordinates.getLatitude(
-                        worldX,
-                        worldZ
-                );
+        int samples =
+                0;
 
 
-        double longitude =
-                EarthCoordinates.getLongitude(
-                        worldX,
-                        worldZ
-                );
+        for (int offsetX =
+             -ROAD_SMOOTH_RADIUS;
+             offsetX <= ROAD_SMOOTH_RADIUS;
+             offsetX++) {
+
+            for (int offsetZ =
+                 -ROAD_SMOOTH_RADIUS;
+                 offsetZ <= ROAD_SMOOTH_RADIUS;
+                 offsetZ++) {
+
+                int sampleX =
+                        worldX + offsetX;
+
+                int sampleZ =
+                        worldZ + offsetZ;
 
 
-        /*
-         * Read the real USGS elevation.
-         */
-        double elevationMeters =
-                EarthTerrainLoader.getGuemesElevation(
-                        latitude,
-                        longitude
-                );
+                double latitude =
+                        EarthCoordinates.getLatitude(
+                                sampleX,
+                                sampleZ
+                        );
+
+                double longitude =
+                        EarthCoordinates.getLongitude(
+                                sampleX,
+                                sampleZ
+                        );
 
 
-        /*
-         * Convert real-world meters into the
-         * EarthBound Minecraft Y scale.
-         *
-         * This is the correct method from
-         * EarthElevation.java.
-         */
-        return EarthElevation.getMinecraftHeight(
-                elevationMeters
-        );
-    }
+                double elevationMeters =
+                        EarthTerrainLoader
+                                .getGuemesElevation(
+                                        latitude,
+                                        longitude
+                                );
 
 
-    /*
-     * ============================================================
-     * SURFACE BLOCK HELPER
-     * ============================================================
-     */
-
-    private static void placeSurfaceBlock(
-            ChunkData chunkData,
-            int chunkMinX,
-            int chunkMinZ,
-            int worldX,
-            int worldZ,
-            Material material
-    ) {
+                int height =
+                        EarthElevation
+                                .getMinecraftHeight(
+                                        elevationMeters
+                                );
 
 
-        if (!belongsToChunk(
-                worldX,
-                worldZ,
-                chunkMinX,
-                chunkMinZ
-        )) {
+                totalHeight +=
+                        height;
 
-            return;
+                samples++;
+            }
         }
 
 
-        int surfaceY =
-                getSurfaceHeight(
-                        worldX,
-                        worldZ
-                );
+        if (samples == 0) {
+
+            double latitude =
+                    EarthCoordinates.getLatitude(
+                            worldX,
+                            worldZ
+                    );
+
+            double longitude =
+                    EarthCoordinates.getLongitude(
+                            worldX,
+                            worldZ
+                    );
 
 
-        setWorldBlock(
-                chunkData,
-                chunkMinX,
-                chunkMinZ,
-                worldX,
-                surfaceY,
-                worldZ,
-                material
-        );
-    }
+            double elevationMeters =
+                    EarthTerrainLoader
+                            .getGuemesElevation(
+                                    latitude,
+                                    longitude
+                            );
 
 
-    /*
-     * ============================================================
-     * CHUNK CHECK
-     * ============================================================
-     */
-
-    private static boolean belongsToChunk(
-            int worldX,
-            int worldZ,
-            int chunkMinX,
-            int chunkMinZ
-    ) {
-
-        return worldX >= chunkMinX
-                && worldX <= chunkMinX + 15
-                && worldZ >= chunkMinZ
-                && worldZ <= chunkMinZ + 15;
-    }
-
-
-    /*
-     * ============================================================
-     * WORLD BLOCK -> CHUNK BLOCK
-     * ============================================================
-     */
-
-    private static void setWorldBlock(
-            ChunkData chunkData,
-            int chunkMinX,
-            int chunkMinZ,
-            int worldX,
-            int y,
-            int worldZ,
-            Material material
-    ) {
-
-
-        /*
-         * Protect against invalid Y coordinates.
-         */
-        if (y < chunkData.getMinHeight()
-                || y >= chunkData.getMaxHeight()) {
-
-            return;
+            return EarthElevation
+                    .getMinecraftHeight(
+                            elevationMeters
+                    );
         }
 
 
-        /*
-         * Convert world coordinates into
-         * local chunk coordinates.
-         */
-        int localX =
-                worldX - chunkMinX;
-
-        int localZ =
-                worldZ - chunkMinZ;
-
-
-        /*
-         * Extra safety check.
-         */
-        if (localX < 0
-                || localX > 15
-                || localZ < 0
-                || localZ > 15) {
-
-            return;
-        }
-
-
-        /*
-         * Place the block.
-         */
-        chunkData.setBlock(
-                localX,
-                y,
-                localZ,
-                material
+        return (int) Math.round(
+                totalHeight / samples
         );
     }
 }
