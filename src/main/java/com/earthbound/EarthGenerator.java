@@ -12,8 +12,7 @@ public class EarthGenerator extends ChunkGenerator {
     private static final int ROAD_SMOOTH_RADIUS = 2;
 
     /*
-     * Keep the currently approved General Store
-     * terrain blending settings.
+     * Approved General Store terrain settings.
      */
     private static final double STORE_BLEND_DISTANCE = 32.0;
     private static final double STORE_SLOPE_RUN = 4.0;
@@ -67,10 +66,6 @@ public class EarthGenerator extends ChunkGenerator {
                         chunkMinZ + localZ;
 
 
-                /*
-                 * Convert Minecraft coordinates
-                 * to real Earth coordinates.
-                 */
                 double latitude =
                         EarthCoordinates.getLatitude(
                                 worldX,
@@ -85,7 +80,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Read real USGS elevation.
+                 * Real USGS elevation.
                  */
                 double elevationMeters =
                         EarthTerrainLoader.getGuemesElevation(
@@ -155,11 +150,10 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                     /*
-                     * Keep the General Store foundation
-                     * completely flat at the approved Y=65.
+                     * Approved flat foundation.
                      */
                     if (EarthBuildingGenerator
-                            .isInsideGuemesStoreFoundationArea(
+                            .isInsideGuemesStoreFoundation(
                                     worldX,
                                     worldZ
                             )) {
@@ -169,6 +163,9 @@ public class EarthGenerator extends ChunkGenerator {
 
                     } else {
 
+                        /*
+                         * Existing store terrain transition.
+                         */
                         double blend =
                                 distance
                                         / STORE_BLEND_DISTANCE;
@@ -184,9 +181,6 @@ public class EarthGenerator extends ChunkGenerator {
                                 );
 
 
-                        /*
-                         * Smoothstep transition.
-                         */
                         double smoothBlend =
                                 blend
                                         * blend
@@ -202,10 +196,6 @@ public class EarthGenerator extends ChunkGenerator {
                                         * smoothBlend;
 
 
-                        /*
-                         * Keep the existing approved
-                         * slope protection.
-                         */
                         int allowedDifference =
                                 Math.max(
                                         1,
@@ -257,8 +247,8 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Don't allow a road to cut through
-                 * the General Store blend/foundation.
+                 * Protect the General Store area from
+                 * real-road generation.
                  */
                 if (EarthBuildingGenerator
                         .isInsideGuemesStoreBlendArea(
@@ -281,7 +271,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Generate the actual terrain column.
+                 * Build terrain.
                  */
                 generateLandColumn(
                         chunkData,
@@ -299,12 +289,14 @@ public class EarthGenerator extends ChunkGenerator {
          * GUEMES GENERAL STORE
          * ========================================================
          *
-         * Do not change:
+         * Existing approved building:
          *
-         * Ground Y = 65
-         * Current orientation approved.
+         * Y = 65
+         * Front = WEST
+         *
+         * Do not rotate.
          */
-        EarthBuildingGenerator.generate(
+        EarthBuildingGenerator.generateGuemesStore(
                 chunkData,
                 chunkX,
                 chunkZ
@@ -316,16 +308,11 @@ public class EarthGenerator extends ChunkGenerator {
          * AREA A - RESIDENTIAL TEST BLOCK
          * ========================================================
          *
-         * This calls the separate:
+         * This connects the new:
          *
          * EarthResidentialGenerator.java
          *
-         * That file currently creates:
-         *
-         * - test neighborhood road
-         * - sidewalks
-         * - eight property plots
-         * - yellow property markers
+         * to the EarthBound world generator.
          */
         EarthResidentialGenerator.generate(
                 chunkData,
@@ -340,7 +327,7 @@ public class EarthGenerator extends ChunkGenerator {
 
     /*
      * ============================================================
-     * LAND
+     * LAND TERRAIN
      * ============================================================
      */
 
@@ -357,7 +344,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Stone below the terrain.
+         * Stone.
          */
         for (int y = minHeight;
              y < surfaceY - 3;
@@ -373,7 +360,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Dirt near the surface.
+         * Dirt.
          */
         for (int y =
              Math.max(
@@ -393,7 +380,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Surface block.
+         * Surface.
          */
         if (road) {
 
@@ -428,18 +415,23 @@ public class EarthGenerator extends ChunkGenerator {
             int localZ
     ) {
 
+        /*
+         * EarthWaterData exposes SEA_LEVEL directly.
+         */
         int seaLevel =
-                EarthWaterData.getSeaLevel();
+                EarthWaterData.SEA_LEVEL;
+
 
         int seabed =
                 seaLevel - 8;
+
 
         int minHeight =
                 chunkData.getMinHeight();
 
 
         /*
-         * Stone underneath seabed.
+         * Stone below seabed.
          */
         for (int y = minHeight;
              y < seabed - 3;
@@ -455,7 +447,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Sandy seabed.
+         * Sand seabed.
          */
         for (int y =
              Math.max(
@@ -475,7 +467,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Ocean water.
+         * Water up to Y=63.
          */
         for (int y =
              seabed + 1;
@@ -533,6 +525,7 @@ public class EarthGenerator extends ChunkGenerator {
                                 sampleZ
                         );
 
+
                 double longitude =
                         EarthCoordinates.getLongitude(
                                 sampleX,
@@ -570,6 +563,7 @@ public class EarthGenerator extends ChunkGenerator {
                             worldX,
                             worldZ
                     );
+
 
             double longitude =
                     EarthCoordinates.getLongitude(
