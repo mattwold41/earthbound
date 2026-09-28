@@ -11,9 +11,23 @@ public class EarthGenerator extends ChunkGenerator {
 
     private static final int ROAD_SMOOTH_RADIUS = 2;
 
-    // How far outside the store footprint terrain gradually
-    // returns to the real USGS terrain height.
-    private static final double STORE_BLEND_DISTANCE = 14.0;
+    /*
+     * Wider transition around the General Store.
+     *
+     * The old version used 14 blocks.
+     * This version uses 32 blocks so the terrain has
+     * much more room to transition away from Y=65.
+     */
+    private static final double STORE_BLEND_DISTANCE = 32.0;
+
+    /*
+     * Controls how quickly the terrain is allowed to rise
+     * or fall as it leaves the store area.
+     *
+     * 4 blocks horizontally for each 1 block vertically
+     * creates a much gentler Minecraft slope.
+     */
+    private static final double STORE_SLOPE_RUN = 4.0;
 
     public EarthGenerator() {
         System.out.println(
@@ -50,7 +64,7 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
                 /*
-                 * Keep real water generation unchanged.
+                 * Keep real Guemes water unchanged.
                  */
                 if (water) {
 
@@ -106,7 +120,7 @@ public class EarthGenerator extends ChunkGenerator {
                 }
 
                 /*
-                 * Real USGS terrain elevation.
+                 * Real USGS elevation.
                  */
                 double elevation =
                         EarthTerrainLoader
@@ -148,14 +162,13 @@ public class EarthGenerator extends ChunkGenerator {
                 /*
                  * GENERAL STORE TERRAIN
                  *
-                 * Underneath the actual building we use
-                 * one stable foundation height.
+                 * The store itself stays at Y=65.
                  *
-                 * Outside the building we gradually blend
-                 * back into the real terrain.
+                 * Immediately around the building we keep
+                 * the ground flat.
                  *
-                 * This removes the giant rectangular cliff
-                 * that the previous generator created.
+                 * Then the ground slowly transitions back
+                 * toward the real USGS terrain.
                  */
                 if (EarthBuildingGenerator
                         .isInsideGuemesStoreBlendArea(
@@ -175,8 +188,7 @@ public class EarthGenerator extends ChunkGenerator {
                                     );
 
                     /*
-                     * Directly beneath the store and its
-                     * immediate foundation, keep it flat.
+                     * Keep the actual store foundation flat.
                      */
                     if (EarthBuildingGenerator
                             .isInsideGuemesStoreFoundation(
@@ -190,8 +202,8 @@ public class EarthGenerator extends ChunkGenerator {
                     } else {
 
                         /*
-                         * 0.0 = store height
-                         * 1.0 = completely natural terrain
+                         * Smooth transition from the store
+                         * platform toward natural terrain.
                          */
                         double blend =
                                 distance
@@ -207,9 +219,10 @@ public class EarthGenerator extends ChunkGenerator {
                                 );
 
                         /*
-                         * Smoothstep produces a softer,
-                         * more natural transition than
-                         * straight linear interpolation.
+                         * Smoothstep.
+                         *
+                         * This removes the abrupt beginning
+                         * and ending of the transition.
                          */
                         blend =
                                 blend
@@ -217,7 +230,7 @@ public class EarthGenerator extends ChunkGenerator {
                                         * (3.0
                                         - 2.0 * blend);
 
-                        height =
+                        int blendedHeight =
                                 (int) Math.round(
                                         storeHeight
                                                 * (1.0 - blend)
@@ -226,15 +239,48 @@ public class EarthGenerator extends ChunkGenerator {
                                 );
 
                         /*
-                         * Don't draw a road through the
-                         * landscaped store transition.
+                         * SLOPE LIMIT
+                         *
+                         * Even if the USGS terrain rises
+                         * quickly nearby, do not allow the
+                         * store grounds to immediately turn
+                         * into a giant staircase.
+                         *
+                         * Every 4 horizontal blocks permits
+                         * approximately 1 vertical block.
                          */
+                        int allowedDifference =
+                                Math.max(
+                                        1,
+                                        (int) Math.floor(
+                                                distance
+                                                        / STORE_SLOPE_RUN
+                                        )
+                                );
+
+                        int minimumHeight =
+                                storeHeight
+                                        - allowedDifference;
+
+                        int maximumHeight =
+                                storeHeight
+                                        + allowedDifference;
+
+                        height =
+                                Math.max(
+                                        minimumHeight,
+                                        Math.min(
+                                                maximumHeight,
+                                                blendedHeight
+                                        )
+                                );
+
                         road = false;
                     }
                 }
 
                 /*
-                 * Generate the terrain column.
+                 * Build terrain column.
                  */
                 for (int y = 0;
                      y <= height;
@@ -284,8 +330,15 @@ public class EarthGenerator extends ChunkGenerator {
         }
 
         /*
-         * Generate the rotated General Store after
-         * the terrain underneath it is complete.
+         * Generate the General Store after the terrain.
+         *
+         * EarthBuildingGenerator now controls:
+         *
+         * - Y=65
+         * - approved orientation
+         * - entrance
+         * - porch
+         * - roof
          */
         EarthBuildingGenerator.generateGuemesStore(
                 chunk,
