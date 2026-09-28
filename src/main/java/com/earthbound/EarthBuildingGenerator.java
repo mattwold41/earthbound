@@ -1,368 +1,745 @@
 package com.earthbound;
 
 import org.bukkit.Material;
-import org.bukkit.World;
-import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
-import java.util.Random;
+public class EarthBuildingGenerator {
 
-public class EarthGenerator extends ChunkGenerator {
-
-    private static final int ROAD_SMOOTH_RADIUS = 2;
-
-    /*
-     * Wider transition around the General Store.
-     */
-    private static final double STORE_BLEND_DISTANCE = 32.0;
+    private EarthBuildingGenerator() {
+    }
 
     /*
-     * Allow approximately one vertical block of change
-     * for every four horizontal blocks.
+     * GUEMES ISLAND GENERAL STORE
      */
-    private static final double STORE_SLOPE_RUN = 4.0;
+    public static final double GUEMES_STORE_LATITUDE = 48.529460;
+    public static final double GUEMES_STORE_LONGITUDE = -122.624110;
 
-    public EarthGenerator() {
-        System.out.println(
-                "=== EARTHBOUND REAL TERRAIN GENERATOR ACTIVE ==="
+    /*
+     * Approved store footprint.
+     */
+    private static final int GUEMES_STORE_SIZE_X = 16;
+    private static final int GUEMES_STORE_SIZE_Z = 24;
+
+    /*
+     * Small flat foundation around the building.
+     */
+    private static final int FOUNDATION_MARGIN = 2;
+
+    /*
+     * Approved fixed ground height.
+     *
+     * DO NOT calculate this from USGS elevation.
+     * The General Store sits at Y=65.
+     */
+    private static final int GUEMES_STORE_GROUND_Y = 65;
+
+    /*
+     * Gives EarthGenerator 32 blocks around the store
+     * for the gentler terrain transition.
+     */
+    private static final int STORE_BLEND_MARGIN = 32;
+
+    public static int getGuemesStoreX() {
+
+        return EarthCoordinates.longitudeToMinecraftX(
+                GUEMES_STORE_LONGITUDE
         );
     }
 
-    @Override
-    public ChunkData generateChunkData(
-            World world,
-            Random random,
-            int chunkX,
-            int chunkZ,
-            BiomeGrid biome
+    public static int getGuemesStoreZ() {
+
+        return EarthCoordinates.latitudeToMinecraftZ(
+                GUEMES_STORE_LATITUDE
+        );
+    }
+
+    /*
+     * Actual store footprint.
+     */
+    public static boolean isInsideGuemesStore(
+            int worldX,
+            int worldZ
     ) {
-        ChunkData chunk = createChunkData(world);
 
-        for (int x = 0; x < 16; x++) {
-            for (int z = 0; z < 16; z++) {
+        int storeX = getGuemesStoreX();
+        int storeZ = getGuemesStoreZ();
 
-                int worldX = chunkX * 16 + x;
-                int worldZ = chunkZ * 16 + z;
+        int halfX =
+                GUEMES_STORE_SIZE_X / 2;
 
-                double latitude =
-                        EarthCoordinates.minecraftToLatitude(worldZ);
+        int halfZ =
+                GUEMES_STORE_SIZE_Z / 2;
 
-                double longitude =
-                        EarthCoordinates.minecraftToLongitude(worldX);
+        return worldX >= storeX - halfX
+                && worldX <= storeX + halfX
+                && worldZ >= storeZ - halfZ
+                && worldZ <= storeZ + halfZ;
+    }
 
-                boolean water =
-                        EarthWaterData.isWater(
-                                latitude,
-                                longitude
-                        );
+    /*
+     * Flat foundation immediately around the store.
+     */
+    public static boolean isInsideGuemesStoreFoundation(
+            int worldX,
+            int worldZ
+    ) {
 
-                /*
-                 * Keep real Guemes water unchanged.
-                 */
-                if (water) {
+        int storeX = getGuemesStoreX();
+        int storeZ = getGuemesStoreZ();
 
-                    int seaFloor =
-                            EarthWaterData.SEA_LEVEL - 8;
+        int halfX =
+                GUEMES_STORE_SIZE_X / 2
+                        + FOUNDATION_MARGIN;
 
-                    for (int y = 0;
-                         y <= seaFloor;
-                         y++) {
+        int halfZ =
+                GUEMES_STORE_SIZE_Z / 2
+                        + FOUNDATION_MARGIN;
 
-                        if (y == seaFloor) {
+        return worldX >= storeX - halfX
+                && worldX <= storeX + halfX
+                && worldZ >= storeZ - halfZ
+                && worldZ <= storeZ + halfZ;
+    }
 
-                            chunk.setBlock(
-                                    x,
-                                    y,
-                                    z,
-                                    Material.SAND
-                            );
+    /*
+     * Large terrain-blending area.
+     *
+     * EarthGenerator uses a 32-block transition,
+     * so this must also be 32.
+     */
+    public static boolean isInsideGuemesStoreBlendArea(
+            int worldX,
+            int worldZ
+    ) {
 
-                        } else if (y > seaFloor - 4) {
+        int storeX = getGuemesStoreX();
+        int storeZ = getGuemesStoreZ();
 
-                            chunk.setBlock(
-                                    x,
-                                    y,
-                                    z,
-                                    Material.GRAVEL
-                            );
+        int halfX =
+                GUEMES_STORE_SIZE_X / 2
+                        + STORE_BLEND_MARGIN;
 
-                        } else {
+        int halfZ =
+                GUEMES_STORE_SIZE_Z / 2
+                        + STORE_BLEND_MARGIN;
 
-                            chunk.setBlock(
-                                    x,
-                                    y,
-                                    z,
-                                    Material.STONE
-                            );
-                        }
-                    }
+        return worldX >= storeX - halfX
+                && worldX <= storeX + halfX
+                && worldZ >= storeZ - halfZ
+                && worldZ <= storeZ + halfZ;
+    }
 
-                    for (int y = seaFloor + 1;
-                         y <= EarthWaterData.SEA_LEVEL;
-                         y++) {
+    /*
+     * Real USGS elevation remains available for
+     * information/debugging, but it does NOT control
+     * the store's Y position.
+     */
+    public static Double getGuemesStoreElevation() {
 
-                        chunk.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.WATER
-                        );
-                    }
+        return EarthTerrainLoader.getGuemesElevation(
+                GUEMES_STORE_LATITUDE,
+                GUEMES_STORE_LONGITUDE
+        );
+    }
+
+    /*
+     * APPROVED STORE HEIGHT.
+     */
+    public static int getGuemesStoreGroundY() {
+
+        return GUEMES_STORE_GROUND_Y;
+    }
+
+    /*
+     * Distance from the outside edge of the store.
+     *
+     * EarthGenerator uses this for terrain blending.
+     */
+    public static double getDistanceFromGuemesStore(
+            int worldX,
+            int worldZ
+    ) {
+
+        int storeX = getGuemesStoreX();
+        int storeZ = getGuemesStoreZ();
+
+        int halfX =
+                GUEMES_STORE_SIZE_X / 2;
+
+        int halfZ =
+                GUEMES_STORE_SIZE_Z / 2;
+
+        int dx =
+                Math.max(
+                        Math.abs(worldX - storeX)
+                                - halfX,
+                        0
+                );
+
+        int dz =
+                Math.max(
+                        Math.abs(worldZ - storeZ)
+                                - halfZ,
+                        0
+                );
+
+        return Math.sqrt(
+                (double) dx * dx
+                        + (double) dz * dz
+        );
+    }
+
+    /*
+     * Generate the General Store.
+     *
+     * APPROVED ORIENTATION:
+     *
+     * Front/entrance = WEST
+     * Porch          = WEST
+     * Rear           = EAST
+     *
+     * Do not rotate this again.
+     */
+    public static void generateGuemesStore(
+            ChunkData chunk,
+            int chunkX,
+            int chunkZ
+    ) {
+
+        int groundY =
+                getGuemesStoreGroundY();
+
+        int storeX =
+                getGuemesStoreX();
+
+        int storeZ =
+                getGuemesStoreZ();
+
+        int minX =
+                storeX
+                        - GUEMES_STORE_SIZE_X / 2;
+
+        int maxX =
+                storeX
+                        + GUEMES_STORE_SIZE_X / 2;
+
+        int minZ =
+                storeZ
+                        - GUEMES_STORE_SIZE_Z / 2;
+
+        int maxZ =
+                storeZ
+                        + GUEMES_STORE_SIZE_Z / 2;
+
+        /*
+         * Main building.
+         */
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
+
+                int worldX =
+                        chunkX * 16
+                                + localX;
+
+                int worldZ =
+                        chunkZ * 16
+                                + localZ;
+
+                if (worldX < minX
+                        || worldX > maxX
+                        || worldZ < minZ
+                        || worldZ > maxZ) {
 
                     continue;
                 }
 
                 /*
-                 * Real USGS terrain elevation.
+                 * Clear building space.
                  */
-                double elevation =
-                        EarthTerrainLoader
-                                .getGuemesElevation(
-                                        worldX,
-                                        worldZ
-                                );
+                for (int y = groundY + 1;
+                     y <= groundY + 13;
+                     y++) {
 
-                int naturalHeight =
-                        EarthElevation
-                                .getMinecraftHeight(
-                                        elevation
-                                );
-
-                int height = naturalHeight;
-
-                /*
-                 * Real road detection.
-                 */
-                EarthRoadData.RoadType roadType =
-                        EarthRoadData.getRoadType(
-                                latitude,
-                                longitude
-                        );
-
-                boolean road =
-                        roadType
-                                != EarthRoadData.RoadType.NONE;
-
-                if (road) {
-
-                    height =
-                            getSmoothedRoadHeight(
-                                    worldX,
-                                    worldZ
-                            );
+                    chunk.setBlock(
+                            localX,
+                            y,
+                            localZ,
+                            Material.AIR
+                    );
                 }
 
                 /*
-                 * GENERAL STORE TERRAIN
-                 *
-                 * EarthBuildingGenerator supplies Y=65.
-                 *
-                 * The immediate foundation stays flat,
-                 * then terrain gradually transitions back
-                 * toward the real USGS elevation.
+                 * Foundation.
                  */
-                if (EarthBuildingGenerator
-                        .isInsideGuemesStoreBlendArea(
-                                worldX,
-                                worldZ
-                        )) {
+                chunk.setBlock(
+                        localX,
+                        groundY,
+                        localZ,
+                        Material.STONE_BRICKS
+                );
 
-                    int storeHeight =
-                            EarthBuildingGenerator
-                                    .getGuemesStoreGroundY();
+                /*
+                 * Interior floor.
+                 */
+                chunk.setBlock(
+                        localX,
+                        groundY + 1,
+                        localZ,
+                        Material.SPRUCE_PLANKS
+                );
 
-                    double distance =
-                            EarthBuildingGenerator
-                                    .getDistanceFromGuemesStore(
-                                            worldX,
-                                            worldZ
-                                    );
+                boolean eastWall =
+                        worldX == minX;
 
-                    /*
-                     * Keep the store foundation flat.
-                     */
-                    if (EarthBuildingGenerator
-                            .isInsideGuemesStoreFoundation(
-                                    worldX,
-                                    worldZ
-                            )) {
+                boolean westWall =
+                        worldX == maxX;
 
-                        height = storeHeight;
-                        road = false;
+                boolean northWall =
+                        worldZ == maxZ;
 
-                    } else {
+                boolean southWall =
+                        worldZ == minZ;
 
-                        /*
-                         * Blend from store height toward
-                         * natural USGS terrain.
-                         */
-                        double blend =
-                                distance
-                                        / STORE_BLEND_DISTANCE;
+                boolean exterior =
+                        eastWall
+                                || westWall
+                                || northWall
+                                || southWall;
 
-                        blend =
-                                Math.max(
-                                        0.0,
-                                        Math.min(
-                                                1.0,
-                                                blend
-                                        )
-                                );
+                /*
+                 * Exterior walls.
+                 */
+                if (exterior) {
 
-                        /*
-                         * Smoothstep interpolation.
-                         */
-                        blend =
-                                blend
-                                        * blend
-                                        * (3.0
-                                        - 2.0 * blend);
+                    for (int y = groundY + 2;
+                         y <= groundY + 5;
+                         y++) {
 
-                        int blendedHeight =
-                                (int) Math.round(
-                                        storeHeight
-                                                * (1.0 - blend)
-                                                + naturalHeight
-                                                * blend
-                                );
-
-                        /*
-                         * Limit the slope around the store.
-                         */
-                        int allowedDifference =
-                                Math.max(
-                                        1,
-                                        (int) Math.floor(
-                                                distance
-                                                        / STORE_SLOPE_RUN
-                                        )
-                                );
-
-                        int minimumHeight =
-                                storeHeight
-                                        - allowedDifference;
-
-                        int maximumHeight =
-                                storeHeight
-                                        + allowedDifference;
-
-                        height =
-                                Math.max(
-                                        minimumHeight,
-                                        Math.min(
-                                                maximumHeight,
-                                                blendedHeight
-                                        )
-                                );
-
-                        /*
-                         * Keep roads from cutting through
-                         * the landscaped store area for now.
-                         */
-                        road = false;
+                        chunk.setBlock(
+                                localX,
+                                y,
+                                localZ,
+                                Material.SPRUCE_PLANKS
+                        );
                     }
                 }
 
                 /*
-                 * Generate terrain column.
+                 * WEST WALL = APPROVED FRONT.
                  */
-                for (int y = 0;
-                     y <= height;
-                     y++) {
+                if (westWall) {
 
-                    if (y == height) {
+                    int relativeZ =
+                            worldZ - minZ;
 
-                        if (road) {
+                    /*
+                     * Front windows.
+                     */
+                    boolean southWindow =
+                            relativeZ >= 3
+                                    && relativeZ <= 6;
 
-                            chunk.setBlock(
-                                    x,
-                                    y,
-                                    z,
-                                    Material.GRAY_CONCRETE
-                            );
+                    boolean northWindow =
+                            relativeZ >= 17
+                                    && relativeZ <= 20;
 
-                        } else {
-
-                            chunk.setBlock(
-                                    x,
-                                    y,
-                                    z,
-                                    Material.GRASS_BLOCK
-                            );
-                        }
-
-                    } else if (y > height - 4) {
+                    if (southWindow
+                            || northWindow) {
 
                         chunk.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.DIRT
+                                localX,
+                                groundY + 3,
+                                localZ,
+                                Material.GLASS_PANE
                         );
 
-                    } else {
+                        chunk.setBlock(
+                                localX,
+                                groundY + 4,
+                                localZ,
+                                Material.GLASS_PANE
+                        );
+                    }
+
+                    /*
+                     * Main entrance.
+                     */
+                    if (relativeZ == 11
+                            || relativeZ == 12) {
 
                         chunk.setBlock(
-                                x,
-                                y,
-                                z,
-                                Material.STONE
+                                localX,
+                                groundY + 2,
+                                localZ,
+                                Material.AIR
+                        );
+
+                        chunk.setBlock(
+                                localX,
+                                groundY + 3,
+                                localZ,
+                                Material.AIR
+                        );
+                    }
+                }
+
+                /*
+                 * North/south side windows.
+                 */
+                if (northWall
+                        || southWall) {
+
+                    int relativeX =
+                            worldX - minX;
+
+                    if ((relativeX >= 3
+                            && relativeX <= 5)
+                            ||
+                            (relativeX >= 11
+                                    && relativeX <= 13)) {
+
+                        chunk.setBlock(
+                                localX,
+                                groundY + 3,
+                                localZ,
+                                Material.GLASS_PANE
+                        );
+
+                        chunk.setBlock(
+                                localX,
+                                groundY + 4,
+                                localZ,
+                                Material.GLASS_PANE
                         );
                     }
                 }
             }
         }
 
-        /*
-         * Generate the approved General Store after
-         * terrain generation.
-         */
-        EarthBuildingGenerator.generateGuemesStore(
+        generateMainRoof(
                 chunk,
                 chunkX,
-                chunkZ
+                chunkZ,
+                groundY,
+                storeX,
+                storeZ
         );
 
-        return chunk;
+        generateCenterRoof(
+                chunk,
+                chunkX,
+                chunkZ,
+                groundY,
+                storeX,
+                storeZ
+        );
+
+        generateWestPorch(
+                chunk,
+                chunkX,
+                chunkZ,
+                groundY,
+                storeX,
+                storeZ
+        );
     }
 
     /*
-     * Existing road smoothing.
+     * Main roof.
      */
-    private int getSmoothedRoadHeight(
-            int worldX,
-            int worldZ
+    private static void generateMainRoof(
+            ChunkData chunk,
+            int chunkX,
+            int chunkZ,
+            int groundY,
+            int storeX,
+            int storeZ
     ) {
 
-        double totalElevation = 0.0;
-        int samples = 0;
+        int minZ =
+                storeZ
+                        - GUEMES_STORE_SIZE_Z / 2
+                        - 1;
 
-        for (int offsetX = -ROAD_SMOOTH_RADIUS;
-             offsetX <= ROAD_SMOOTH_RADIUS;
-             offsetX++) {
+        int maxZ =
+                storeZ
+                        + GUEMES_STORE_SIZE_Z / 2
+                        + 1;
 
-            for (int offsetZ = -ROAD_SMOOTH_RADIUS;
-                 offsetZ <= ROAD_SMOOTH_RADIUS;
-                 offsetZ++) {
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
 
-                double sampleElevation =
-                        EarthTerrainLoader
-                                .getGuemesElevation(
-                                        worldX + offsetX,
-                                        worldZ + offsetZ
-                                );
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
 
-                totalElevation += sampleElevation;
-                samples++;
+                int worldX =
+                        chunkX * 16
+                                + localX;
+
+                int worldZ =
+                        chunkZ * 16
+                                + localZ;
+
+                if (worldZ < minZ
+                        || worldZ > maxZ) {
+
+                    continue;
+                }
+
+                int distanceFromCenter =
+                        Math.abs(
+                                worldX - storeX
+                        );
+
+                int roofY;
+
+                if (distanceFromCenter <= 2) {
+
+                    roofY =
+                            groundY + 8;
+
+                } else if (distanceFromCenter <= 5) {
+
+                    roofY =
+                            groundY + 7;
+
+                } else if (distanceFromCenter <= 9) {
+
+                    roofY =
+                            groundY + 6;
+
+                } else {
+
+                    continue;
+                }
+
+                chunk.setBlock(
+                        localX,
+                        roofY,
+                        localZ,
+                        Material.DARK_OAK_PLANKS
+                );
             }
         }
+    }
 
-        double averageElevation =
-                totalElevation / samples;
+    /*
+     * Raised rear roof.
+     *
+     * Rear is EAST in the approved orientation.
+     */
+    private static void generateCenterRoof(
+            ChunkData chunk,
+            int chunkX,
+            int chunkZ,
+            int groundY,
+            int storeX,
+            int storeZ
+    ) {
 
-        return EarthElevation
-                .getMinecraftHeight(
-                        averageElevation
+        int centerX =
+                storeX - 2;
+
+        int minZ =
+                storeZ - 5;
+
+        int maxZ =
+                storeZ + 5;
+
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
+
+                int worldX =
+                        chunkX * 16
+                                + localX;
+
+                int worldZ =
+                        chunkZ * 16
+                                + localZ;
+
+                if (worldZ < minZ
+                        || worldZ > maxZ) {
+
+                    continue;
+                }
+
+                int distance =
+                        Math.abs(
+                                worldX - centerX
+                        );
+
+                if (distance == 3) {
+
+                    chunk.setBlock(
+                            localX,
+                            groundY + 8,
+                            localZ,
+                            Material.SPRUCE_PLANKS
+                    );
+                }
+
+                int roofY;
+
+                if (distance <= 1) {
+
+                    roofY =
+                            groundY + 11;
+
+                } else if (distance <= 2) {
+
+                    roofY =
+                            groundY + 10;
+
+                } else if (distance <= 4) {
+
+                    roofY =
+                            groundY + 9;
+
+                } else {
+
+                    continue;
+                }
+
+                chunk.setBlock(
+                        localX,
+                        roofY,
+                        localZ,
+                        Material.DARK_OAK_PLANKS
                 );
+            }
+        }
+    }
+
+    /*
+     * Approved WEST porch.
+     */
+    private static void generateWestPorch(
+            ChunkData chunk,
+            int chunkX,
+            int chunkZ,
+            int groundY,
+            int storeX,
+            int storeZ
+    ) {
+
+        int frontX =
+                storeX
+                        + GUEMES_STORE_SIZE_X / 2;
+
+        int porchMinX =
+                frontX + 1;
+
+        int porchMaxX =
+                frontX + 4;
+
+        int porchMinZ =
+                storeZ - 7;
+
+        int porchMaxZ =
+                storeZ + 7;
+
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
+
+                int worldX =
+                        chunkX * 16
+                                + localX;
+
+                int worldZ =
+                        chunkZ * 16
+                                + localZ;
+
+                if (worldX < porchMinX
+                        || worldX > porchMaxX
+                        || worldZ < porchMinZ
+                        || worldZ > porchMaxZ) {
+
+                    continue;
+                }
+
+                /*
+                 * Porch floor.
+                 */
+                chunk.setBlock(
+                        localX,
+                        groundY + 1,
+                        localZ,
+                        Material.SPRUCE_PLANKS
+                );
+
+                /*
+                 * Porch roof.
+                 */
+                chunk.setBlock(
+                        localX,
+                        groundY + 6,
+                        localZ,
+                        Material.DARK_OAK_PLANKS
+                );
+
+                /*
+                 * Porch posts.
+                 */
+                boolean outsideEdge =
+                        worldX == porchMaxX;
+
+                boolean post =
+                        worldZ == porchMinZ
+                                || worldZ == storeZ - 3
+                                || worldZ == storeZ + 3
+                                || worldZ == porchMaxZ;
+
+                if (outsideEdge
+                        && post) {
+
+                    for (int y = groundY + 2;
+                         y <= groundY + 5;
+                         y++) {
+
+                        chunk.setBlock(
+                                localX,
+                                y,
+                                localZ,
+                                Material.STRIPPED_SPRUCE_LOG
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /*
+     * Debug/location information.
+     */
+    public static String getGuemesStoreLocationInfo() {
+
+        return "Guemes General Store: "
+                + "lat="
+                + GUEMES_STORE_LATITUDE
+                + ", lon="
+                + GUEMES_STORE_LONGITUDE
+                + ", x="
+                + getGuemesStoreX()
+                + ", y="
+                + getGuemesStoreGroundY()
+                + ", z="
+                + getGuemesStoreZ();
     }
 }
