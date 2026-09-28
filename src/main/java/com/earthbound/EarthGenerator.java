@@ -11,23 +11,15 @@ public class EarthGenerator extends ChunkGenerator {
 
     private static final int ROAD_SMOOTH_RADIUS = 2;
 
-    /*
-     * Only the immediate building footprint
-     * receives foundation adjustment.
-     *
-     * We no longer raise the entire large
-     * foundation area into a giant platform.
-     */
-    private static final int STORE_MAX_FOUNDATION_RAISE = 2;
-
+    // How far outside the store footprint terrain gradually
+    // returns to the real USGS terrain height.
+    private static final double STORE_BLEND_DISTANCE = 14.0;
 
     public EarthGenerator() {
-
         System.out.println(
                 "=== EARTHBOUND REAL TERRAIN GENERATOR ACTIVE ==="
         );
     }
-
 
     @Override
     public ChunkData generateChunkData(
@@ -37,142 +29,33 @@ public class EarthGenerator extends ChunkGenerator {
             int chunkZ,
             BiomeGrid biome
     ) {
-
-        ChunkData chunk =
-                createChunkData(world);
-
+        ChunkData chunk = createChunkData(world);
 
         for (int x = 0; x < 16; x++) {
-
             for (int z = 0; z < 16; z++) {
 
-                int worldX =
-                        chunkX * 16 + x;
-
-                int worldZ =
-                        chunkZ * 16 + z;
-
+                int worldX = chunkX * 16 + x;
+                int worldZ = chunkZ * 16 + z;
 
                 double latitude =
-                        EarthCoordinates.minecraftToLatitude(
-                                worldZ
-                        );
+                        EarthCoordinates.minecraftToLatitude(worldZ);
 
                 double longitude =
-                        EarthCoordinates.minecraftToLongitude(
-                                worldX
-                        );
+                        EarthCoordinates.minecraftToLongitude(worldX);
 
-
-                boolean storeFootprint =
-                        EarthBuildingGenerator
-                                .isInsideGuemesStore(
-                                        worldX,
-                                        worldZ
-                                );
-
-
-                /*
-                 * Real USGS elevation.
-                 */
-                double elevation =
-                        EarthTerrainLoader.getGuemesElevation(
-                                worldX,
-                                worldZ
-                        );
-
-                int naturalHeight =
-                        EarthElevation.getMinecraftHeight(
-                                elevation
-                        );
-
-                int height =
-                        naturalHeight;
-
-
-                /*
-                 * Real road information.
-                 */
-                EarthRoadData.RoadType roadType =
-                        EarthRoadData.getRoadType(
-                                latitude,
-                                longitude
-                        );
-
-                boolean road =
-                        roadType
-                                != EarthRoadData.RoadType.NONE;
-
-
-                /*
-                 * Water information.
-                 */
                 boolean water =
                         EarthWaterData.isWater(
                                 latitude,
                                 longitude
                         );
 
-
                 /*
-                 * =================================================
-                 * STORE FOUNDATION
-                 * =================================================
-                 *
-                 * The old generator forced the entire store
-                 * area to one Y level. On sloping terrain that
-                 * produced the enormous rectangular pedestal.
-                 *
-                 * Now the real terrain remains in place.
-                 * We only allow a small foundation adjustment.
-                 */
-                if (storeFootprint) {
-
-                    int desiredGround =
-                            EarthBuildingGenerator
-                                    .getGuemesStoreGroundY();
-
-                    if (desiredGround
-                            > naturalHeight
-                            + STORE_MAX_FOUNDATION_RAISE) {
-
-                        height =
-                                naturalHeight
-                                        + STORE_MAX_FOUNDATION_RAISE;
-
-                    } else if (desiredGround
-                            < naturalHeight
-                            - STORE_MAX_FOUNDATION_RAISE) {
-
-                        height =
-                                naturalHeight
-                                        - STORE_MAX_FOUNDATION_RAISE;
-
-                    } else {
-
-                        height =
-                                desiredGround;
-                    }
-
-
-                    /*
-                     * The building itself takes
-                     * priority over water/road
-                     * inside its footprint.
-                     */
-                    water = false;
-                    road = false;
-                }
-
-
-                /*
-                 * WATER
+                 * Keep real water generation unchanged.
                  */
                 if (water) {
 
                     int seaFloor =
                             EarthWaterData.SEA_LEVEL - 8;
-
 
                     for (int y = 0;
                          y <= seaFloor;
@@ -187,9 +70,7 @@ public class EarthGenerator extends ChunkGenerator {
                                     Material.SAND
                             );
 
-                        } else if (
-                                y > seaFloor - 4
-                        ) {
+                        } else if (y > seaFloor - 4) {
 
                             chunk.setBlock(
                                     x,
@@ -209,7 +90,6 @@ public class EarthGenerator extends ChunkGenerator {
                         }
                     }
 
-
                     for (int y = seaFloor + 1;
                          y <= EarthWaterData.SEA_LEVEL;
                          y++) {
@@ -225,11 +105,37 @@ public class EarthGenerator extends ChunkGenerator {
                     continue;
                 }
 
+                /*
+                 * Real USGS terrain elevation.
+                 */
+                double elevation =
+                        EarthTerrainLoader
+                                .getGuemesElevation(
+                                        worldX,
+                                        worldZ
+                                );
+
+                int naturalHeight =
+                        EarthElevation
+                                .getMinecraftHeight(
+                                        elevation
+                                );
+
+                int height = naturalHeight;
 
                 /*
-                 * Smooth roads while leaving
-                 * the store footprint alone.
+                 * Real road detection.
                  */
+                EarthRoadData.RoadType roadType =
+                        EarthRoadData.getRoadType(
+                                latitude,
+                                longitude
+                        );
+
+                boolean road =
+                        roadType
+                                != EarthRoadData.RoadType.NONE;
+
                 if (road) {
 
                     height =
@@ -239,9 +145,96 @@ public class EarthGenerator extends ChunkGenerator {
                             );
                 }
 
+                /*
+                 * GENERAL STORE TERRAIN
+                 *
+                 * Underneath the actual building we use
+                 * one stable foundation height.
+                 *
+                 * Outside the building we gradually blend
+                 * back into the real terrain.
+                 *
+                 * This removes the giant rectangular cliff
+                 * that the previous generator created.
+                 */
+                if (EarthBuildingGenerator
+                        .isInsideGuemesStoreBlendArea(
+                                worldX,
+                                worldZ
+                        )) {
+
+                    int storeHeight =
+                            EarthBuildingGenerator
+                                    .getGuemesStoreGroundY();
+
+                    double distance =
+                            EarthBuildingGenerator
+                                    .getDistanceFromGuemesStore(
+                                            worldX,
+                                            worldZ
+                                    );
+
+                    /*
+                     * Directly beneath the store and its
+                     * immediate foundation, keep it flat.
+                     */
+                    if (EarthBuildingGenerator
+                            .isInsideGuemesStoreFoundation(
+                                    worldX,
+                                    worldZ
+                            )) {
+
+                        height = storeHeight;
+                        road = false;
+
+                    } else {
+
+                        /*
+                         * 0.0 = store height
+                         * 1.0 = completely natural terrain
+                         */
+                        double blend =
+                                distance
+                                        / STORE_BLEND_DISTANCE;
+
+                        blend =
+                                Math.max(
+                                        0.0,
+                                        Math.min(
+                                                1.0,
+                                                blend
+                                        )
+                                );
+
+                        /*
+                         * Smoothstep produces a softer,
+                         * more natural transition than
+                         * straight linear interpolation.
+                         */
+                        blend =
+                                blend
+                                        * blend
+                                        * (3.0
+                                        - 2.0 * blend);
+
+                        height =
+                                (int) Math.round(
+                                        storeHeight
+                                                * (1.0 - blend)
+                                                + naturalHeight
+                                                * blend
+                                );
+
+                        /*
+                         * Don't draw a road through the
+                         * landscaped store transition.
+                         */
+                        road = false;
+                    }
+                }
 
                 /*
-                 * Generate land.
+                 * Generate the terrain column.
                  */
                 for (int y = 0;
                      y <= height;
@@ -268,9 +261,7 @@ public class EarthGenerator extends ChunkGenerator {
                             );
                         }
 
-                    } else if (
-                            y > height - 4
-                    ) {
+                    } else if (y > height - 4) {
 
                         chunk.setBlock(
                                 x,
@@ -292,9 +283,9 @@ public class EarthGenerator extends ChunkGenerator {
             }
         }
 
-
         /*
-         * Buildings are placed after terrain.
+         * Generate the rotated General Store after
+         * the terrain underneath it is complete.
          */
         EarthBuildingGenerator.generateGuemesStore(
                 chunk,
@@ -302,19 +293,18 @@ public class EarthGenerator extends ChunkGenerator {
                 chunkZ
         );
 
-
         return chunk;
     }
 
-
+    /*
+     * Existing road smoothing system.
+     */
     private int getSmoothedRoadHeight(
             int worldX,
             int worldZ
     ) {
-
         double totalElevation = 0.0;
         int samples = 0;
-
 
         for (int offsetX = -ROAD_SMOOTH_RADIUS;
              offsetX <= ROAD_SMOOTH_RADIUS;
@@ -325,25 +315,23 @@ public class EarthGenerator extends ChunkGenerator {
                  offsetZ++) {
 
                 double sampleElevation =
-                        EarthTerrainLoader.getGuemesElevation(
-                                worldX + offsetX,
-                                worldZ + offsetZ
-                        );
+                        EarthTerrainLoader
+                                .getGuemesElevation(
+                                        worldX + offsetX,
+                                        worldZ + offsetZ
+                                );
 
-                totalElevation +=
-                        sampleElevation;
-
+                totalElevation += sampleElevation;
                 samples++;
             }
         }
 
-
         double averageElevation =
                 totalElevation / samples;
 
-
-        return EarthElevation.getMinecraftHeight(
-                averageElevation
-        );
+        return EarthElevation
+                .getMinecraftHeight(
+                        averageElevation
+                );
     }
 }
