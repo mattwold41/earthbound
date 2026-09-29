@@ -33,7 +33,7 @@ public class EarthBound extends JavaPlugin {
 
         /*
          * ========================================================
-         * LOAD CONFIGURATION
+         * LOAD CONFIG
          * ========================================================
          */
 
@@ -73,7 +73,7 @@ public class EarthBound extends JavaPlugin {
 
 
         getLogger().info(
-                "EarthBound Settings Loaded:"
+                "EarthBound Settings Loaded"
         );
 
 
@@ -123,11 +123,46 @@ public class EarthBound extends JavaPlugin {
 
         /*
          * ========================================================
-         * LOAD REAL USGS ELEVATION
+         * DISABLE NORMAL MOB SPAWNING
+         * ========================================================
+         */
+
+        Bukkit.getScheduler()
+                .runTask(
+                        this,
+                        () -> {
+
+
+                            for (World world :
+                                    Bukkit.getWorlds()) {
+
+
+                                world.setGameRule(
+                                        org.bukkit.GameRule.DO_MOB_SPAWNING,
+                                        false
+                                );
+
+
+                                getLogger().info(
+                                        "Disabled natural mob spawning in "
+                                                + world.getName()
+                                );
+
+                            }
+
+                        }
+                );
+
+
+
+        /*
+         * ========================================================
+         * LOAD USGS ELEVATION
          * ========================================================
          */
 
         EarthTerrainDownloader.loadGuemesIsland();
+
 
 
         if (EarthTerrainDownloader.isLoaded()) {
@@ -159,6 +194,7 @@ public class EarthBound extends JavaPlugin {
                 EarthWaterData.loadGuemesWaterMask();
 
 
+
         if (waterLoaded) {
 
 
@@ -186,6 +222,7 @@ public class EarthBound extends JavaPlugin {
 
         boolean roadsLoaded =
                 EarthRoadData.loadGuemesRoadMask();
+
 
 
         if (roadsLoaded) {
@@ -229,8 +266,8 @@ public class EarthBound extends JavaPlugin {
 
 
                                 getLogger().warning(
-                                        "Could not set Guemes spawn because "
-                                                + "earthbound world was not found."
+                                        "Could not set Guemes spawn. "
+                                                + "World not found."
                                 );
 
 
@@ -284,6 +321,7 @@ public class EarthBound extends JavaPlugin {
 
 
 
+
     @Override
     public ChunkGenerator getDefaultWorldGenerator(
             String worldName,
@@ -300,6 +338,5 @@ public class EarthBound extends JavaPlugin {
         return new EarthGenerator();
 
     }
-
 
 }
