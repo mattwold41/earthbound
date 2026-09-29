@@ -8,73 +8,92 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class EarthBound extends JavaPlugin {
 
+
     /*
+     * ============================================================
      * GUEMES ISLAND SPAWN
+     * ============================================================
      */
+
     private static final double GUEMES_SPAWN_X = -654.0;
     private static final double GUEMES_SPAWN_Y = 86.0;
     private static final double GUEMES_SPAWN_Z = -355.0;
 
 
+
     @Override
     public void onEnable() {
+
 
         getLogger().info(
                 "EarthBound starting..."
         );
 
 
+
         /*
          * ========================================================
-         * LOAD EARTHBOUND CONFIGURATION
+         * LOAD CONFIGURATION
          * ========================================================
          */
 
         saveDefaultConfig();
 
+
         boolean hostileMobs =
-                getConfig().getBoolean(
-                        "world.hostile-mobs",
-                        false
-                );
+                getConfig()
+                        .getBoolean(
+                                "world.hostile-mobs",
+                                false
+                        );
+
 
         boolean netherEnabled =
-                getConfig().getBoolean(
-                        "world.nether",
-                        false
-                );
+                getConfig()
+                        .getBoolean(
+                                "world.nether",
+                                false
+                        );
+
 
         boolean endEnabled =
-                getConfig().getBoolean(
-                        "world.end",
-                        false
-                );
+                getConfig()
+                        .getBoolean(
+                                "world.end",
+                                false
+                        );
+
 
         double hungerRate =
-                getConfig().getDouble(
-                        "player.hunger-rate",
-                        0.5
-                );
+                getConfig()
+                        .getDouble(
+                                "player.hunger-rate",
+                                0.5
+                        );
 
 
         getLogger().info(
-                "EarthBound Settings:"
+                "EarthBound Settings Loaded:"
         );
+
 
         getLogger().info(
                 "Hostile mobs: "
                         + hostileMobs
         );
 
+
         getLogger().info(
                 "Nether enabled: "
                         + netherEnabled
         );
 
+
         getLogger().info(
                 "End enabled: "
                         + endEnabled
         );
+
 
         getLogger().info(
                 "Hunger rate: "
@@ -82,9 +101,29 @@ public class EarthBound extends JavaPlugin {
         );
 
 
+
         /*
          * ========================================================
-         * LOAD REAL USGS ELEVATION DATA
+         * ENABLE EARTHBOUND WORLD RULES
+         * ========================================================
+         */
+
+        Bukkit.getPluginManager()
+                .registerEvents(
+                        new EarthBoundWorldRules(this),
+                        this
+                );
+
+
+        getLogger().info(
+                "EarthBound world rules enabled!"
+        );
+
+
+
+        /*
+         * ========================================================
+         * LOAD REAL USGS ELEVATION
          * ========================================================
          */
 
@@ -93,17 +132,21 @@ public class EarthBound extends JavaPlugin {
 
         if (EarthTerrainDownloader.isLoaded()) {
 
+
             getLogger().info(
                     "Real USGS Guemes elevation loaded successfully!"
             );
 
+
         } else {
+
 
             getLogger().warning(
                     "USGS Guemes elevation did not load!"
             );
 
         }
+
 
 
         /*
@@ -118,17 +161,21 @@ public class EarthBound extends JavaPlugin {
 
         if (waterLoaded) {
 
+
             getLogger().info(
                     "Real Guemes water polygons loaded successfully!"
             );
 
+
         } else {
+
 
             getLogger().warning(
                     "Guemes water polygons did not load!"
             );
 
         }
+
 
 
         /*
@@ -143,11 +190,14 @@ public class EarthBound extends JavaPlugin {
 
         if (roadsLoaded) {
 
+
             getLogger().info(
                     "Real Guemes road centerlines loaded successfully!"
             );
 
+
         } else {
+
 
             getLogger().warning(
                     "Guemes road centerlines did not load!"
@@ -156,70 +206,82 @@ public class EarthBound extends JavaPlugin {
         }
 
 
+
         /*
          * ========================================================
          * SET GUEMES SPAWN
          * ========================================================
          */
 
-        Bukkit.getScheduler().runTask(
-                this,
-                () -> {
+        Bukkit.getScheduler()
+                .runTask(
+                        this,
+                        () -> {
 
-                    World world =
-                            Bukkit.getWorld(
-                                    "earthbound"
+
+                            World world =
+                                    Bukkit.getWorld(
+                                            "earthbound"
+                                    );
+
+
+                            if (world == null) {
+
+
+                                getLogger().warning(
+                                        "Could not set Guemes spawn because "
+                                                + "earthbound world was not found."
+                                );
+
+
+                                return;
+
+                            }
+
+
+
+                            Location spawn =
+                                    new Location(
+                                            world,
+                                            GUEMES_SPAWN_X,
+                                            GUEMES_SPAWN_Y,
+                                            GUEMES_SPAWN_Z
+                                    );
+
+
+
+                            world.setSpawnLocation(
+                                    spawn
                             );
 
 
-                    if (world == null) {
 
-                        getLogger().warning(
-                                "Could not set Guemes spawn because "
-                                        + "the earthbound world was not found."
-                        );
-
-                        return;
-
-                    }
-
-
-                    Location spawn =
-                            new Location(
-                                    world,
-                                    GUEMES_SPAWN_X,
-                                    GUEMES_SPAWN_Y,
-                                    GUEMES_SPAWN_Z
+                            getLogger().info(
+                                    "Guemes Island spawn set to "
+                                            + GUEMES_SPAWN_X
+                                            + ", "
+                                            + GUEMES_SPAWN_Y
+                                            + ", "
+                                            + GUEMES_SPAWN_Z
                             );
 
 
-                    world.setSpawnLocation(
-                            spawn
-                    );
+                        }
+                );
 
-
-                    getLogger().info(
-                            "Guemes Island spawn set to "
-                                    + GUEMES_SPAWN_X
-                                    + ", "
-                                    + GUEMES_SPAWN_Y
-                                    + ", "
-                                    + GUEMES_SPAWN_Z
-                    );
-
-                }
-        );
 
 
         getLogger().info(
                 "EarthBound enabled!"
         );
 
+
         getLogger().info(
-                "EarthBound core configuration loaded!"
+                "EarthBound systems loaded!"
         );
 
     }
+
 
 
     @Override
@@ -227,6 +289,7 @@ public class EarthBound extends JavaPlugin {
             String worldName,
             String id
     ) {
+
 
         getLogger().info(
                 "Loading EarthBound terrain generator for "
@@ -237,5 +300,6 @@ public class EarthBound extends JavaPlugin {
         return new EarthGenerator();
 
     }
+
 
 }
