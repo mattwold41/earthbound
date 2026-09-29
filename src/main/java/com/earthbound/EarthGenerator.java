@@ -339,6 +339,26 @@ public class EarthGenerator extends ChunkGenerator {
         );
 
 
+        /*
+         * ========================================================
+         * GUEMES ISLAND DEVELOPMENT CONTROLLER
+         * ========================================================
+         *
+         * This controls future island-wide development while
+         * preserving the approved General Store and Area A.
+         *
+         * Island-wide homes are currently disabled inside
+         * EarthGuemesGenerator, so connecting the controller here
+         * does not add experimental houses yet.
+         */
+
+        EarthGuemesGenerator.generate(
+                chunkData,
+                chunkX,
+                chunkZ
+        );
+
+
         return chunkData;
     }
 
