@@ -1,520 +1,42 @@
 package com.earthbound;
 
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
-public final class EarthGuemesGenerator {
+import java.util.Random;
+
+public class EarthGenerator extends ChunkGenerator {
+
+    private static final int ROAD_SMOOTH_RADIUS = 2;
 
     /*
-     * ============================================================
-     * EARTHBOUND - GUEMES ISLAND DEVELOPMENT CONTROLLER
-     * ============================================================
-     *
-     * PURPOSE:
-     *
-     * This class controls development outside the approved
-     * Area A neighborhood and General Store.
-     *
-     * It does NOT replace:
-     *
-     * - USGS terrain
-     * - Census roads
-     * - coastline/water generation
-     * - Area A
-     * - General Store
-     *
-     * Development must pass safety checks before structures
-     * are generated.
-     * ============================================================
+     * Approved General Store terrain settings.
      */
+    private static final double STORE_BLEND_DISTANCE = 32.0;
+    private static final double STORE_SLOPE_RUN = 4.0;
 
-    /*
-     * Current Guemes geographic bounds.
-     */
-    private static final double WEST_LONGITUDE =
-            -122.70;
 
-    private static final double EAST_LONGITUDE =
-            -122.55;
+    public EarthGenerator() {
 
-    private static final double SOUTH_LATITUDE =
-            48.47;
-
-    private static final double NORTH_LATITUDE =
-            48.60;
-
-    /*
-     * Approximate Guemes Mountain protection center.
-     *
-     * This remains protected from residential generation.
-     */
-    private static final double GUEMES_MOUNTAIN_LATITUDE =
-            48.5445;
-
-    private static final double GUEMES_MOUNTAIN_LONGITUDE =
-            -122.5945;
-
-    /*
-     * Real-world protection radius.
-     */
-    private static final double GUEMES_MOUNTAIN_PROTECTION_METERS =
-            850.0;
-
-    /*
-     * Keep structures away from very low shoreline terrain.
-     */
-    private static final int MINIMUM_BUILD_HEIGHT =
-            EarthWaterData.SEA_LEVEL + 3;
-
-    /*
-     * Development must be reasonably close to a real
-     * Census road.
-     *
-     * This is measured in real-world meters.
-     */
-    private static final double MAXIMUM_ROAD_DISTANCE_METERS =
-            45.0;
-
-    /*
-     * ============================================================
-     * MASTER DEVELOPMENT SWITCH
-     * ============================================================
-     *
-     * TRUE:
-     * New Guemes development may generate.
-     *
-     * FALSE:
-     * Only the already-approved systems generate.
-     *
-     * We are enabling this for the controlled first Guemes
-     * development test.
-     */
-    private static final boolean ENABLE_ISLAND_HOMES =
-            true;
-
-    /*
-     * ============================================================
-     * FIRST CONTROLLED GUEMES RESIDENTIAL CLUSTER
-     * ============================================================
-     *
-     * This is intentionally small.
-     *
-     * We are NOT automatically filling every Guemes road
-     * with houses.
-     *
-     * The cluster is positioned relative to EarthBound
-     * coordinates and must still pass all development checks.
-     *
-     * This first batch gives us something visible to inspect
-     * on Xbox before we expand the system farther.
-     * ============================================================
-     */
-
-    /*
-     * Center of the first controlled district.
-     *
-     * This is south/central Guemes development territory,
-     * separate from Area A.
-     *
-     * The road-finding routine below searches around this
-     * starting point instead of blindly assuming the road
-     * is exactly at one Z coordinate.
-     */
-    private static final double FIRST_DISTRICT_LATITUDE =
-            48.5350;
-
-    private static final double FIRST_DISTRICT_LONGITUDE =
-            -122.6245;
-
-    /*
-     * Number of homes on each side of the road.
-     *
-     * 3 north + 3 south = 6 total.
-     */
-    private static final int HOMES_PER_SIDE =
-            3;
-
-    /*
-     * Existing Area A property dimensions.
-     *
-     * These match the reusable house generator.
-     */
-    private static final int PLOT_WIDTH =
-            16;
-
-    private static final int PLOT_DEPTH =
-            20;
-
-    private static final int PLOT_SPACING =
-            4;
-
-    /*
-     * Existing residential generator assumes an
-     * east-west road.
-     *
-     * We therefore only generate this first district when
-     * the real road near the district appears predominantly
-     * east-west.
-     */
-    private static final int ROAD_DIRECTION_SAMPLE_BLOCKS =
-            12;
-
-    /*
-     * Search distance for finding the real road near the
-     * district center.
-     */
-    private static final int ROAD_SEARCH_BLOCKS =
-            30;
-
-    private EarthGuemesGenerator() {
-    }
-
-    /*
-     * ============================================================
-     * MAIN GUEMES GENERATION
-     * ============================================================
-     */
-
-    public static void generate(
-            ChunkData chunkData,
-            int chunkX,
-            int chunkZ
-    ) {
-
-        if (!ENABLE_ISLAND_HOMES) {
-            return;
-        }
-
-        if (!EarthRoadData.isLoaded()) {
-            return;
-        }
-
-        generateFirstResidentialDistrict(
-                chunkData,
-                chunkX,
-                chunkZ
+        System.out.println(
+                "=== EARTHBOUND REAL TERRAIN GENERATOR ACTIVE ==="
         );
     }
 
-    /*
-     * ============================================================
-     * FIRST RESIDENTIAL DISTRICT
-     * ============================================================
-     */
 
-    private static void generateFirstResidentialDistrict(
-            ChunkData chunkData,
-            int chunkX,
-            int chunkZ
-    ) {
-
-        int districtCenterX =
-                EarthCoordinates.longitudeToMinecraftX(
-                        FIRST_DISTRICT_LONGITUDE
-                );
-
-        int approximateCenterZ =
-                EarthCoordinates.latitudeToMinecraftZ(
-                        FIRST_DISTRICT_LATITUDE
-                );
-
-        int roadCenterZ =
-                findRoadCenterZ(
-                        districtCenterX,
-                        approximateCenterZ
-                );
-
-        /*
-         * No real Census road was found close enough.
-         */
-        if (roadCenterZ == Integer.MIN_VALUE) {
-            return;
-        }
-
-        /*
-         * Our current approved house design faces
-         * north/south.
-         *
-         * Therefore this first reusable district should only
-         * generate beside a road that appears primarily
-         * east-west.
-         */
-        if (!isApproximatelyEastWestRoad(
-                districtCenterX,
-                roadCenterZ
-        )) {
-            return;
-        }
-
-        double roadLatitude =
-                EarthCoordinates.getLatitude(
-                        districtCenterX,
-                        roadCenterZ
-                );
-
-        double roadLongitude =
-                EarthCoordinates.getLongitude(
-                        districtCenterX,
-                        roadCenterZ
-                );
-
-        double roadDistance =
-                EarthRoadData
-                        .getDistanceToNearestRoadMeters(
-                                roadLatitude,
-                                roadLongitude
-                        );
-
-        if (roadDistance
-                > MAXIMUM_ROAD_DISTANCE_METERS) {
-
-            return;
-        }
-
-        /*
-         * Determine total district width.
-         */
-        int totalWidth =
-                (HOMES_PER_SIDE * PLOT_WIDTH)
-                        + ((HOMES_PER_SIDE - 1)
-                        * PLOT_SPACING);
-
-        int firstPlotX =
-                districtCenterX
-                        - (totalWidth / 2);
-
-        /*
-         * Keep properties beyond the actual road surface.
-         *
-         * The reusable residential house system handles
-         * the walkway toward roadCenterZ.
-         */
-        int northPlotMinZ =
-                roadCenterZ + 8;
-
-        int southPlotMaxZ =
-                roadCenterZ - 8;
-
-        int southPlotMinZ =
-                southPlotMaxZ - PLOT_DEPTH;
-
-        for (int plot = 0;
-             plot < HOMES_PER_SIDE;
-             plot++) {
-
-            int plotMinX =
-                    firstPlotX
-                            + plot
-                            * (PLOT_WIDTH
-                            + PLOT_SPACING);
-
-            /*
-             * NORTH PROPERTY
-             */
-            generateResidentialHome(
-                    chunkData,
-                    chunkX,
-                    chunkZ,
-                    plotMinX,
-                    northPlotMinZ,
-                    true,
-                    100 + plot,
-                    roadCenterZ
-            );
-
-            /*
-             * SOUTH PROPERTY
-             */
-            generateResidentialHome(
-                    chunkData,
-                    chunkX,
-                    chunkZ,
-                    plotMinX,
-                    southPlotMinZ,
-                    false,
-                    200 + plot,
-                    roadCenterZ
-            );
-        }
-    }
-
-    /*
-     * ============================================================
-     * FIND REAL ROAD CENTER
-     * ============================================================
-     *
-     * Search north/south from the approximate district
-     * coordinate.
-     *
-     * We collect road blocks and use the middle of the
-     * detected road as the working center.
-     * ============================================================
-     */
-
-    private static int findRoadCenterZ(
-            int worldX,
-            int approximateZ
-    ) {
-
-        int firstRoadZ =
-                Integer.MIN_VALUE;
-
-        int lastRoadZ =
-                Integer.MIN_VALUE;
-
-        for (int offset = -ROAD_SEARCH_BLOCKS;
-             offset <= ROAD_SEARCH_BLOCKS;
-             offset++) {
-
-            int worldZ =
-                    approximateZ + offset;
-
-            double latitude =
-                    EarthCoordinates.getLatitude(
-                            worldX,
-                            worldZ
-                    );
-
-            double longitude =
-                    EarthCoordinates.getLongitude(
-                            worldX,
-                            worldZ
-                    );
-
-            if (EarthRoadData.isRoad(
-                    latitude,
-                    longitude
-            )) {
-
-                if (firstRoadZ
-                        == Integer.MIN_VALUE) {
-
-                    firstRoadZ =
-                            worldZ;
-                }
-
-                lastRoadZ =
-                        worldZ;
-            }
-        }
-
-        if (firstRoadZ
-                == Integer.MIN_VALUE) {
-
-            return Integer.MIN_VALUE;
-        }
-
-        return (firstRoadZ + lastRoadZ) / 2;
-    }
-
-    /*
-     * ============================================================
-     * ROAD DIRECTION CHECK
-     * ============================================================
-     *
-     * The current reusable homes face north/south.
-     *
-     * We therefore verify that the road continues farther
-     * east/west than north/south before generating this
-     * first district.
-     * ============================================================
-     */
-
-    private static boolean isApproximatelyEastWestRoad(
-            int roadX,
-            int roadZ
-    ) {
-
-        int eastWestHits =
-                0;
-
-        int northSouthHits =
-                0;
-
-        for (int offset =
-                     -ROAD_DIRECTION_SAMPLE_BLOCKS;
-             offset <= ROAD_DIRECTION_SAMPLE_BLOCKS;
-             offset += 2) {
-
-            /*
-             * East / west sample.
-             */
-            double eastWestLatitude =
-                    EarthCoordinates.getLatitude(
-                            roadX + offset,
-                            roadZ
-                    );
-
-            double eastWestLongitude =
-                    EarthCoordinates.getLongitude(
-                            roadX + offset,
-                            roadZ
-                    );
-
-            if (EarthRoadData.isRoad(
-                    eastWestLatitude,
-                    eastWestLongitude
-            )) {
-
-                eastWestHits++;
-            }
-
-            /*
-             * North / south sample.
-             */
-            double northSouthLatitude =
-                    EarthCoordinates.getLatitude(
-                            roadX,
-                            roadZ + offset
-                    );
-
-            double northSouthLongitude =
-                    EarthCoordinates.getLongitude(
-                            roadX,
-                            roadZ + offset
-                    );
-
-            if (EarthRoadData.isRoad(
-                    northSouthLatitude,
-                    northSouthLongitude
-            )) {
-
-                northSouthHits++;
-            }
-        }
-
-        return eastWestHits
-                >= northSouthHits;
-    }
-
-    /*
-     * ============================================================
-     * RESIDENTIAL HOME GENERATION
-     * ============================================================
-     */
-
-    public static void generateResidentialHome(
-            ChunkData chunkData,
+    @Override
+    public ChunkData generateChunkData(
+            World world,
+            Random random,
             int chunkX,
             int chunkZ,
-            int plotMinX,
-            int plotMinZ,
-            boolean northSide,
-            int houseNumber,
-            int roadCenterZ
+            BiomeGrid biome
     ) {
 
-        int propertyCenterX =
-                plotMinX + (PLOT_WIDTH / 2);
-
-        int propertyCenterZ =
-                plotMinZ + (PLOT_DEPTH / 2);
-
-        if (!isSuitableForDevelopment(
-                propertyCenterX,
-                propertyCenterZ
-        )) {
-            return;
-        }
+        ChunkData chunkData =
+                createChunkData(world);
 
         int chunkMinX =
                 chunkX << 4;
@@ -522,216 +44,579 @@ public final class EarthGuemesGenerator {
         int chunkMinZ =
                 chunkZ << 4;
 
-        EarthResidentialGenerator.generateHome(
+
+        /*
+         * ========================================================
+         * BASE EARTH TERRAIN
+         * ========================================================
+         */
+
+        for (int localX = 0;
+             localX < 16;
+             localX++) {
+
+            for (int localZ = 0;
+                 localZ < 16;
+                 localZ++) {
+
+                int worldX =
+                        chunkMinX + localX;
+
+                int worldZ =
+                        chunkMinZ + localZ;
+
+
+                double latitude =
+                        EarthCoordinates.getLatitude(
+                                worldX,
+                                worldZ
+                        );
+
+                double longitude =
+                        EarthCoordinates.getLongitude(
+                                worldX,
+                                worldZ
+                        );
+
+
+                /*
+                 * Real USGS elevation.
+                 */
+                double elevationMeters =
+                        EarthTerrainLoader.getGuemesElevation(
+                                latitude,
+                                longitude
+                        );
+
+
+                int naturalHeight =
+                        EarthElevation.getMinecraftHeight(
+                                elevationMeters
+                        );
+
+
+                /*
+                 * =================================================
+                 * WATER
+                 * =================================================
+                 */
+
+                boolean water =
+                        EarthWaterData.isWater(
+                                latitude,
+                                longitude
+                        );
+
+
+                if (water) {
+
+                    generateWaterColumn(
+                            chunkData,
+                            localX,
+                            localZ
+                    );
+
+                    continue;
+                }
+
+
+                /*
+                 * =================================================
+                 * NATURAL EARTH TERRAIN
+                 * =================================================
+                 *
+                 * Keep the real USGS-generated land.
+                 *
+                 * Area A does NOT raise, flatten, compress,
+                 * or grade this terrain.
+                 */
+
+                int terrainHeight =
+                        naturalHeight;
+
+
+                /*
+                 * =================================================
+                 * GENERAL STORE TERRAIN BLEND
+                 * =================================================
+                 *
+                 * Keep the existing approved General Store system.
+                 */
+
+                if (EarthBuildingGenerator
+                        .isInsideGuemesStoreBlendArea(
+                                worldX,
+                                worldZ
+                        )) {
+
+                    int storeHeight =
+                            EarthBuildingGenerator
+                                    .getGuemesStoreGroundY();
+
+
+                    double distance =
+                            EarthBuildingGenerator
+                                    .getDistanceFromGuemesStore(
+                                            worldX,
+                                            worldZ
+                                    );
+
+
+                    /*
+                     * Approved flat foundation.
+                     */
+                    if (EarthBuildingGenerator
+                            .isInsideGuemesStoreFoundation(
+                                    worldX,
+                                    worldZ
+                            )) {
+
+                        terrainHeight =
+                                storeHeight;
+
+                    } else {
+
+                        /*
+                         * Existing approved store transition.
+                         */
+                        double blend =
+                                distance
+                                        / STORE_BLEND_DISTANCE;
+
+
+                        blend =
+                                Math.max(
+                                        0.0,
+                                        Math.min(
+                                                1.0,
+                                                blend
+                                        )
+                                );
+
+
+                        double smoothBlend =
+                                blend
+                                        * blend
+                                        * (3.0
+                                        - 2.0
+                                        * blend);
+
+
+                        double blendedHeight =
+                                storeHeight
+                                        + (naturalHeight
+                                        - storeHeight)
+                                        * smoothBlend;
+
+
+                        int allowedDifference =
+                                Math.max(
+                                        1,
+                                        (int) Math.floor(
+                                                distance
+                                                        / STORE_SLOPE_RUN
+                                        )
+                                );
+
+
+                        int minimumHeight =
+                                storeHeight
+                                        - allowedDifference;
+
+                        int maximumHeight =
+                                storeHeight
+                                        + allowedDifference;
+
+
+                        terrainHeight =
+                                (int) Math.round(
+                                        blendedHeight
+                                );
+
+
+                        terrainHeight =
+                                Math.max(
+                                        minimumHeight,
+                                        Math.min(
+                                                maximumHeight,
+                                                terrainHeight
+                                        )
+                                );
+                    }
+                }
+
+
+                /*
+                 * =================================================
+                 * REAL ROADS
+                 * =================================================
+                 */
+
+                boolean road =
+                        EarthRoadData.isRoad(
+                                latitude,
+                                longitude
+                        );
+
+
+                /*
+                 * Protect the General Store area from
+                 * real-road generation.
+                 */
+                if (EarthBuildingGenerator
+                        .isInsideGuemesStoreBlendArea(
+                                worldX,
+                                worldZ
+                        )) {
+
+                    road = false;
+                }
+
+
+                /*
+                 * Real roads follow their existing
+                 * EarthBound road smoothing system.
+                 */
+                if (road) {
+
+                    terrainHeight =
+                            getSmoothedRoadHeight(
+                                    worldX,
+                                    worldZ
+                            );
+                }
+
+
+                /*
+                 * Build terrain.
+                 */
+                generateLandColumn(
+                        chunkData,
+                        localX,
+                        localZ,
+                        terrainHeight,
+                        road
+                );
+            }
+        }
+
+
+        /*
+         * ========================================================
+         * GUEMES GENERAL STORE
+         * ========================================================
+         *
+         * Existing approved building:
+         *
+         * Y = 65
+         * Front = WEST
+         *
+         * Do not rotate.
+         */
+
+        EarthBuildingGenerator.generateGuemesStore(
                 chunkData,
-                chunkMinX,
-                chunkMinZ,
-                plotMinX,
-                plotMinZ,
-                northSide,
-                houseNumber,
-                roadCenterZ
+                chunkX,
+                chunkZ
         );
+
+
+        /*
+         * ========================================================
+         * AREA A - RESIDENTIAL TEST BLOCK
+         * ========================================================
+         *
+         * Area A now sits directly on the existing
+         * natural USGS-generated land.
+         *
+         * It does NOT modify the terrain underneath it.
+         */
+
+        EarthResidentialGenerator.generate(
+                chunkData,
+                chunkX,
+                chunkZ
+        );
+
+
+        /*
+         * ========================================================
+         * GUEMES ISLAND DEVELOPMENT CONTROLLER
+         * ========================================================
+         */
+
+        EarthGuemesGenerator.generate(
+                chunkData,
+                chunkX,
+                chunkZ
+        );
+
+
+        return chunkData;
     }
+
 
     /*
      * ============================================================
-     * DEVELOPMENT SUITABILITY
+     * LAND TERRAIN
      * ============================================================
      */
 
-    public static boolean isSuitableForDevelopment(
+    private void generateLandColumn(
+            ChunkData chunkData,
+            int localX,
+            int localZ,
+            int surfaceY,
+            boolean road
+    ) {
+
+        int minHeight =
+                chunkData.getMinHeight();
+
+
+        /*
+         * Stone.
+         */
+        for (int y = minHeight;
+             y < surfaceY - 3;
+             y++) {
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.STONE
+            );
+        }
+
+
+        /*
+         * Dirt.
+         */
+        for (int y =
+             Math.max(
+                     minHeight,
+                     surfaceY - 3
+             );
+             y < surfaceY;
+             y++) {
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.DIRT
+            );
+        }
+
+
+        /*
+         * Surface.
+         */
+        if (road) {
+
+            chunkData.setBlock(
+                    localX,
+                    surfaceY,
+                    localZ,
+                    Material.GRAY_CONCRETE
+            );
+
+        } else {
+
+            chunkData.setBlock(
+                    localX,
+                    surfaceY,
+                    localZ,
+                    Material.GRASS_BLOCK
+            );
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * WATER
+     * ============================================================
+     */
+
+    private void generateWaterColumn(
+            ChunkData chunkData,
+            int localX,
+            int localZ
+    ) {
+
+        int seaLevel =
+                EarthWaterData.SEA_LEVEL;
+
+
+        int seabed =
+                seaLevel - 8;
+
+
+        int minHeight =
+                chunkData.getMinHeight();
+
+
+        /*
+         * Stone below seabed.
+         */
+        for (int y = minHeight;
+             y < seabed - 3;
+             y++) {
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.STONE
+            );
+        }
+
+
+        /*
+         * Sand seabed.
+         */
+        for (int y =
+             Math.max(
+                     minHeight,
+                     seabed - 3
+             );
+             y <= seabed;
+             y++) {
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.SAND
+            );
+        }
+
+
+        /*
+         * Water up to Y=63.
+         */
+        for (int y =
+             seabed + 1;
+             y <= seaLevel;
+             y++) {
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.WATER
+            );
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * ROAD HEIGHT SMOOTHING
+     * ============================================================
+     */
+
+    private int getSmoothedRoadHeight(
             int worldX,
             int worldZ
     ) {
 
-        double latitude =
-                EarthCoordinates.getLatitude(
-                        worldX,
-                        worldZ
-                );
+        double totalHeight =
+                0.0;
 
-        double longitude =
-                EarthCoordinates.getLongitude(
-                        worldX,
-                        worldZ
-                );
+        int samples =
+                0;
 
-        /*
-         * Must remain inside current Guemes bounds.
-         */
-        if (!isInsideGuemesBounds(
-                latitude,
-                longitude
-        )) {
 
-            return false;
-        }
+        for (int offsetX =
+             -ROAD_SMOOTH_RADIUS;
+             offsetX <= ROAD_SMOOTH_RADIUS;
+             offsetX++) {
 
-        /*
-         * Protect Guemes Mountain.
-         */
-        if (isInsideGuemesMountainProtection(
-                latitude,
-                longitude
-        )) {
+            for (int offsetZ =
+                 -ROAD_SMOOTH_RADIUS;
+                 offsetZ <= ROAD_SMOOTH_RADIUS;
+                 offsetZ++) {
 
-            return false;
-        }
+                int sampleX =
+                        worldX + offsetX;
 
-        /*
-         * Keep development close to real roads.
-         */
-        double roadDistance =
-                EarthRoadData
-                        .getDistanceToNearestRoadMeters(
-                                latitude,
-                                longitude
+                int sampleZ =
+                        worldZ + offsetZ;
+
+
+                double latitude =
+                        EarthCoordinates.getLatitude(
+                                sampleX,
+                                sampleZ
                         );
 
-        if (roadDistance
-                > MAXIMUM_ROAD_DISTANCE_METERS) {
 
-            return false;
-        }
-
-        /*
-         * Check real USGS elevation.
-         */
-        double elevationMeters =
-                EarthTerrainLoader
-                        .getGuemesElevation(
-                                latitude,
-                                longitude
+                double longitude =
+                        EarthCoordinates.getLongitude(
+                                sampleX,
+                                sampleZ
                         );
 
-        int minecraftHeight =
-                EarthElevation
-                        .getMinecraftHeight(
-                                elevationMeters
-                        );
 
-        /*
-         * Protect shoreline / very low terrain.
-         */
-        if (minecraftHeight
-                < MINIMUM_BUILD_HEIGHT) {
+                double elevationMeters =
+                        EarthTerrainLoader
+                                .getGuemesElevation(
+                                        latitude,
+                                        longitude
+                                );
 
-            return false;
+
+                int height =
+                        EarthElevation
+                                .getMinecraftHeight(
+                                        elevationMeters
+                                );
+
+
+                totalHeight +=
+                        height;
+
+                samples++;
+            }
         }
 
-        return true;
-    }
 
-    /*
-     * ============================================================
-     * GUEMES BOUNDS
-     * ============================================================
-     */
+        if (samples == 0) {
 
-    public static boolean isInsideGuemesBounds(
-            double latitude,
-            double longitude
-    ) {
+            double latitude =
+                    EarthCoordinates.getLatitude(
+                            worldX,
+                            worldZ
+                    );
 
-        return latitude
-                >= SOUTH_LATITUDE
-                && latitude
-                <= NORTH_LATITUDE
-                && longitude
-                >= WEST_LONGITUDE
-                && longitude
-                <= EAST_LONGITUDE;
-    }
 
-    /*
-     * ============================================================
-     * GUEMES MOUNTAIN PROTECTION
-     * ============================================================
-     */
+            double longitude =
+                    EarthCoordinates.getLongitude(
+                            worldX,
+                            worldZ
+                    );
 
-    public static boolean isInsideGuemesMountainProtection(
-            double latitude,
-            double longitude
-    ) {
 
-        double distanceMeters =
-                distanceMeters(
-                        latitude,
-                        longitude,
-                        GUEMES_MOUNTAIN_LATITUDE,
-                        GUEMES_MOUNTAIN_LONGITUDE
-                );
+            double elevationMeters =
+                    EarthTerrainLoader
+                            .getGuemesElevation(
+                                    latitude,
+                                    longitude
+                            );
 
-        return distanceMeters
-                <= GUEMES_MOUNTAIN_PROTECTION_METERS;
-    }
 
-    /*
-     * ============================================================
-     * DISTANCE HELPER
-     * ============================================================
-     */
+            return EarthElevation
+                    .getMinecraftHeight(
+                            elevationMeters
+                    );
+        }
 
-    private static double distanceMeters(
-            double latitude1,
-            double longitude1,
-            double latitude2,
-            double longitude2
-    ) {
 
-        double earthRadiusMeters =
-                6371000.0;
-
-        double latitude1Radians =
-                Math.toRadians(
-                        latitude1
-                );
-
-        double latitude2Radians =
-                Math.toRadians(
-                        latitude2
-                );
-
-        double latitudeDifference =
-                Math.toRadians(
-                        latitude2
-                                - latitude1
-                );
-
-        double longitudeDifference =
-                Math.toRadians(
-                        longitude2
-                                - longitude1
-                );
-
-        double a =
-                Math.sin(
-                        latitudeDifference / 2.0
-                )
-                        * Math.sin(
-                        latitudeDifference / 2.0
-                )
-                        + Math.cos(
-                        latitude1Radians
-                )
-                        * Math.cos(
-                        latitude2Radians
-                )
-                        * Math.sin(
-                        longitudeDifference / 2.0
-                )
-                        * Math.sin(
-                        longitudeDifference / 2.0
-                );
-
-        double c =
-                2.0
-                        * Math.atan2(
-                        Math.sqrt(a),
-                        Math.sqrt(1.0 - a)
-                );
-
-        return earthRadiusMeters * c;
+        return (int) Math.round(
+                totalHeight / samples
+        );
     }
 }
