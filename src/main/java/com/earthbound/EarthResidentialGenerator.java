@@ -14,26 +14,26 @@ public class EarthResidentialGenerator {
      * EARTHBOUND - GUEMES RESIDENTIAL AREA A
      * ============================================================
      *
-     * VERSION 6 - REUSABLE HOUSE SYSTEM
+     * VERSION 7 - STANDARD EARTHBOUND ROAD DESIGN
      *
      * - Preserves natural USGS terrain.
-     * - Keeps the approved neighborhood road.
-     * - Keeps sidewalks.
-     * - Keeps all 8 property boundaries.
-     * - Automatically generates a home on all 8 properties.
-     * - Homes on both sides face the neighborhood road.
-     * - Preserves the approved pitched-roof/gable design.
-     * - Adds basic finished interiors.
-     * - Adds simple house-to-house visual variation.
-     * - Uses foundations instead of flattening entire properties.
-     * - Approved Area A behavior remains unchanged.
-     * - Homes can now use another east-west road center.
+     * - Keeps all 8 Area A properties.
+     * - Keeps all existing homes.
+     * - Keeps property boundaries.
+     * - Keeps house interiors.
+     * - Keeps pitched roofs.
+     * - Keeps house-to-road walkways.
      *
-     * IMPORTANT:
-     * This class does NOT modify the General Store.
+     * ROAD STANDARD:
      *
-     * Actual NPC residents will be handled later by the
-     * EarthBound NPC/property system.
+     * POLISHED ANDESITE
+     * GRAY CONCRETE
+     * GRAY CONCRETE
+     * GRAY CONCRETE
+     * POLISHED ANDESITE
+     *
+     * This gives EarthBound a 3-block driving surface
+     * with a 1-block gray border on each side.
      * ============================================================
      */
 
@@ -43,7 +43,11 @@ public class EarthResidentialGenerator {
     private static final int DISTRICT_HALF_WIDTH = 45;
     private static final int DISTRICT_HALF_LENGTH = 55;
 
-    private static final int ROAD_HALF_WIDTH = 3;
+    /*
+     * 1 block on either side of center =
+     * 3-block driving surface.
+     */
+    private static final int ROAD_HALF_WIDTH = 1;
 
     private static final int PLOT_WIDTH = 16;
     private static final int PLOT_DEPTH = 20;
@@ -56,14 +60,21 @@ public class EarthResidentialGenerator {
     private static final Material ROAD_MATERIAL =
             Material.GRAY_CONCRETE;
 
+    /*
+     * Gray road border.
+     *
+     * Polished andesite is darker than the old
+     * smooth-stone border.
+     */
     private static final Material SIDEWALK_MATERIAL =
-            Material.SMOOTH_STONE;
+            Material.POLISHED_ANDESITE;
 
     private static final Material PLOT_MARKER =
             Material.YELLOW_CONCRETE;
 
     private EarthResidentialGenerator() {
     }
+
 
     /*
      * ============================================================
@@ -110,10 +121,19 @@ public class EarthResidentialGenerator {
         );
     }
 
+
     /*
      * ============================================================
      * NEIGHBORHOOD ROAD
      * ============================================================
+     *
+     * Road:
+     *
+     * border
+     * road
+     * road
+     * road
+     * border
      */
 
     private static void generateNeighborhoodRoad(
@@ -127,6 +147,10 @@ public class EarthResidentialGenerator {
 
         int roadEndX =
                 CENTER_X + DISTRICT_HALF_WIDTH;
+
+        /*
+         * Three-block gray driving surface.
+         */
 
         for (int worldX = roadStartX;
              worldX <= roadEndX;
@@ -147,10 +171,14 @@ public class EarthResidentialGenerator {
             }
         }
 
-        int northSidewalkZ =
+        /*
+         * One-block border on each side.
+         */
+
+        int northBorderZ =
                 CENTER_Z + ROAD_HALF_WIDTH + 1;
 
-        int southSidewalkZ =
+        int southBorderZ =
                 CENTER_Z - ROAD_HALF_WIDTH - 1;
 
         for (int worldX = roadStartX;
@@ -162,7 +190,7 @@ public class EarthResidentialGenerator {
                     chunkMinX,
                     chunkMinZ,
                     worldX,
-                    northSidewalkZ,
+                    northBorderZ,
                     SIDEWALK_MATERIAL
             );
 
@@ -171,11 +199,12 @@ public class EarthResidentialGenerator {
                     chunkMinX,
                     chunkMinZ,
                     worldX,
-                    southSidewalkZ,
+                    southBorderZ,
                     SIDEWALK_MATERIAL
             );
         }
     }
+
 
     /*
      * ============================================================
@@ -191,7 +220,8 @@ public class EarthResidentialGenerator {
 
         int totalWidth =
                 (PLOTS_PER_SIDE * PLOT_WIDTH)
-                        + ((PLOTS_PER_SIDE - 1) * PLOT_SPACING);
+                        + ((PLOTS_PER_SIDE - 1)
+                        * PLOT_SPACING);
 
         int firstPlotX =
                 CENTER_X - (totalWidth / 2);
@@ -239,9 +269,10 @@ public class EarthResidentialGenerator {
         }
     }
 
+
     /*
      * ============================================================
-     * GENERATE ALL 8 APPROVED AREA A HOMES
+     * GENERATE ALL 8 AREA A HOMES
      * ============================================================
      */
 
@@ -253,7 +284,8 @@ public class EarthResidentialGenerator {
 
         int totalWidth =
                 (PLOTS_PER_SIDE * PLOT_WIDTH)
-                        + ((PLOTS_PER_SIDE - 1) * PLOT_SPACING);
+                        + ((PLOTS_PER_SIDE - 1)
+                        * PLOT_SPACING);
 
         int firstPlotX =
                 CENTER_X - (totalWidth / 2);
@@ -276,11 +308,6 @@ public class EarthResidentialGenerator {
                             + plot
                             * (PLOT_WIDTH + PLOT_SPACING);
 
-            /*
-             * NORTH SIDE
-             *
-             * Road is SOUTH of these houses.
-             */
             generateHome(
                     chunkData,
                     chunkMinX,
@@ -291,11 +318,6 @@ public class EarthResidentialGenerator {
                     plot
             );
 
-            /*
-             * SOUTH SIDE
-             *
-             * Road is NORTH of these houses.
-             */
             generateHome(
                     chunkData,
                     chunkMinX,
@@ -308,15 +330,11 @@ public class EarthResidentialGenerator {
         }
     }
 
+
     /*
      * ============================================================
-     * APPROVED AREA A HOME ENTRY POINT
+     * ORIGINAL AREA A HOME ENTRY POINT
      * ============================================================
-     *
-     * This keeps the original public method intact.
-     *
-     * Existing Area A calls automatically use the approved
-     * Area A road center.
      */
 
     public static void generateHome(
@@ -341,17 +359,11 @@ public class EarthResidentialGenerator {
         );
     }
 
+
     /*
      * ============================================================
      * REUSABLE GUEMES HOME ENTRY POINT
      * ============================================================
-     *
-     * This version allows another east-west neighborhood road
-     * to provide its own center Z.
-     *
-     * This does NOT yet rotate houses for north-south roads.
-     * That will be handled separately when we add road-direction
-     * support.
      */
 
     public static void generateHome(
@@ -377,9 +389,6 @@ public class EarthResidentialGenerator {
 
         if (northSide) {
 
-            /*
-             * Front faces SOUTH toward road.
-             */
             houseMinZ =
                     plotMinZ + 5;
 
@@ -388,9 +397,6 @@ public class EarthResidentialGenerator {
 
         } else {
 
-            /*
-             * Front faces NORTH toward road.
-             */
             int plotMaxZ =
                     plotMinZ + PLOT_DEPTH;
 
@@ -421,6 +427,7 @@ public class EarthResidentialGenerator {
 
         Material floorMaterial =
                 getFloorMaterial(houseNumber);
+
 
         /*
          * ========================================================
@@ -472,9 +479,6 @@ public class EarthResidentialGenerator {
                     );
                 }
 
-                /*
-                 * Clear only the actual building footprint.
-                 */
                 for (int y = groundY + 1;
                      y <= groundY + 10;
                      y++) {
@@ -501,6 +505,7 @@ public class EarthResidentialGenerator {
                 );
             }
         }
+
 
         /*
          * ========================================================
@@ -575,6 +580,7 @@ public class EarthResidentialGenerator {
             }
         }
 
+
         /*
          * ========================================================
          * GABLE WALLS
@@ -619,6 +625,7 @@ public class EarthResidentialGenerator {
                 );
             }
         }
+
 
         /*
          * ========================================================
@@ -680,6 +687,7 @@ public class EarthResidentialGenerator {
                 centerZ
         );
 
+
         /*
          * ========================================================
          * FRONT DOOR
@@ -726,6 +734,7 @@ public class EarthResidentialGenerator {
                         : BlockFace.NORTH
         );
 
+
         /*
          * ========================================================
          * PITCHED ROOF
@@ -739,12 +748,10 @@ public class EarthResidentialGenerator {
             int distanceFromEdge =
                     Math.min(
                             Math.abs(
-                                    worldX
-                                            - (houseMinX - 1)
+                                    worldX - (houseMinX - 1)
                             ),
                             Math.abs(
-                                    worldX
-                                            - (houseMaxX + 1)
+                                    worldX - (houseMaxX + 1)
                             )
                     );
 
@@ -766,6 +773,7 @@ public class EarthResidentialGenerator {
                 );
             }
         }
+
 
         /*
          * ========================================================
@@ -803,6 +811,7 @@ public class EarthResidentialGenerator {
                 roadCenterZ
         );
 
+
         /*
          * ========================================================
          * BASIC FINISHED INTERIOR
@@ -821,6 +830,7 @@ public class EarthResidentialGenerator {
                 houseNumber
         );
     }
+
 
     /*
      * ============================================================
@@ -1022,6 +1032,7 @@ public class EarthResidentialGenerator {
         }
     }
 
+
     /*
      * ============================================================
      * WALKWAY
@@ -1040,10 +1051,10 @@ public class EarthResidentialGenerator {
 
         if (northSide) {
 
-            int sidewalkZ =
+            int borderZ =
                     roadCenterZ + ROAD_HALF_WIDTH + 1;
 
-            for (int z = sidewalkZ + 1;
+            for (int z = borderZ + 1;
                  z < porchZ;
                  z++) {
 
@@ -1059,10 +1070,10 @@ public class EarthResidentialGenerator {
 
         } else {
 
-            int sidewalkZ =
+            int borderZ =
                     roadCenterZ - ROAD_HALF_WIDTH - 1;
 
-            for (int z = sidewalkZ - 1;
+            for (int z = borderZ - 1;
                  z > porchZ;
                  z--) {
 
@@ -1077,6 +1088,7 @@ public class EarthResidentialGenerator {
             }
         }
     }
+
 
     /*
      * ============================================================
@@ -1140,6 +1152,7 @@ public class EarthResidentialGenerator {
         );
     }
 
+
     /*
      * ============================================================
      * HOUSE MATERIAL VARIATION
@@ -1166,6 +1179,7 @@ public class EarthResidentialGenerator {
         };
     }
 
+
     private static Material getRoofMaterial(
             int houseNumber
     ) {
@@ -1183,6 +1197,7 @@ public class EarthResidentialGenerator {
         };
     }
 
+
     private static Material getFloorMaterial(
             int houseNumber
     ) {
@@ -1199,6 +1214,7 @@ public class EarthResidentialGenerator {
                     Material.SPRUCE_PLANKS;
         };
     }
+
 
     /*
      * ============================================================
@@ -1235,6 +1251,7 @@ public class EarthResidentialGenerator {
                 Material.GLASS_PANE
         );
     }
+
 
     /*
      * ============================================================
@@ -1299,6 +1316,7 @@ public class EarthResidentialGenerator {
         }
     }
 
+
     /*
      * ============================================================
      * NATURAL USGS TERRAIN HEIGHT
@@ -1332,6 +1350,7 @@ public class EarthResidentialGenerator {
                 elevationMeters
         );
     }
+
 
     /*
      * ============================================================
@@ -1374,6 +1393,7 @@ public class EarthResidentialGenerator {
         );
     }
 
+
     /*
      * ============================================================
      * CHUNK CHECK
@@ -1392,6 +1412,7 @@ public class EarthResidentialGenerator {
                 && worldZ >= chunkMinZ
                 && worldZ <= chunkMinZ + 15;
     }
+
 
     /*
      * ============================================================
@@ -1436,6 +1457,7 @@ public class EarthResidentialGenerator {
                 material
         );
     }
+
 
     /*
      * ============================================================
