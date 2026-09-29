@@ -312,7 +312,7 @@ public class EarthResidentialGenerator {
      * ============================================================
      */
 
-    private static void generateHome(
+    public static void generateHome(
             ChunkData chunkData,
             int chunkMinX,
             int chunkMinZ,
