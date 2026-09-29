@@ -1,7 +1,6 @@
 package com.earthbound;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.UUID;
@@ -18,20 +17,31 @@ public class EarthEconomy {
 
     private static YamlConfiguration data;
 
+
     private static HashMap<UUID, Double> balances =
             new HashMap<>();
 
 
 
-    public static void setup(EarthBound earthBound) {
+    /*
+     * ============================================================
+     * START ECONOMY SYSTEM
+     * ============================================================
+     */
+
+    public static void setup(
+            EarthBound earthBound
+    ) {
+
 
         plugin = earthBound;
 
 
-        file = new File(
-                plugin.getDataFolder(),
-                "economy.yml"
-        );
+        file =
+                new File(
+                        plugin.getDataFolder(),
+                        "economy.yml"
+                );
 
 
         if (!plugin.getDataFolder().exists()) {
@@ -57,14 +67,24 @@ public class EarthEconomy {
 
 
         data =
-                YamlConfiguration.loadConfiguration(file);
+                YamlConfiguration
+                        .loadConfiguration(
+                                file
+                        );
 
 
         loadBalances();
 
+
     }
 
 
+
+    /*
+     * ============================================================
+     * LOAD SAVED MONEY
+     * ============================================================
+     */
 
     private static void loadBalances() {
 
@@ -74,16 +94,20 @@ public class EarthEconomy {
 
 
             UUID uuid =
-                    UUID.fromString(key);
+                    UUID.fromString(
+                            key
+                    );
 
 
-            double money =
-                    data.getDouble(key);
+            double amount =
+                    data.getDouble(
+                            key
+                    );
 
 
             balances.put(
                     uuid,
-                    money
+                    amount
             );
 
         }
@@ -91,6 +115,12 @@ public class EarthEconomy {
     }
 
 
+
+    /*
+     * ============================================================
+     * SAVE MONEY
+     * ============================================================
+     */
 
     public static void save() {
 
@@ -109,7 +139,9 @@ public class EarthEconomy {
 
         try {
 
-            data.save(file);
+            data.save(
+                    file
+            );
 
         } catch (IOException e) {
 
@@ -121,14 +153,23 @@ public class EarthEconomy {
 
 
 
+    /*
+     * ============================================================
+     * CREATE PLAYER ACCOUNT
+     * ============================================================
+     */
+
     public static void createAccount(
             Player player
     ) {
 
 
-        if (!balances.containsKey(
-                player.getUniqueId()
-        )) {
+        UUID uuid =
+                player.getUniqueId();
+
+
+
+        if (!balances.containsKey(uuid)) {
 
 
             double startingMoney =
@@ -140,7 +181,7 @@ public class EarthEconomy {
 
 
             balances.put(
-                    player.getUniqueId(),
+                    uuid,
                     startingMoney
             );
 
@@ -153,16 +194,114 @@ public class EarthEconomy {
 
 
 
+    /*
+     * ============================================================
+     * GET BALANCE
+     * ============================================================
+     */
+
     public static double getBalance(
             Player player
     ) {
 
-        createAccount(player);
+
+        createAccount(
+                player
+        );
 
 
         return balances.get(
                 player.getUniqueId()
         );
+
+    }
+
+
+
+    /*
+     * ============================================================
+     * ADD MONEY
+     * ============================================================
+     */
+
+    public static void addMoney(
+            Player player,
+            double amount
+    ) {
+
+
+        createAccount(
+                player
+        );
+
+
+        UUID uuid =
+                player.getUniqueId();
+
+
+
+        double current =
+                balances.get(uuid);
+
+
+
+        balances.put(
+                uuid,
+                current + amount
+        );
+
+
+        save();
+
+    }
+
+
+
+    /*
+     * ============================================================
+     * REMOVE MONEY
+     * ============================================================
+     */
+
+    public static boolean removeMoney(
+            Player player,
+            double amount
+    ) {
+
+
+        createAccount(
+                player
+        );
+
+
+        UUID uuid =
+                player.getUniqueId();
+
+
+
+        double current =
+                balances.get(uuid);
+
+
+
+        if (current < amount) {
+
+            return false;
+
+        }
+
+
+
+        balances.put(
+                uuid,
+                current - amount
+        );
+
+
+        save();
+
+
+        return true;
 
     }
 
