@@ -33,12 +33,10 @@ public class EarthEconomyCommand implements CommandExecutor {
                 (Player) sender;
 
 
-
         double balance =
                 EarthEconomy.getBalance(
                         player
                 );
-
 
 
         player.sendMessage(
