@@ -1,0 +1,10 @@
+world:
+  hostile-mobs: false
+  nether: false
+  end: false
+
+player:
+  hunger-rate: 0.5
+
+economy:
+  starting-money: 100000
