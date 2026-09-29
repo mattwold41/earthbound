@@ -753,7 +753,7 @@ public class EarthResidentialGenerator {
             );
         }
 
-        generateWalkway(
+            generateWalkway(
                 chunkData,
                 chunkMinX,
                 chunkMinZ,
