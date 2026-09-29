@@ -30,6 +30,7 @@ public class EarthBound extends JavaPlugin {
         );
 
 
+
         /*
          * ========================================================
          * LOAD CONFIGURATION
@@ -120,10 +121,55 @@ public class EarthBound extends JavaPlugin {
         EarthEconomy.setup(this);
 
 
-        getCommand("balance")
-                .setExecutor(
-                        new EarthEconomyCommand()
-                );
+
+        if (getCommand("balance") != null) {
+
+
+            getCommand("balance")
+                    .setExecutor(
+                            new EarthEconomyCommand()
+                    );
+
+
+            getLogger().info(
+                    "Balance command registered!"
+            );
+
+        }
+
+
+
+        /*
+         * ========================================================
+         * STORE SYSTEM
+         * ========================================================
+         */
+
+        EarthStore.setup();
+
+
+
+        if (getCommand("store") != null) {
+
+
+            getCommand("store")
+                    .setExecutor(
+                            new EarthStoreCommand()
+                    );
+
+
+            getLogger().info(
+                    "Store command registered!"
+            );
+
+        } else {
+
+
+            getLogger().warning(
+                    "Store command missing from plugin.yml!"
+            );
+
+        }
 
 
 
@@ -176,6 +222,7 @@ public class EarthBound extends JavaPlugin {
         EarthTerrainDownloader.loadGuemesIsland();
 
 
+
         if (EarthTerrainDownloader.isLoaded()) {
 
 
@@ -205,6 +252,7 @@ public class EarthBound extends JavaPlugin {
                 EarthWaterData.loadGuemesWaterMask();
 
 
+
         if (waterLoaded) {
 
 
@@ -232,6 +280,7 @@ public class EarthBound extends JavaPlugin {
 
         boolean roadsLoaded =
                 EarthRoadData.loadGuemesRoadMask();
+
 
 
         if (roadsLoaded) {
@@ -282,6 +331,7 @@ public class EarthBound extends JavaPlugin {
                                 return;
 
                             }
+
 
 
                             Location spawn =
