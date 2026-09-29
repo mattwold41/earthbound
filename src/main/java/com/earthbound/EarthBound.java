@@ -10,10 +10,6 @@ public class EarthBound extends JavaPlugin {
 
     /*
      * GUEMES ISLAND SPAWN
-     *
-     * Temporary approved spawn location.
-     * We can fine-tune this later when the
-     * ferry/waterfront area is completed.
      */
     private static final double GUEMES_SPAWN_X = -654.0;
     private static final double GUEMES_SPAWN_Y = 86.0;
@@ -29,8 +25,69 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * Load real USGS elevation data.
+         * ========================================================
+         * LOAD EARTHBOUND CONFIGURATION
+         * ========================================================
          */
+
+        saveDefaultConfig();
+
+        boolean hostileMobs =
+                getConfig().getBoolean(
+                        "world.hostile-mobs",
+                        false
+                );
+
+        boolean netherEnabled =
+                getConfig().getBoolean(
+                        "world.nether",
+                        false
+                );
+
+        boolean endEnabled =
+                getConfig().getBoolean(
+                        "world.end",
+                        false
+                );
+
+        double hungerRate =
+                getConfig().getDouble(
+                        "player.hunger-rate",
+                        0.5
+                );
+
+
+        getLogger().info(
+                "EarthBound Settings:"
+        );
+
+        getLogger().info(
+                "Hostile mobs: "
+                        + hostileMobs
+        );
+
+        getLogger().info(
+                "Nether enabled: "
+                        + netherEnabled
+        );
+
+        getLogger().info(
+                "End enabled: "
+                        + endEnabled
+        );
+
+        getLogger().info(
+                "Hunger rate: "
+                        + hungerRate
+        );
+
+
+        /*
+         * ========================================================
+         * LOAD REAL USGS ELEVATION DATA
+         * ========================================================
+         */
+
         EarthTerrainDownloader.loadGuemesIsland();
 
 
@@ -50,8 +107,11 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * Load real vector water polygons.
+         * ========================================================
+         * LOAD WATER DATA
+         * ========================================================
          */
+
         boolean waterLoaded =
                 EarthWaterData.loadGuemesWaterMask();
 
@@ -72,9 +132,11 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * Load real Census TIGERweb
-         * road centerlines.
+         * ========================================================
+         * LOAD ROAD DATA
+         * ========================================================
          */
+
         boolean roadsLoaded =
                 EarthRoadData.loadGuemesRoadMask();
 
@@ -95,11 +157,11 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * Set the Guemes Island world spawn.
-         *
-         * This runs after the world has finished
-         * loading so the EarthBound world exists.
+         * ========================================================
+         * SET GUEMES SPAWN
+         * ========================================================
          */
+
         Bukkit.getScheduler().runTask(
                 this,
                 () -> {
@@ -109,6 +171,7 @@ public class EarthBound extends JavaPlugin {
                                     "earthbound"
                             );
 
+
                     if (world == null) {
 
                         getLogger().warning(
@@ -117,6 +180,7 @@ public class EarthBound extends JavaPlugin {
                         );
 
                         return;
+
                     }
 
 
@@ -129,9 +193,6 @@ public class EarthBound extends JavaPlugin {
                             );
 
 
-                    /*
-                     * Set Minecraft's world spawn.
-                     */
                     world.setSpawnLocation(
                             spawn
                     );
@@ -145,6 +206,7 @@ public class EarthBound extends JavaPlugin {
                                     + ", "
                                     + GUEMES_SPAWN_Z
                     );
+
                 }
         );
 
@@ -154,7 +216,7 @@ public class EarthBound extends JavaPlugin {
         );
 
         getLogger().info(
-                "EarthBound systems loaded!"
+                "EarthBound core configuration loaded!"
         );
 
     }
