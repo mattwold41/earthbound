@@ -1,27 +1,37 @@
 package com.earthbound;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.Bisected;
+import org.bukkit.block.data.type.Door;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * EARTHBOUND - GUEMES RESIDENTIAL TEST BLOCK
+     * EARTHBOUND - GUEMES RESIDENTIAL AREA A
      * ============================================================
      *
-     * Area A
+     * VERSION 6:
      *
-     * VERSION 5:
-     * - Keeps existing natural USGS terrain.
-     * - Keeps neighborhood road and sidewalks.
-     * - Keeps all 8 test property markers.
-     * - Keeps ONE test starter house.
-     * - Fills the front and rear gable walls beneath the roof.
-     * - House uses a small foundation instead of grading terrain.
+     * - Preserves natural USGS terrain.
+     * - Keeps the approved neighborhood road.
+     * - Keeps sidewalks.
+     * - Keeps all 8 property boundaries.
+     * - Automatically generates a home on all 8 properties.
+     * - Homes on both sides face the neighborhood road.
+     * - Preserves the approved pitched-roof/gable design.
+     * - Adds basic finished interiors.
+     * - Adds simple house-to-house visual variation.
+     * - Uses foundations instead of flattening entire properties.
      *
      * IMPORTANT:
      * This class does NOT modify the General Store.
+     *
+     * Actual NPC residents will be handled later by the
+     * EarthBound NPC/property system.
      * ============================================================
      */
 
@@ -38,6 +48,9 @@ public class EarthResidentialGenerator {
     private static final int PLOT_SPACING = 4;
     private static final int PLOTS_PER_SIDE = 4;
 
+    private static final int HOUSE_WIDTH = 11;
+    private static final int HOUSE_DEPTH = 13;
+
     private static final Material ROAD_MATERIAL =
             Material.GRAY_CONCRETE;
 
@@ -47,21 +60,12 @@ public class EarthResidentialGenerator {
     private static final Material PLOT_MARKER =
             Material.YELLOW_CONCRETE;
 
-    /*
-     * ============================================================
-     * FIRST TEST HOUSE
-     * ============================================================
-     */
-
-    private static final int TEST_HOUSE_WIDTH = 11;
-    private static final int TEST_HOUSE_DEPTH = 13;
-
     private EarthResidentialGenerator() {
     }
 
     /*
      * ============================================================
-     * MAIN GENERATION METHOD
+     * MAIN GENERATION
      * ============================================================
      */
 
@@ -97,7 +101,7 @@ public class EarthResidentialGenerator {
                 chunkMinZ
         );
 
-        generateFirstTestHouse(
+        generateAllHomes(
                 chunkData,
                 chunkMinX,
                 chunkMinZ
@@ -126,32 +130,15 @@ public class EarthResidentialGenerator {
              worldX <= roadEndX;
              worldX++) {
 
-            for (int worldZ =
-                 CENTER_Z - ROAD_HALF_WIDTH;
+            for (int worldZ = CENTER_Z - ROAD_HALF_WIDTH;
                  worldZ <= CENTER_Z + ROAD_HALF_WIDTH;
                  worldZ++) {
 
-                if (!belongsToChunk(
-                        worldX,
-                        worldZ,
-                        chunkMinX,
-                        chunkMinZ
-                )) {
-                    continue;
-                }
-
-                int surfaceY =
-                        getNaturalSurfaceHeight(
-                                worldX,
-                                worldZ
-                        );
-
-                setWorldBlock(
+                placeNaturalSurfaceBlock(
                         chunkData,
                         chunkMinX,
                         chunkMinZ,
                         worldX,
-                        surfaceY,
                         worldZ,
                         ROAD_MATERIAL
                 );
@@ -190,7 +177,7 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * HOUSE PLOTS
+     * PROPERTY PLOTS
      * ============================================================
      */
 
@@ -202,8 +189,7 @@ public class EarthResidentialGenerator {
 
         int totalWidth =
                 (PLOTS_PER_SIDE * PLOT_WIDTH)
-                        + ((PLOTS_PER_SIDE - 1)
-                        * PLOT_SPACING);
+                        + ((PLOTS_PER_SIDE - 1) * PLOT_SPACING);
 
         int firstPlotX =
                 CENTER_X - (totalWidth / 2);
@@ -229,20 +215,14 @@ public class EarthResidentialGenerator {
             int maxX =
                     minX + PLOT_WIDTH;
 
-            int northMinZ =
-                    northPlotMinZ;
-
-            int northMaxZ =
-                    northMinZ + PLOT_DEPTH;
-
             markPlot(
                     chunkData,
                     chunkMinX,
                     chunkMinZ,
                     minX,
                     maxX,
-                    northMinZ,
-                    northMaxZ
+                    northPlotMinZ,
+                    northPlotMinZ + PLOT_DEPTH
             );
 
             markPlot(
@@ -259,11 +239,11 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * FIRST TEST HOUSE
+     * GENERATE ALL 8 HOMES
      * ============================================================
      */
 
-    private static void generateFirstTestHouse(
+    private static void generateAllHomes(
             ChunkData chunkData,
             int chunkMinX,
             int chunkMinZ
@@ -271,45 +251,137 @@ public class EarthResidentialGenerator {
 
         int totalWidth =
                 (PLOTS_PER_SIDE * PLOT_WIDTH)
-                        + ((PLOTS_PER_SIDE - 1)
-                        * PLOT_SPACING);
+                        + ((PLOTS_PER_SIDE - 1) * PLOT_SPACING);
 
         int firstPlotX =
                 CENTER_X - (totalWidth / 2);
 
-        int plotMinX = firstPlotX;
-
-        int plotMinZ =
+        int northPlotMinZ =
                 CENTER_Z + ROAD_HALF_WIDTH + 5;
+
+        int southPlotMaxZ =
+                CENTER_Z - ROAD_HALF_WIDTH - 5;
+
+        int southPlotMinZ =
+                southPlotMaxZ - PLOT_DEPTH;
+
+        for (int plot = 0;
+             plot < PLOTS_PER_SIDE;
+             plot++) {
+
+            int plotMinX =
+                    firstPlotX
+                            + plot
+                            * (PLOT_WIDTH + PLOT_SPACING);
+
+            /*
+             * NORTH SIDE
+             *
+             * Road is SOUTH of these houses.
+             */
+            generateHome(
+                    chunkData,
+                    chunkMinX,
+                    chunkMinZ,
+                    plotMinX,
+                    northPlotMinZ,
+                    true,
+                    plot
+            );
+
+            /*
+             * SOUTH SIDE
+             *
+             * Road is NORTH of these houses.
+             */
+            generateHome(
+                    chunkData,
+                    chunkMinX,
+                    chunkMinZ,
+                    plotMinX,
+                    southPlotMinZ,
+                    false,
+                    plot + PLOTS_PER_SIDE
+            );
+        }
+    }
+
+    /*
+     * ============================================================
+     * PROCEDURAL HOME
+     * ============================================================
+     */
+
+    private static void generateHome(
+            ChunkData chunkData,
+            int chunkMinX,
+            int chunkMinZ,
+            int plotMinX,
+            int plotMinZ,
+            boolean northSide,
+            int houseNumber
+    ) {
 
         int houseMinX =
                 plotMinX
-                        + ((PLOT_WIDTH - TEST_HOUSE_WIDTH) / 2);
+                        + ((PLOT_WIDTH - HOUSE_WIDTH) / 2);
 
         int houseMaxX =
-                houseMinX + TEST_HOUSE_WIDTH - 1;
+                houseMinX + HOUSE_WIDTH - 1;
 
-        int houseMinZ =
-                plotMinZ + 5;
+        int houseMinZ;
+        int houseMaxZ;
 
-        int houseMaxZ =
-                houseMinZ + TEST_HOUSE_DEPTH - 1;
+        if (northSide) {
 
-        int centerHouseX =
+            /*
+             * Front faces SOUTH toward road.
+             */
+            houseMinZ =
+                    plotMinZ + 5;
+
+            houseMaxZ =
+                    houseMinZ + HOUSE_DEPTH - 1;
+
+        } else {
+
+            /*
+             * Front faces NORTH toward road.
+             */
+            int plotMaxZ =
+                    plotMinZ + PLOT_DEPTH;
+
+            houseMaxZ =
+                    plotMaxZ - 5;
+
+            houseMinZ =
+                    houseMaxZ - HOUSE_DEPTH + 1;
+        }
+
+        int centerX =
                 (houseMinX + houseMaxX) / 2;
 
-        int centerHouseZ =
+        int centerZ =
                 (houseMinZ + houseMaxZ) / 2;
 
         int groundY =
                 getNaturalSurfaceHeight(
-                        centerHouseX,
-                        centerHouseZ
+                        centerX,
+                        centerZ
                 );
+
+        Material wallMaterial =
+                getWallMaterial(houseNumber);
+
+        Material roofMaterial =
+                getRoofMaterial(houseNumber);
+
+        Material floorMaterial =
+                getFloorMaterial(houseNumber);
 
         /*
          * ========================================================
-         * FOUNDATION
+         * FOUNDATION + INTERIOR CLEARING
          * ========================================================
          */
 
@@ -357,8 +429,11 @@ public class EarthResidentialGenerator {
                     );
                 }
 
+                /*
+                 * Clear only the actual building footprint.
+                 */
                 for (int y = groundY + 1;
-                     y <= groundY + 9;
+                     y <= groundY + 10;
                      y++) {
 
                     setWorldBlock(
@@ -379,7 +454,7 @@ public class EarthResidentialGenerator {
                         worldX,
                         groundY + 1,
                         worldZ,
-                        Material.SPRUCE_PLANKS
+                        floorMaterial
                 );
             }
         }
@@ -410,13 +485,11 @@ public class EarthResidentialGenerator {
                 boolean northWall =
                         worldZ == houseMaxZ;
 
-                boolean exterior =
-                        westWall
-                                || eastWall
-                                || southWall
-                                || northWall;
+                if (!(westWall
+                        || eastWall
+                        || southWall
+                        || northWall)) {
 
-                if (!exterior) {
                     continue;
                 }
 
@@ -431,7 +504,7 @@ public class EarthResidentialGenerator {
                             worldX,
                             y,
                             worldZ,
-                            Material.WHITE_TERRACOTTA
+                            wallMaterial
                     );
                 }
 
@@ -461,14 +534,9 @@ public class EarthResidentialGenerator {
 
         /*
          * ========================================================
-         * FRONT AND REAR GABLE WALLS
+         * GABLE WALLS
          * ========================================================
-         *
-         * Fill the triangular space beneath the pitched roof.
          */
-
-        int houseCenterX =
-                (houseMinX + houseMaxX) / 2;
 
         for (int worldX = houseMinX;
              worldX <= houseMaxX;
@@ -494,7 +562,7 @@ public class EarthResidentialGenerator {
                         worldX,
                         y,
                         houseMinZ,
-                        Material.WHITE_TERRACOTTA
+                        wallMaterial
                 );
 
                 setWorldBlock(
@@ -504,39 +572,10 @@ public class EarthResidentialGenerator {
                         worldX,
                         y,
                         houseMaxZ,
-                        Material.WHITE_TERRACOTTA
+                        wallMaterial
                 );
             }
         }
-
-        /*
-         * ========================================================
-         * FRONT DOOR - SOUTH / ROAD SIDE
-         * ========================================================
-         */
-
-        int doorX =
-                houseCenterX;
-
-        setWorldBlock(
-                chunkData,
-                chunkMinX,
-                chunkMinZ,
-                doorX,
-                groundY + 2,
-                houseMinZ,
-                Material.AIR
-        );
-
-        setWorldBlock(
-                chunkData,
-                chunkMinX,
-                chunkMinZ,
-                doorX,
-                groundY + 3,
-                houseMinZ,
-                Material.AIR
-        );
 
         /*
          * ========================================================
@@ -586,7 +625,7 @@ public class EarthResidentialGenerator {
                 chunkMinZ,
                 houseMinX,
                 groundY + 3,
-                houseMinZ + 5
+                centerZ
         );
 
         placeWindow(
@@ -595,7 +634,56 @@ public class EarthResidentialGenerator {
                 chunkMinZ,
                 houseMaxX,
                 groundY + 3,
-                houseMinZ + 5
+                centerZ
+        );
+
+        /*
+         * ========================================================
+         * FRONT DOOR
+         * ========================================================
+         */
+
+        int doorX =
+                centerX;
+
+        int frontZ =
+                northSide
+                        ? houseMinZ
+                        : houseMaxZ;
+
+        /*
+         * Clear doorway.
+         */
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                doorX,
+                groundY + 2,
+                frontZ,
+                Material.AIR
+        );
+
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                doorX,
+                groundY + 3,
+                frontZ,
+                Material.AIR
+        );
+
+        placeDoor(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                doorX,
+                groundY + 2,
+                frontZ,
+                northSide
+                        ? BlockFace.SOUTH
+                        : BlockFace.NORTH
         );
 
         /*
@@ -610,8 +698,14 @@ public class EarthResidentialGenerator {
 
             int distanceFromEdge =
                     Math.min(
-                            Math.abs(worldX - (houseMinX - 1)),
-                            Math.abs(worldX - (houseMaxX + 1))
+                            Math.abs(
+                                    worldX
+                                            - (houseMinX - 1)
+                            ),
+                            Math.abs(
+                                    worldX
+                                            - (houseMaxX + 1)
+                            )
                     );
 
             int roofY =
@@ -628,19 +722,21 @@ public class EarthResidentialGenerator {
                         worldX,
                         roofY,
                         worldZ,
-                        Material.DARK_OAK_PLANKS
+                        roofMaterial
                 );
             }
         }
 
         /*
          * ========================================================
-         * FRONT PORCH
+         * FRONT PORCH + WALKWAY
          * ========================================================
          */
 
         int porchZ =
-                houseMinZ - 1;
+                northSide
+                        ? houseMinZ - 1
+                        : houseMaxZ + 1;
 
         for (int x = doorX - 1;
              x <= doorX + 1;
@@ -653,32 +749,447 @@ public class EarthResidentialGenerator {
                     x,
                     groundY + 1,
                     porchZ,
-                    Material.SPRUCE_PLANKS
+                    floorMaterial
             );
         }
+
+        generateWalkway(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                doorX,
+                porchZ,
+                northSide
+        );
 
         /*
          * ========================================================
-         * WALKWAY
+         * BASIC FINISHED INTERIOR
          * ========================================================
          */
 
-        int sidewalkZ =
-                CENTER_Z + ROAD_HALF_WIDTH + 1;
+        generateInterior(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                houseMinX,
+                houseMaxX,
+                houseMinZ,
+                houseMaxZ,
+                groundY,
+                houseNumber
+        );
+    }
 
-        for (int z = sidewalkZ + 1;
-             z < porchZ;
-             z++) {
+    /*
+     * ============================================================
+     * BASIC INTERIOR
+     * ============================================================
+     *
+     * These are simple starter-home furnishings.
+     *
+     * The future NPC system can recognize these homes as
+     * residential properties without requiring world regeneration.
+     * ============================================================
+     */
 
-            placeNaturalSurfaceBlock(
+    private static void generateInterior(
+            ChunkData chunkData,
+            int chunkMinX,
+            int chunkMinZ,
+            int minX,
+            int maxX,
+            int minZ,
+            int maxZ,
+            int groundY,
+            int houseNumber
+    ) {
+
+        /*
+         * Kitchen/work area.
+         */
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                minX + 1,
+                groundY + 2,
+                minZ + 2,
+                Material.CRAFTING_TABLE
+        );
+
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                minX + 1,
+                groundY + 2,
+                minZ + 3,
+                Material.FURNACE
+        );
+
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                minX + 1,
+                groundY + 2,
+                minZ + 4,
+                Material.BARREL
+        );
+
+        /*
+         * Storage.
+         */
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                maxX - 1,
+                groundY + 2,
+                maxZ - 2,
+                Material.BARREL
+        );
+
+        /*
+         * Bookshelf / living area.
+         */
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                maxX - 1,
+                groundY + 2,
+                minZ + 3,
+                Material.BOOKSHELF
+        );
+
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                maxX - 1,
+                groundY + 3,
+                minZ + 3,
+                Material.BOOKSHELF
+        );
+
+        /*
+         * Small table.
+         */
+        int tableX =
+                (minX + maxX) / 2;
+
+        int tableZ =
+                (minZ + maxZ) / 2;
+
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                tableX,
+                groundY + 2,
+                tableZ,
+                Material.SPRUCE_FENCE
+        );
+
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                tableX,
+                groundY + 3,
+                tableZ,
+                Material.SPRUCE_PRESSURE_PLATE
+        );
+
+        /*
+         * Simple seating.
+         */
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                tableX - 1,
+                groundY + 2,
+                tableZ,
+                Material.SPRUCE_STAIRS
+        );
+
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                tableX + 1,
+                groundY + 2,
+                tableZ,
+                Material.SPRUCE_STAIRS
+        );
+
+        /*
+         * Bedroom/storage corner.
+         *
+         * Beds themselves will eventually be tied into household
+         * behavior. For now this provides a finished bedroom area
+         * without creating NPC logic inside the terrain generator.
+         */
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                minX + 2,
+                groundY + 2,
+                maxZ - 2,
+                Material.RED_CARPET
+        );
+
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                minX + 3,
+                groundY + 2,
+                maxZ - 2,
+                Material.RED_CARPET
+        );
+
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                minX + 4,
+                groundY + 2,
+                maxZ - 2,
+                Material.RED_CARPET
+        );
+
+        /*
+         * Interior lighting.
+         */
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                minX + 2,
+                groundY + 5,
+                minZ + 2,
+                Material.GLOWSTONE
+        );
+
+        setWorldBlock(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                maxX - 2,
+                groundY + 5,
+                maxZ - 2,
+                Material.GLOWSTONE
+        );
+
+        /*
+         * Small decorative variation.
+         */
+        if (houseNumber % 2 == 0) {
+
+            setWorldBlock(
                     chunkData,
                     chunkMinX,
                     chunkMinZ,
-                    doorX,
-                    z,
-                    Material.STONE_BRICKS
+                    maxX - 2,
+                    groundY + 2,
+                    minZ + 2,
+                    Material.FLOWER_POT
+            );
+
+        } else {
+
+            setWorldBlock(
+                    chunkData,
+                    chunkMinX,
+                    chunkMinZ,
+                    maxX - 2,
+                    groundY + 2,
+                    minZ + 2,
+                    Material.BOOKSHELF
             );
         }
+    }
+
+    /*
+     * ============================================================
+     * WALKWAY
+     * ============================================================
+     */
+
+    private static void generateWalkway(
+            ChunkData chunkData,
+            int chunkMinX,
+            int chunkMinZ,
+            int doorX,
+            int porchZ,
+            boolean northSide
+    ) {
+
+        if (northSide) {
+
+            int sidewalkZ =
+                    CENTER_Z + ROAD_HALF_WIDTH + 1;
+
+            for (int z = sidewalkZ + 1;
+                 z < porchZ;
+                 z++) {
+
+                placeNaturalSurfaceBlock(
+                        chunkData,
+                        chunkMinX,
+                        chunkMinZ,
+                        doorX,
+                        z,
+                        Material.STONE_BRICKS
+                );
+            }
+
+        } else {
+
+            int sidewalkZ =
+                    CENTER_Z - ROAD_HALF_WIDTH - 1;
+
+            for (int z = sidewalkZ - 1;
+                 z > porchZ;
+                 z--) {
+
+                placeNaturalSurfaceBlock(
+                        chunkData,
+                        chunkMinX,
+                        chunkMinZ,
+                        doorX,
+                        z,
+                        Material.STONE_BRICKS
+                );
+            }
+        }
+    }
+
+    /*
+     * ============================================================
+     * DOOR HELPER
+     * ============================================================
+     */
+
+    private static void placeDoor(
+            ChunkData chunkData,
+            int chunkMinX,
+            int chunkMinZ,
+            int worldX,
+            int worldY,
+            int worldZ,
+            BlockFace facing
+    ) {
+
+        if (!belongsToChunk(
+                worldX,
+                worldZ,
+                chunkMinX,
+                chunkMinZ
+        )) {
+            return;
+        }
+
+        Door bottom =
+                (Door) Bukkit.createBlockData(
+                        Material.SPRUCE_DOOR
+                );
+
+        bottom.setFacing(facing);
+        bottom.setHalf(Bisected.Half.BOTTOM);
+
+        Door top =
+                (Door) Bukkit.createBlockData(
+                        Material.SPRUCE_DOOR
+                );
+
+        top.setFacing(facing);
+        top.setHalf(Bisected.Half.TOP);
+
+        setWorldBlockData(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                worldX,
+                worldY,
+                worldZ,
+                bottom
+        );
+
+        setWorldBlockData(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                worldX,
+                worldY + 1,
+                worldZ,
+                top
+        );
+    }
+
+    /*
+     * ============================================================
+     * HOUSE MATERIAL VARIATION
+     * ============================================================
+     */
+
+    private static Material getWallMaterial(
+            int houseNumber
+    ) {
+
+        return switch (houseNumber % 4) {
+
+            case 1 ->
+                    Material.LIGHT_GRAY_TERRACOTTA;
+
+            case 2 ->
+                    Material.WHITE_CONCRETE;
+
+            case 3 ->
+                    Material.SANDSTONE;
+
+            default ->
+                    Material.WHITE_TERRACOTTA;
+        };
+    }
+
+    private static Material getRoofMaterial(
+            int houseNumber
+    ) {
+
+        return switch (houseNumber % 3) {
+
+            case 1 ->
+                    Material.SPRUCE_PLANKS;
+
+            case 2 ->
+                    Material.DARK_OAK_PLANKS;
+
+            default ->
+                    Material.DARK_OAK_PLANKS;
+        };
+    }
+
+    private static Material getFloorMaterial(
+            int houseNumber
+    ) {
+
+        return switch (houseNumber % 3) {
+
+            case 1 ->
+                    Material.OAK_PLANKS;
+
+            case 2 ->
+                    Material.BIRCH_PLANKS;
+
+            default ->
+                    Material.SPRUCE_PLANKS;
+        };
     }
 
     /*
@@ -876,7 +1387,7 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * WORLD BLOCK -> CHUNK BLOCK
+     * MATERIAL BLOCK HELPER
      * ============================================================
      */
 
@@ -915,6 +1426,50 @@ public class EarthResidentialGenerator {
                 y,
                 localZ,
                 material
+        );
+    }
+
+    /*
+     * ============================================================
+     * BLOCK DATA HELPER
+     * ============================================================
+     */
+
+    private static void setWorldBlockData(
+            ChunkData chunkData,
+            int chunkMinX,
+            int chunkMinZ,
+            int worldX,
+            int y,
+            int worldZ,
+            org.bukkit.block.data.BlockData blockData
+    ) {
+
+        if (y < chunkData.getMinHeight()
+                || y >= chunkData.getMaxHeight()) {
+
+            return;
+        }
+
+        int localX =
+                worldX - chunkMinX;
+
+        int localZ =
+                worldZ - chunkMinZ;
+
+        if (localX < 0
+                || localX > 15
+                || localZ < 0
+                || localZ > 15) {
+
+            return;
+        }
+
+        chunkData.setBlock(
+                localX,
+                y,
+                localZ,
+                blockData
         );
     }
 }
