@@ -2,6 +2,8 @@ package com.earthbound;
 
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.type.Slab;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
@@ -14,46 +16,66 @@ public class EarthGenerator extends ChunkGenerator {
      * EARTHBOUND ROAD SETTINGS
      * ============================================================
      *
-     * Standard local-road design:
+     * FINAL ROAD STANDARD
      *
-     * BORDER | ROAD | ROAD | ROAD | BORDER
+     * LOCAL:
+     * Stone Brick | Polished Blackstone Bricks x5 | Stone Brick
      *
-     * Center driving surface = 3 blocks
-     * Border = 1 block on each side
-     * Total = approximately 5 blocks
+     * HIGHWAY:
+     * Stone Brick | Polished Blackstone Bricks x8 | Stone Brick
+     *
+     * FREEWAY:
+     * Stone Brick | Polished Blackstone Bricks x10 | Stone Brick
+     *
+     * The widths stored in EarthRoadData are the driving-surface
+     * widths only.
+     *
+     * One additional block is used on each side for the
+     * Stone Brick border.
      */
 
-    private static final int ROAD_SMOOTH_RADIUS = 2;
+    private static final int ROAD_SMOOTH_RADIUS = 3;
 
     /*
-     * Distance from the real-world road centerline.
-     *
-     * Minecraft scale in this test region is close enough
-     * to use these meter distances as block-width targets.
+     * One-block border outside each driving surface.
      */
-
-    private static final double ROAD_SURFACE_RADIUS = 1.5;
-
-    private static final double ROAD_BORDER_RADIUS = 2.5;
+    private static final double ROAD_BORDER_WIDTH = 1.0;
 
 
     /*
-     * Three-block driving surface.
+     * Main road materials.
      */
 
     private static final Material ROAD_SURFACE =
-            Material.GRAY_CONCRETE;
+            Material.POLISHED_BLACKSTONE_BRICKS;
+
+    private static final Material ROAD_SURFACE_SLAB =
+            Material.POLISHED_BLACKSTONE_BRICK_SLAB;
+
+    private static final Material ROAD_BORDER =
+            Material.STONE_BRICKS;
+
+    private static final Material ROAD_BORDER_SLAB =
+            Material.STONE_BRICK_SLAB;
 
 
     /*
-     * Gray border on both sides.
+     * ============================================================
+     * ROAD SLOPE SETTINGS
+     * ============================================================
      *
-     * Smooth stone keeps the border gray while making it
-     * visibly different from the driving surface.
+     * Roads use half-block vertical transitions.
+     *
+     * This is especially useful for Bedrock / Xbox players:
+     * instead of repeatedly encountering full vertical block
+     * faces, the road can rise and fall in half-block increments.
+     *
+     * A larger smoothing radius also prevents the road from
+     * copying every tiny terrain bump.
      */
 
-    private static final Material ROAD_BORDER =
-            Material.SMOOTH_STONE;
+    private static final double HALF_BLOCK =
+            0.5;
 
 
     /*
@@ -62,15 +84,35 @@ public class EarthGenerator extends ChunkGenerator {
      * ============================================================
      */
 
-    private static final double STORE_BLEND_DISTANCE = 32.0;
+    private static final double STORE_BLEND_DISTANCE =
+            32.0;
 
-    private static final double STORE_SLOPE_RUN = 4.0;
+    private static final double STORE_SLOPE_RUN =
+            4.0;
 
 
     public EarthGenerator() {
 
         System.out.println(
                 "=== EARTHBOUND REAL TERRAIN GENERATOR ACTIVE ==="
+        );
+
+        System.out.println(
+                "[EarthBound] Road design: "
+                        + "Polished Blackstone Bricks + Stone Brick borders"
+        );
+
+        System.out.println(
+                "[EarthBound] Road widths: local="
+                        + EarthRoadData.LOCAL_WIDTH
+                        + ", highway="
+                        + EarthRoadData.HIGHWAY_WIDTH
+                        + ", freeway="
+                        + EarthRoadData.FREEWAY_WIDTH
+        );
+
+        System.out.println(
+                "[EarthBound] Half-block road slope transitions enabled."
         );
     }
 
@@ -86,6 +128,7 @@ public class EarthGenerator extends ChunkGenerator {
 
         ChunkData chunkData =
                 createChunkData(world);
+
 
         int chunkMinX =
                 chunkX << 4;
@@ -108,6 +151,7 @@ public class EarthGenerator extends ChunkGenerator {
                  localZ < 16;
                  localZ++) {
 
+
                 int worldX =
                         chunkMinX + localX;
 
@@ -116,8 +160,8 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Convert Minecraft coordinates
-                 * into real Earth coordinates.
+                 * Convert Minecraft coordinates into
+                 * real Earth coordinates.
                  */
 
                 double latitude =
@@ -125,6 +169,7 @@ public class EarthGenerator extends ChunkGenerator {
                                 worldX,
                                 worldZ
                         );
+
 
                 double longitude =
                         EarthCoordinates.getLongitude(
@@ -145,6 +190,7 @@ public class EarthGenerator extends ChunkGenerator {
                                 longitude
                         );
 
+
                 int naturalHeight =
                         EarthElevation.getMinecraftHeight(
                                 elevationMeters
@@ -163,6 +209,7 @@ public class EarthGenerator extends ChunkGenerator {
                                 longitude
                         );
 
+
                 if (water) {
 
                     generateWaterColumn(
@@ -176,7 +223,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Start with natural USGS terrain.
+                 * Start with the real USGS terrain.
                  */
 
                 int terrainHeight =
@@ -187,6 +234,8 @@ public class EarthGenerator extends ChunkGenerator {
                  * =================================================
                  * GENERAL STORE TERRAIN BLEND
                  * =================================================
+                 *
+                 * Preserve the existing approved store terrain.
                  */
 
                 if (EarthBuildingGenerator
@@ -195,9 +244,11 @@ public class EarthGenerator extends ChunkGenerator {
                                 worldZ
                         )) {
 
+
                     int storeHeight =
                             EarthBuildingGenerator
                                     .getGuemesStoreGroundY();
+
 
                     double distance =
                             EarthBuildingGenerator
@@ -208,7 +259,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                     /*
-                     * Keep the actual store foundation flat.
+                     * Actual store foundation stays flat.
                      */
 
                     if (EarthBuildingGenerator
@@ -217,18 +268,18 @@ public class EarthGenerator extends ChunkGenerator {
                                     worldZ
                             )) {
 
+
                         terrainHeight =
                                 storeHeight;
 
+
                     } else {
 
-                        /*
-                         * Smooth terrain transition around store.
-                         */
 
                         double blend =
                                 distance
                                         / STORE_BLEND_DISTANCE;
+
 
                         blend =
                                 Math.max(
@@ -239,12 +290,14 @@ public class EarthGenerator extends ChunkGenerator {
                                         )
                                 );
 
+
                         double smoothBlend =
                                 blend
                                         * blend
                                         * (3.0
                                         - 2.0
                                         * blend);
+
 
                         double blendedHeight =
                                 storeHeight
@@ -262,9 +315,11 @@ public class EarthGenerator extends ChunkGenerator {
                                         )
                                 );
 
+
                         int minimumHeight =
                                 storeHeight
                                         - allowedDifference;
+
 
                         int maximumHeight =
                                 storeHeight
@@ -275,6 +330,7 @@ public class EarthGenerator extends ChunkGenerator {
                                 (int) Math.round(
                                         blendedHeight
                                 );
+
 
                         terrainHeight =
                                 Math.max(
@@ -290,44 +346,26 @@ public class EarthGenerator extends ChunkGenerator {
 
                 /*
                  * =================================================
-                 * NEW EARTHBOUND ROAD DESIGN
+                 * EARTHBOUND ROAD CLASSIFICATION
                  * =================================================
                  *
-                 * Measure distance from this block to the nearest
-                 * real Census/TIGER road centerline.
+                 * Check each real Census/TIGER road class
+                 * separately.
+                 *
+                 * This allows:
+                 *
+                 * Local   = 5 blocks
+                 * Highway = 8 blocks
+                 * Freeway = 10 blocks
+                 *
+                 * Higher classes take priority when roads overlap.
                  */
 
-                double roadDistance =
-                        EarthRoadData
-                                .getDistanceToNearestRoadMeters(
-                                        latitude,
-                                        longitude
-                                );
-
-
-                /*
-                 * Three-block-wide center driving surface.
-                 */
-
-                boolean roadSurface =
-                        roadDistance
-                                <= ROAD_SURFACE_RADIUS;
-
-
-                /*
-                 * One-block gray border outside the road surface.
-                 */
-
-                boolean roadBorder =
-                        roadDistance
-                                > ROAD_SURFACE_RADIUS
-                                && roadDistance
-                                <= ROAD_BORDER_RADIUS;
-
-
-                boolean road =
-                        roadSurface
-                                || roadBorder;
+                RoadInfo roadInfo =
+                        getRoadInfo(
+                                latitude,
+                                longitude
+                        );
 
 
                 /*
@@ -335,10 +373,12 @@ public class EarthGenerator extends ChunkGenerator {
                  * GENERAL STORE ROAD PROTECTION
                  * =================================================
                  *
-                 * Roads are allowed through the large terrain
-                 * blend around the store.
+                 * IMPORTANT:
                  *
-                 * Only the actual store foundation is protected.
+                 * Roads ARE allowed through the large store
+                 * terrain-blend zone.
+                 *
+                 * Only the actual building foundation is protected.
                  */
 
                 if (EarthBuildingGenerator
@@ -347,9 +387,9 @@ public class EarthGenerator extends ChunkGenerator {
                                 worldZ
                         )) {
 
-                    road = false;
-                    roadSurface = false;
-                    roadBorder = false;
+
+                    roadInfo =
+                            RoadInfo.none();
                 }
 
 
@@ -359,18 +399,19 @@ public class EarthGenerator extends ChunkGenerator {
                  * =================================================
                  */
 
-                if (road) {
+                if (roadInfo.isRoad()) {
 
-                    terrainHeight =
-                            getSmoothedRoadHeight(
+
+                    double roadHeight =
+                            getSmoothedRoadHeightPrecise(
                                     worldX,
                                     worldZ
                             );
 
 
                     /*
-                     * Keep roads compatible with the General Store
-                     * terrain transition.
+                     * Keep the road compatible with the
+                     * General Store terrain transition.
                      */
 
                     if (EarthBuildingGenerator
@@ -379,31 +420,62 @@ public class EarthGenerator extends ChunkGenerator {
                                     worldZ
                             )) {
 
-                        terrainHeight =
-                                getStoreCompatibleRoadHeight(
+
+                        roadHeight =
+                                getStoreCompatibleRoadHeightPrecise(
                                         worldX,
                                         worldZ,
-                                        terrainHeight,
+                                        roadHeight,
                                         naturalHeight
                                 );
                     }
+
+
+                    /*
+                     * Quantize road elevation to half-block
+                     * increments.
+                     *
+                     * Examples:
+                     *
+                     * 65.0
+                     * 65.5
+                     * 66.0
+                     * 66.5
+                     *
+                     * This eliminates many of the abrupt
+                     * full-block jumps seen in the test road.
+                     */
+
+                    roadHeight =
+                            quantizeToHalfBlock(
+                                    roadHeight
+                            );
+
+
+                    generateRoadColumn(
+                            chunkData,
+                            localX,
+                            localZ,
+                            roadHeight,
+                            roadInfo.surface,
+                            roadInfo.border
+                    );
+
+
+                } else {
+
+
+                    /*
+                     * Normal non-road land.
+                     */
+
+                    generateNaturalLandColumn(
+                            chunkData,
+                            localX,
+                            localZ,
+                            terrainHeight
+                    );
                 }
-
-
-                /*
-                 * =================================================
-                 * BUILD TERRAIN COLUMN
-                 * =================================================
-                 */
-
-                generateLandColumn(
-                        chunkData,
-                        localX,
-                        localZ,
-                        terrainHeight,
-                        roadSurface,
-                        roadBorder
-                );
             }
         }
 
@@ -413,7 +485,7 @@ public class EarthGenerator extends ChunkGenerator {
          * GUEMES GENERAL STORE
          * ========================================================
          *
-         * Keep existing approved store.
+         * Keep the existing approved building.
          *
          * Ground Y = 65
          * Front = WEST
@@ -458,18 +530,226 @@ public class EarthGenerator extends ChunkGenerator {
 
     /*
      * ============================================================
-     * LAND GENERATION
+     * ROAD INFORMATION
      * ============================================================
      */
 
-    private void generateLandColumn(
+    private RoadInfo getRoadInfo(
+            double latitude,
+            double longitude
+    ) {
+
+        /*
+         * --------------------------------------------------------
+         * FREEWAY
+         * --------------------------------------------------------
+         */
+
+        double freewayDistance =
+                EarthRoadData
+                        .getDistanceToNearestFreewayMeters(
+                                latitude,
+                                longitude
+                        );
+
+
+        double freewayRadius =
+                EarthRoadData.FREEWAY_WIDTH
+                        / 2.0;
+
+
+        if (freewayDistance
+                <= freewayRadius) {
+
+
+            return RoadInfo.surface(
+                    EarthRoadData.RoadType.FREEWAY
+            );
+        }
+
+
+        if (freewayDistance
+                <= freewayRadius
+                + ROAD_BORDER_WIDTH) {
+
+
+            return RoadInfo.border(
+                    EarthRoadData.RoadType.FREEWAY
+            );
+        }
+
+
+        /*
+         * --------------------------------------------------------
+         * HIGHWAY
+         * --------------------------------------------------------
+         */
+
+        double highwayDistance =
+                EarthRoadData
+                        .getDistanceToNearestHighwayMeters(
+                                latitude,
+                                longitude
+                        );
+
+
+        double highwayRadius =
+                EarthRoadData.HIGHWAY_WIDTH
+                        / 2.0;
+
+
+        if (highwayDistance
+                <= highwayRadius) {
+
+
+            return RoadInfo.surface(
+                    EarthRoadData.RoadType.HIGHWAY
+            );
+        }
+
+
+        if (highwayDistance
+                <= highwayRadius
+                + ROAD_BORDER_WIDTH) {
+
+
+            return RoadInfo.border(
+                    EarthRoadData.RoadType.HIGHWAY
+            );
+        }
+
+
+        /*
+         * --------------------------------------------------------
+         * LOCAL ROAD
+         * --------------------------------------------------------
+         */
+
+        double localDistance =
+                EarthRoadData
+                        .getDistanceToNearestLocalRoadMeters(
+                                latitude,
+                                longitude
+                        );
+
+
+        double localRadius =
+                EarthRoadData.LOCAL_WIDTH
+                        / 2.0;
+
+
+        if (localDistance
+                <= localRadius) {
+
+
+            return RoadInfo.surface(
+                    EarthRoadData.RoadType.LOCAL
+            );
+        }
+
+
+        if (localDistance
+                <= localRadius
+                + ROAD_BORDER_WIDTH) {
+
+
+            return RoadInfo.border(
+                    EarthRoadData.RoadType.LOCAL
+            );
+        }
+
+
+        return RoadInfo.none();
+    }
+
+
+    /*
+     * ============================================================
+     * ROAD INFO HOLDER
+     * ============================================================
+     */
+
+    private static final class RoadInfo {
+
+        private final EarthRoadData.RoadType type;
+
+        private final boolean surface;
+
+        private final boolean border;
+
+
+        private RoadInfo(
+                EarthRoadData.RoadType type,
+                boolean surface,
+                boolean border
+        ) {
+
+            this.type =
+                    type;
+
+            this.surface =
+                    surface;
+
+            this.border =
+                    border;
+        }
+
+
+        private static RoadInfo none() {
+
+            return new RoadInfo(
+                    EarthRoadData.RoadType.NONE,
+                    false,
+                    false
+            );
+        }
+
+
+        private static RoadInfo surface(
+                EarthRoadData.RoadType type
+        ) {
+
+            return new RoadInfo(
+                    type,
+                    true,
+                    false
+            );
+        }
+
+
+        private static RoadInfo border(
+                EarthRoadData.RoadType type
+        ) {
+
+            return new RoadInfo(
+                    type,
+                    false,
+                    true
+            );
+        }
+
+
+        private boolean isRoad() {
+
+            return type
+                    != EarthRoadData.RoadType.NONE;
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * NATURAL LAND GENERATION
+     * ============================================================
+     */
+
+    private void generateNaturalLandColumn(
             ChunkData chunkData,
             int localX,
             int localZ,
-            int surfaceY,
-            boolean roadSurface,
-            boolean roadBorder
+            int surfaceY
     ) {
+
 
         int minHeight =
                 chunkData.getMinHeight();
@@ -483,6 +763,7 @@ public class EarthGenerator extends ChunkGenerator {
              y < surfaceY - 3;
              y++) {
 
+
             chunkData.setBlock(
                     localX,
                     y,
@@ -493,7 +774,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Dirt underneath surface.
+         * Dirt.
          */
 
         for (int y =
@@ -503,6 +784,99 @@ public class EarthGenerator extends ChunkGenerator {
              );
              y < surfaceY;
              y++) {
+
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.DIRT
+            );
+        }
+
+
+        /*
+         * Grass surface.
+         */
+
+        chunkData.setBlock(
+                localX,
+                surfaceY,
+                localZ,
+                Material.GRASS_BLOCK
+        );
+    }
+
+
+    /*
+     * ============================================================
+     * ROAD COLUMN GENERATION
+     * ============================================================
+     *
+     * Road elevation may end in:
+     *
+     * .0 = full block surface
+     * .5 = half-block slab transition
+     */
+
+    private void generateRoadColumn(
+            ChunkData chunkData,
+            int localX,
+            int localZ,
+            double roadHeight,
+            boolean roadSurface,
+            boolean roadBorder
+    ) {
+
+
+        int minHeight =
+                chunkData.getMinHeight();
+
+
+        int baseY =
+                (int) Math.floor(
+                        roadHeight
+                );
+
+
+        boolean halfStep =
+                Math.abs(
+                        roadHeight
+                                - baseY
+                                - HALF_BLOCK
+                ) < 0.01;
+
+
+        /*
+         * Fill below road with stone.
+         */
+
+        for (int y = minHeight;
+             y < baseY - 3;
+             y++) {
+
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.STONE
+            );
+        }
+
+
+        /*
+         * Dirt support.
+         */
+
+        for (int y =
+             Math.max(
+                     minHeight,
+                     baseY - 3
+             );
+             y < baseY;
+             y++) {
+
 
             chunkData.setBlock(
                     localX,
@@ -515,47 +889,204 @@ public class EarthGenerator extends ChunkGenerator {
 
         /*
          * ========================================================
-         * SURFACE BLOCK
+         * HALF-BLOCK ROAD TRANSITION
+         * ========================================================
+         */
+
+        if (halfStep) {
+
+
+            /*
+             * A solid support block underneath the slab.
+             */
+
+            chunkData.setBlock(
+                    localX,
+                    baseY,
+                    localZ,
+                    Material.DIRT
+            );
+
+
+            if (roadSurface) {
+
+
+                setBottomSlab(
+                        chunkData,
+                        localX,
+                        baseY + 1,
+                        localZ,
+                        ROAD_SURFACE_SLAB
+                );
+
+
+            } else if (roadBorder) {
+
+
+                setBottomSlab(
+                        chunkData,
+                        localX,
+                        baseY + 1,
+                        localZ,
+                        ROAD_BORDER_SLAB
+                );
+            }
+
+
+            /*
+             * Clear headroom over the transition.
+             */
+
+            clearRoadHeadroom(
+                    chunkData,
+                    localX,
+                    baseY + 2,
+                    localZ
+            );
+
+
+            return;
+        }
+
+
+        /*
+         * ========================================================
+         * FULL-BLOCK ROAD SURFACE
          * ========================================================
          */
 
         if (roadSurface) {
 
-            /*
-             * Three-block-wide paved road.
-             */
 
             chunkData.setBlock(
                     localX,
-                    surfaceY,
+                    baseY,
                     localZ,
                     ROAD_SURFACE
             );
 
+
         } else if (roadBorder) {
 
-            /*
-             * One-block gray border.
-             */
 
             chunkData.setBlock(
                     localX,
-                    surfaceY,
+                    baseY,
                     localZ,
                     ROAD_BORDER
             );
+        }
+
+
+        /*
+         * Clear enough room above road surface for player.
+         */
+
+        clearRoadHeadroom(
+                chunkData,
+                localX,
+                baseY + 1,
+                localZ
+        );
+    }
+
+
+    /*
+     * ============================================================
+     * BOTTOM SLAB
+     * ============================================================
+     */
+
+    private void setBottomSlab(
+            ChunkData chunkData,
+            int localX,
+            int y,
+            int localZ,
+            Material slabMaterial
+    ) {
+
+
+        BlockData blockData =
+                slabMaterial
+                        .createBlockData();
+
+
+        if (blockData instanceof Slab) {
+
+
+            Slab slab =
+                    (Slab) blockData;
+
+
+            slab.setType(
+                    Slab.Type.BOTTOM
+            );
+
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    slab
+            );
+
 
         } else {
 
+
             /*
-             * Normal land.
+             * Safety fallback.
              */
 
             chunkData.setBlock(
                     localX,
-                    surfaceY,
+                    y,
                     localZ,
-                    Material.GRASS_BLOCK
+                    slabMaterial
+            );
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * ROAD HEADROOM
+     * ============================================================
+     */
+
+    private void clearRoadHeadroom(
+            ChunkData chunkData,
+            int localX,
+            int firstAirY,
+            int localZ
+    ) {
+
+
+        int maxHeight =
+                chunkData.getMaxHeight();
+
+
+        for (int offset = 0;
+             offset < 3;
+             offset++) {
+
+
+            int y =
+                    firstAirY
+                            + offset;
+
+
+            if (y >= maxHeight) {
+
+                break;
+            }
+
+
+            chunkData.setBlock(
+                    localX,
+                    y,
+                    localZ,
+                    Material.AIR
             );
         }
     }
@@ -573,23 +1104,27 @@ public class EarthGenerator extends ChunkGenerator {
             int localZ
     ) {
 
+
         int seaLevel =
                 EarthWaterData.SEA_LEVEL;
 
+
         int seabed =
                 seaLevel - 8;
+
 
         int minHeight =
                 chunkData.getMinHeight();
 
 
         /*
-         * Stone underneath seabed.
+         * Stone below seabed.
          */
 
         for (int y = minHeight;
              y < seabed - 3;
              y++) {
+
 
             chunkData.setBlock(
                     localX,
@@ -612,6 +1147,7 @@ public class EarthGenerator extends ChunkGenerator {
              y <= seabed;
              y++) {
 
+
             chunkData.setBlock(
                     localX,
                     y,
@@ -622,13 +1158,14 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Water to sea level.
+         * Water up to sea level.
          */
 
         for (int y =
              seabed + 1;
              y <= seaLevel;
              y++) {
+
 
             chunkData.setBlock(
                     localX,
@@ -642,17 +1179,28 @@ public class EarthGenerator extends ChunkGenerator {
 
     /*
      * ============================================================
-     * ROAD HEIGHT SMOOTHING
+     * PRECISE ROAD HEIGHT SMOOTHING
      * ============================================================
+     *
+     * IMPORTANT:
+     *
+     * The old generator returned an integer here.
+     *
+     * That forced every road elevation onto whole blocks.
+     *
+     * This version preserves the decimal average so the final
+     * road can be quantized to half-block increments.
      */
 
-    private int getSmoothedRoadHeight(
+    private double getSmoothedRoadHeightPrecise(
             int worldX,
             int worldZ
     ) {
 
+
         double totalHeight =
                 0.0;
+
 
         int samples =
                 0;
@@ -663,16 +1211,21 @@ public class EarthGenerator extends ChunkGenerator {
              offsetX <= ROAD_SMOOTH_RADIUS;
              offsetX++) {
 
+
             for (int offsetZ =
                  -ROAD_SMOOTH_RADIUS;
                  offsetZ <= ROAD_SMOOTH_RADIUS;
                  offsetZ++) {
 
+
                 int sampleX =
-                        worldX + offsetX;
+                        worldX
+                                + offsetX;
+
 
                 int sampleZ =
-                        worldZ + offsetZ;
+                        worldZ
+                                + offsetZ;
 
 
                 double latitude =
@@ -680,6 +1233,7 @@ public class EarthGenerator extends ChunkGenerator {
                                 sampleX,
                                 sampleZ
                         );
+
 
                 double longitude =
                         EarthCoordinates.getLongitude(
@@ -706,6 +1260,7 @@ public class EarthGenerator extends ChunkGenerator {
                 totalHeight +=
                         height;
 
+
                 samples++;
             }
         }
@@ -713,17 +1268,20 @@ public class EarthGenerator extends ChunkGenerator {
 
         if (samples == 0) {
 
+
             double latitude =
                     EarthCoordinates.getLatitude(
                             worldX,
                             worldZ
                     );
 
+
             double longitude =
                     EarthCoordinates.getLongitude(
                             worldX,
                             worldZ
                     );
+
 
             double elevationMeters =
                     EarthTerrainLoader
@@ -732,6 +1290,7 @@ public class EarthGenerator extends ChunkGenerator {
                                     longitude
                             );
 
+
             return EarthElevation
                     .getMinecraftHeight(
                             elevationMeters
@@ -739,24 +1298,41 @@ public class EarthGenerator extends ChunkGenerator {
         }
 
 
-        return (int) Math.round(
-                totalHeight / samples
-        );
+        return totalHeight
+                / samples;
     }
 
 
     /*
      * ============================================================
-     * STORE-COMPATIBLE ROAD HEIGHT
+     * HALF-BLOCK QUANTIZATION
      * ============================================================
      */
 
-    private int getStoreCompatibleRoadHeight(
+    private double quantizeToHalfBlock(
+            double height
+    ) {
+
+
+        return Math.round(
+                height * 2.0
+        ) / 2.0;
+    }
+
+
+    /*
+     * ============================================================
+     * STORE-COMPATIBLE PRECISE ROAD HEIGHT
+     * ============================================================
+     */
+
+    private double getStoreCompatibleRoadHeightPrecise(
             int worldX,
             int worldZ,
-            int roadHeight,
+            double roadHeight,
             int naturalHeight
     ) {
+
 
         int storeHeight =
                 EarthBuildingGenerator
@@ -815,43 +1391,37 @@ public class EarthGenerator extends ChunkGenerator {
                 storeHeight
                         - allowedDifference;
 
+
         int maximumHeight =
                 storeHeight
                         + allowedDifference;
 
 
-        int storeTerrainHeight =
-                (int) Math.round(
-                        blendedTerrain
-                );
-
-
-        storeTerrainHeight =
+        double storeTerrainHeight =
                 Math.max(
                         minimumHeight,
                         Math.min(
                                 maximumHeight,
-                                storeTerrainHeight
+                                blendedTerrain
                         )
                 );
 
 
         /*
-         * Gradually blend the road into the approved
+         * Blend road elevation toward the approved
          * General Store terrain.
          */
 
         double storeInfluence =
-                1.0 - blend;
+                1.0
+                        - blend;
 
 
-        return (int) Math.round(
+        return roadHeight
+                * (1.0
+                - storeInfluence)
 
-                roadHeight
-                        * (1.0 - storeInfluence)
-
-                        + storeTerrainHeight
-                        * storeInfluence
-        );
+                + storeTerrainHeight
+                * storeInfluence;
     }
 }
