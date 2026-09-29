@@ -1,7 +1,8 @@
 package com.earthbound;
 
+import org.bukkit.World;
 import org.bukkit.World.Environment;
-import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -11,16 +12,31 @@ import org.bukkit.event.player.PlayerPortalEvent;
 
 public class EarthBoundWorldRules implements Listener {
 
+
     private final EarthBound plugin;
 
 
-    public EarthBoundWorldRules(EarthBound plugin) {
+    public EarthBoundWorldRules(
+            EarthBound plugin
+    ) {
+
         this.plugin = plugin;
+
     }
 
 
+
+    /*
+     * ============================================================
+     * BLOCK HOSTILE MOB SPAWNING
+     * ============================================================
+     */
+
     @EventHandler
-    public void onMobSpawn(EntitySpawnEvent event) {
+    public void onMobSpawn(
+            EntitySpawnEvent event
+    ) {
+
 
         boolean hostileMobs =
                 plugin.getConfig()
@@ -29,51 +45,66 @@ public class EarthBoundWorldRules implements Listener {
                                 false
                         );
 
+
         if (hostileMobs) {
+
             return;
+
         }
 
 
-        EntityType type =
-                event.getEntityType();
+        if (event.getEntity() instanceof Monster) {
 
 
-        switch (type) {
+            event.setCancelled(true);
 
-            case CREEPER:
-            case ZOMBIE:
-            case HUSK:
-            case DROWNED:
-            case SKELETON:
-            case STRAY:
-            case SPIDER:
-            case CAVE_SPIDER:
-            case ENDERMAN:
-            case WITCH:
-            case PHANTOM:
 
-                event.setCancelled(true);
-                break;
+            plugin.getLogger().info(
+                    "Blocked hostile mob: "
+                            + event.getEntityType()
+            );
 
-            default:
-                break;
         }
+
     }
 
 
 
+
+    /*
+     * ============================================================
+     * BLOCK NETHER AND END
+     * ============================================================
+     */
+
     @EventHandler
-    public void onPortal(PlayerPortalEvent event) {
+    public void onPortal(
+            PlayerPortalEvent event
+    ) {
+
 
         if (event.getTo() == null) {
+
             return;
+
         }
 
 
-        Environment destination =
+        World destination =
                 event.getTo()
-                        .getWorld()
-                        .getEnvironment();
+                        .getWorld();
+
+
+        if (destination == null) {
+
+            return;
+
+        }
+
+
+        Environment environment =
+                destination.getEnvironment();
+
 
 
         boolean nether =
@@ -96,35 +127,57 @@ public class EarthBoundWorldRules implements Listener {
                 event.getPlayer();
 
 
-        if (destination == Environment.NETHER
+
+        if (environment == Environment.NETHER
                 && !nether) {
 
+
             event.setCancelled(true);
+
 
             player.sendMessage(
                     "§cThe Nether is disabled on EarthBound."
             );
+
+
         }
 
 
-        if (destination == Environment.THE_END
+
+        if (environment == Environment.THE_END
                 && !end) {
 
+
             event.setCancelled(true);
+
 
             player.sendMessage(
                     "§cThe End is disabled on EarthBound."
             );
+
         }
+
     }
 
 
 
+
+    /*
+     * ============================================================
+     * HUNGER CONTROL
+     * ============================================================
+     */
+
     @EventHandler
-    public void onFood(FoodLevelChangeEvent event) {
+    public void onFoodChange(
+            FoodLevelChangeEvent event
+    ) {
+
 
         if (!(event.getEntity() instanceof Player)) {
+
             return;
+
         }
 
 
@@ -136,8 +189,10 @@ public class EarthBoundWorldRules implements Listener {
                         );
 
 
+
         Player player =
                 (Player) event.getEntity();
+
 
 
         int oldFood =
@@ -148,15 +203,18 @@ public class EarthBoundWorldRules implements Listener {
                 event.getFoodLevel();
 
 
+
         if (newFood < oldFood) {
+
 
             int loss =
                     oldFood - newFood;
 
 
-            int adjusted =
-                    (int) Math.max(
+            int adjustedLoss =
+                    Math.max(
                             1,
+                            (int)
                             Math.round(
                                     loss * hungerRate
                             )
@@ -164,8 +222,11 @@ public class EarthBoundWorldRules implements Listener {
 
 
             event.setFoodLevel(
-                    oldFood - adjusted
+                    oldFood - adjustedLoss
             );
+
         }
+
     }
+
 }
