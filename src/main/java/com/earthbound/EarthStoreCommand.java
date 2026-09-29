@@ -22,11 +22,10 @@ public class EarthStoreCommand implements CommandExecutor {
         if (!(sender instanceof Player)) {
 
             sender.sendMessage(
-                    "This command is for players only."
+                    "Players only."
             );
 
             return true;
-
         }
 
 
@@ -35,87 +34,58 @@ public class EarthStoreCommand implements CommandExecutor {
 
 
 
-        /*
-         * ========================================================
-         * OPEN STORE MENU
-         * ========================================================
-         */
-
         if (args.length == 0) {
-
 
             player.sendMessage(
                     ChatColor.GOLD
-                            + "===== EarthBound Store ====="
+                    + "===== EarthBound Store ====="
+            );
+
+            player.sendMessage(
+                    ChatColor.YELLOW
+                    + "Buy:"
+            );
+
+            player.sendMessage(
+                    ChatColor.WHITE
+                    + "/store buy bread 10"
+            );
+
+            player.sendMessage(
+                    ChatColor.WHITE
+                    + "/store buy oak_planks 10"
             );
 
 
             player.sendMessage(
                     ChatColor.YELLOW
-                            + "Buy:"
+                    + "Sell:"
             );
-
 
             player.sendMessage(
                     ChatColor.WHITE
-                            + "/store buy bread amount"
+                    + "/store sell oak_log 10"
             );
-
 
             player.sendMessage(
                     ChatColor.WHITE
-                            + "/store buy wheat_seeds amount"
-            );
-
-
-            player.sendMessage(
-                    ChatColor.WHITE
-                            + "/store buy oak_log amount"
-            );
-
-
-
-            player.sendMessage(
-                    ChatColor.YELLOW
-                            + "Sell:"
-            );
-
-
-            player.sendMessage(
-                    ChatColor.WHITE
-                            + "/store sell oak_log amount"
-            );
-
-
-            player.sendMessage(
-                    ChatColor.WHITE
-                            + "/store sell wheat amount"
-            );
-
-
-            player.sendMessage(
-                    ChatColor.WHITE
-                            + "/store sell stone amount"
+                    + "/store sell stone 10"
             );
 
 
             return true;
-
         }
 
 
 
         if (args.length < 3) {
 
-
             player.sendMessage(
                     ChatColor.RED
-                            + "Usage: /store buy/sell item amount"
+                    + "Use: /store buy/sell item amount"
             );
 
-
             return true;
-
         }
 
 
@@ -130,7 +100,6 @@ public class EarthStoreCommand implements CommandExecutor {
 
         try {
 
-
             material =
                     Material.valueOf(
                             args[1].toUpperCase()
@@ -139,15 +108,13 @@ public class EarthStoreCommand implements CommandExecutor {
 
         } catch (Exception e) {
 
-
             player.sendMessage(
                     ChatColor.RED
-                            + "Unknown item."
+                    + "Unknown item: "
+                    + args[1]
             );
 
-
             return true;
-
         }
 
 
@@ -157,7 +124,6 @@ public class EarthStoreCommand implements CommandExecutor {
 
         try {
 
-
             amount =
                     Integer.parseInt(
                             args[2]
@@ -166,10 +132,108 @@ public class EarthStoreCommand implements CommandExecutor {
 
         } catch (Exception e) {
 
-
             player.sendMessage(
                     ChatColor.RED
-                            + "Invalid amount."
+                    + "Invalid amount."
+            );
+
+            return true;
+        }
+
+
+
+        /*
+         * ==========================
+         * SELL
+         * ==========================
+         */
+
+        if (action.equals("sell")) {
+
+
+            double price =
+                    EarthStore.getSellPrice(
+                            material
+                    );
+
+
+            if (price < 0) {
+
+                player.sendMessage(
+                        ChatColor.RED
+                        + "Store does not buy "
+                        + material
+                );
+
+                return true;
+            }
+
+
+
+            int count = 0;
+
+
+            for (org.bukkit.inventory.ItemStack item :
+                    player.getInventory().getContents()) {
+
+
+                if (item != null
+                        && item.getType() == material) {
+
+
+                    count += item.getAmount();
+
+                }
+
+            }
+
+
+
+            if (count < amount) {
+
+                player.sendMessage(
+                        ChatColor.RED
+                        + "You only have "
+                        + count
+                        + " "
+                        + material
+                );
+
+                return true;
+            }
+
+
+
+            player.getInventory()
+                    .removeItem(
+                            new org.bukkit.inventory.ItemStack(
+                                    material,
+                                    amount
+                            )
+                    );
+
+
+
+            double money =
+                    price * amount;
+
+
+
+            EarthEconomy.addMoney(
+                    player,
+                    money
+            );
+
+
+
+            player.sendMessage(
+                    ChatColor.GREEN
+                    + "Sold "
+                    + amount
+                    + " "
+                    + material
+                    + " for $"
+                    + money
             );
 
 
@@ -180,9 +244,9 @@ public class EarthStoreCommand implements CommandExecutor {
 
 
         /*
-         * ========================================================
+         * ==========================
          * BUY
-         * ========================================================
+         * ==========================
          */
 
         if (action.equals("buy")) {
@@ -194,20 +258,17 @@ public class EarthStoreCommand implements CommandExecutor {
                     );
 
 
-
             if (price < 0) {
-
 
                 player.sendMessage(
                         ChatColor.RED
-                                + "This item is not sold here."
+                        + "Store does not sell "
+                        + material
                 );
-
 
                 return true;
 
             }
-
 
 
             double total =
@@ -215,19 +276,15 @@ public class EarthStoreCommand implements CommandExecutor {
 
 
 
-            double balance =
-                    EarthEconomy.getBalance(
-                            player
-                    );
-
-
-
-            if (balance < total) {
+            if (!EarthEconomy.removeMoney(
+                    player,
+                    total
+            )) {
 
 
                 player.sendMessage(
                         ChatColor.RED
-                                + "You do not have enough money."
+                        + "Not enough money."
                 );
 
 
@@ -246,119 +303,14 @@ public class EarthStoreCommand implements CommandExecutor {
                     );
 
 
-            EarthEconomy.removeMoney(
-                    player,
-                    total
-            );
-
-
-
             player.sendMessage(
                     ChatColor.GREEN
-                            + "Purchased "
-                            + amount
-                            + " "
-                            + material
-                            + " for $"
-                            + total
-            );
-
-
-            return true;
-
-        }
-
-
-
-        /*
-         * ========================================================
-         * SELL
-         * ========================================================
-         */
-
-        if (action.equals("sell")) {
-
-
-            double price =
-                    EarthStore.getSellPrice(
-                            material
-                    );
-
-
-
-            if (price < 0) {
-
-
-                player.sendMessage(
-                        ChatColor.RED
-                                + "The store does not buy this item."
-                );
-
-
-                return true;
-
-            }
-
-
-
-            int amountOwned =
-                    player.getInventory()
-                            .containsAtLeast(
-                                    new org.bukkit.inventory.ItemStack(
-                                            material
-                                    ),
-                                    amount
-                            )
-                    ? amount
-                    : 0;
-
-
-
-            if (amountOwned == 0) {
-
-
-                player.sendMessage(
-                        ChatColor.RED
-                                + "You do not have enough items."
-                );
-
-
-                return true;
-
-            }
-
-
-
-            player.getInventory()
-                    .removeItem(
-                            new org.bukkit.inventory.ItemStack(
-                                    material,
-                                    amount
-                            )
-                    );
-
-
-
-            double payment =
-                    price * amount;
-
-
-
-            EarthEconomy.addMoney(
-                    player,
-                    payment
-            );
-
-
-
-            player.sendMessage(
-                    ChatColor.GREEN
-                            + "Sold "
-                            + amount
-                            + " "
-                            + material
-                            + " for $"
-                            + payment
+                    + "Bought "
+                    + amount
+                    + " "
+                    + material
+                    + " for $"
+                    + total
             );
 
 
@@ -370,7 +322,7 @@ public class EarthStoreCommand implements CommandExecutor {
 
         player.sendMessage(
                 ChatColor.RED
-                        + "Use buy or sell."
+                + "Use buy or sell."
         );
 
 
