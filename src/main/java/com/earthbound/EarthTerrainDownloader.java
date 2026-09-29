@@ -13,11 +13,47 @@ import java.nio.file.Files;
 
 public class EarthTerrainDownloader {
 
+    /*
+     * ============================================================
+     * EARTHBOUND USGS TERRAIN DOWNLOADER
+     * ============================================================
+     *
+     * Downloads and stores real USGS 3DEP elevation data for
+     * Guemes Island.
+     *
+     * IMPORTANT:
+     *
+     * The downloaded raster is 512 x 512.
+     *
+     * Minecraft blocks do NOT simply snap to the nearest raster
+     * pixel anymore.
+     *
+     * Elevation is calculated using bilinear interpolation between
+     * the four surrounding USGS raster pixels.
+     *
+     * This prevents large square elevation terraces caused by
+     * nearest-pixel sampling.
+     * ============================================================
+     */
+
+
+    /*
+     * ============================================================
+     * USGS SERVICE
+     * ============================================================
+     */
+
     public static final String USGS_3DEP_SERVICE =
             "https://elevation.nationalmap.gov/"
-            + "arcgis/rest/services/"
-            + "3DEPElevation/ImageServer";
+                    + "arcgis/rest/services/"
+                    + "3DEPElevation/ImageServer";
 
+
+    /*
+     * ============================================================
+     * GUEMES ISLAND DATA BOUNDS
+     * ============================================================
+     */
 
     public static final double WEST =
             -122.70;
@@ -32,6 +68,12 @@ public class EarthTerrainDownloader {
             48.60;
 
 
+    /*
+     * ============================================================
+     * RASTER SIZE
+     * ============================================================
+     */
+
     public static final int TILE_WIDTH =
             512;
 
@@ -39,14 +81,27 @@ public class EarthTerrainDownloader {
             512;
 
 
+    /*
+     * ============================================================
+     * ELEVATION DATA
+     * ============================================================
+     */
+
     private static double[][] elevationData;
 
-    private static boolean loaded = false;
+    private static boolean loaded =
+            false;
 
 
     private EarthTerrainDownloader() {
     }
 
+
+    /*
+     * ============================================================
+     * LOAD GUEMES ISLAND
+     * ============================================================
+     */
 
     public static void loadGuemesIsland() {
 
@@ -54,12 +109,14 @@ public class EarthTerrainDownloader {
                 "=== Loading real USGS Guemes elevation ==="
         );
 
+
         try {
 
             File terrainFolder =
                     new File(
                             "plugins/EarthBound/terrain"
                     );
+
 
             if (!terrainFolder.exists()) {
 
@@ -74,6 +131,12 @@ public class EarthTerrainDownloader {
                             "guemes-elevation.tif"
                     );
 
+
+            /*
+             * --------------------------------------------------------
+             * DOWNLOAD IF NECESSARY
+             * --------------------------------------------------------
+             */
 
             if (!elevationFile.exists()) {
 
@@ -90,12 +153,19 @@ public class EarthTerrainDownloader {
             }
 
 
+            /*
+             * --------------------------------------------------------
+             * READ RASTER
+             * --------------------------------------------------------
+             */
+
             readElevationTile(
                     elevationFile
             );
 
 
-            loaded = true;
+            loaded =
+                    true;
 
 
             System.out.println(
@@ -105,30 +175,38 @@ public class EarthTerrainDownloader {
 
             System.out.println(
                     "Raster size: "
-                    + TILE_WIDTH
-                    + "x"
-                    + TILE_HEIGHT
+                            + elevationData[0].length
+                            + "x"
+                            + elevationData.length
             );
 
 
             System.out.println(
                     "Center elevation sample: "
-                    + elevationData[
-                            TILE_HEIGHT / 2
+                            + elevationData[
+                            elevationData.length / 2
                             ][
-                            TILE_WIDTH / 2
+                            elevationData[0].length / 2
                             ]
-                    + " meters"
+                            + " meters"
+            );
+
+
+            System.out.println(
+                    "[EarthBound] Bilinear USGS terrain interpolation enabled."
             );
 
 
         } catch (Exception exception) {
 
-            loaded = false;
+            loaded =
+                    false;
+
 
             System.err.println(
                     "Failed to load Guemes USGS elevation."
             );
+
 
             exception.printStackTrace();
 
@@ -137,6 +215,12 @@ public class EarthTerrainDownloader {
     }
 
 
+    /*
+     * ============================================================
+     * DOWNLOAD USGS ELEVATION TILE
+     * ============================================================
+     */
+
     private static void downloadElevationTile(
             File destination
     ) throws Exception {
@@ -144,25 +228,25 @@ public class EarthTerrainDownloader {
 
         String url =
                 USGS_3DEP_SERVICE
-                + "/exportImage"
-                + "?bbox="
-                + WEST
-                + ","
-                + SOUTH
-                + ","
-                + EAST
-                + ","
-                + NORTH
-                + "&bboxSR=4326"
-                + "&imageSR=4326"
-                + "&size="
-                + TILE_WIDTH
-                + ","
-                + TILE_HEIGHT
-                + "&format=tiff"
-                + "&pixelType=F32"
-                + "&interpolation=RSP_BilinearInterpolation"
-                + "&f=image";
+                        + "/exportImage"
+                        + "?bbox="
+                        + WEST
+                        + ","
+                        + SOUTH
+                        + ","
+                        + EAST
+                        + ","
+                        + NORTH
+                        + "&bboxSR=4326"
+                        + "&imageSR=4326"
+                        + "&size="
+                        + TILE_WIDTH
+                        + ","
+                        + TILE_HEIGHT
+                        + "&format=tiff"
+                        + "&pixelType=F32"
+                        + "&interpolation=RSP_BilinearInterpolation"
+                        + "&f=image";
 
 
         System.out.println(
@@ -172,7 +256,9 @@ public class EarthTerrainDownloader {
 
         HttpURLConnection connection =
                 (HttpURLConnection)
-                        URI.create(url)
+                        URI.create(
+                                        url
+                                )
                                 .toURL()
                                 .openConnection();
 
@@ -181,13 +267,16 @@ public class EarthTerrainDownloader {
                 "GET"
         );
 
+
         connection.setConnectTimeout(
                 30000
         );
 
+
         connection.setReadTimeout(
                 60000
         );
+
 
         connection.setRequestProperty(
                 "User-Agent",
@@ -203,7 +292,7 @@ public class EarthTerrainDownloader {
 
             throw new IllegalStateException(
                     "USGS returned HTTP "
-                    + responseCode
+                            + responseCode
             );
 
         }
@@ -239,14 +328,20 @@ public class EarthTerrainDownloader {
 
         System.out.println(
                 "Downloaded "
-                + Files.size(
+                        + Files.size(
                         destination.toPath()
                 )
-                + " bytes."
+                        + " bytes."
         );
 
     }
 
+
+    /*
+     * ============================================================
+     * READ USGS TIFF
+     * ============================================================
+     */
 
     private static void readElevationTile(
             File elevationFile
@@ -280,12 +375,22 @@ public class EarthTerrainDownloader {
 
 
         elevationData =
-                new double[height][width];
+                new double[
+                        height
+                        ][
+                        width
+                        ];
 
 
-        for (int y = 0; y < height; y++) {
+        for (int y = 0;
+             y < height;
+             y++) {
 
-            for (int x = 0; x < width; x++) {
+
+            for (int x = 0;
+                 x < width;
+                 x++) {
+
 
                 elevationData[y][x] =
                         raster.getSampleDouble(
@@ -295,25 +400,84 @@ public class EarthTerrainDownloader {
                         );
 
             }
-
         }
 
     }
 
 
+    /*
+     * ============================================================
+     * TERRAIN STATUS
+     * ============================================================
+     */
+
     public static boolean isLoaded() {
 
         return loaded
-                && elevationData != null;
+                && elevationData != null
+                && elevationData.length > 0
+                && elevationData[0].length > 0;
 
     }
 
+
+    /*
+     * ============================================================
+     * GET REAL USGS ELEVATION
+     * ============================================================
+     *
+     * OLD SYSTEM:
+     *
+     * Minecraft coordinate
+     *       |
+     *       v
+     * nearest raster pixel
+     *       |
+     *       v
+     * elevation
+     *
+     *
+     * NEW SYSTEM:
+     *
+     * Minecraft coordinate
+     *       |
+     *       v
+     * exact decimal raster position
+     *       |
+     *       v
+     * four surrounding raster pixels
+     *       |
+     *       v
+     * bilinear interpolation
+     *       |
+     *       v
+     * smooth elevation value
+     *
+     *
+     * Example:
+     *
+     * P00 ---------------- P10
+     *  |                    |
+     *  |        X           |
+     *  |                    |
+     * P01 ---------------- P11
+     *
+     * X receives a weighted elevation based on its exact
+     * position between P00, P10, P01 and P11.
+     * ============================================================
+     */
 
     public static double getElevation(
             double latitude,
             double longitude
     ) {
 
+
+        /*
+         * --------------------------------------------------------
+         * SAFETY CHECK
+         * --------------------------------------------------------
+         */
 
         if (!isLoaded()) {
 
@@ -322,15 +486,25 @@ public class EarthTerrainDownloader {
         }
 
 
+        /*
+         * --------------------------------------------------------
+         * CONVERT LATITUDE / LONGITUDE TO RASTER PERCENTAGE
+         * --------------------------------------------------------
+         */
+
         double xPercent =
                 (longitude - WEST)
-                / (EAST - WEST);
+                        / (EAST - WEST);
 
 
         double yPercent =
                 (NORTH - latitude)
-                / (NORTH - SOUTH);
+                        / (NORTH - SOUTH);
 
+
+        /*
+         * Keep coordinates safely inside the raster.
+         */
 
         xPercent =
                 Math.max(
@@ -352,25 +526,348 @@ public class EarthTerrainDownloader {
                 );
 
 
-        int pixelX =
-                (int) Math.round(
-                        xPercent
-                        * (elevationData[0].length - 1)
+        /*
+         * --------------------------------------------------------
+         * EXACT DECIMAL RASTER POSITION
+         * --------------------------------------------------------
+         *
+         * IMPORTANT:
+         *
+         * Do NOT round these values.
+         */
+
+        int rasterWidth =
+                elevationData[0].length;
+
+
+        int rasterHeight =
+                elevationData.length;
+
+
+        double exactX =
+                xPercent
+                        * (rasterWidth - 1);
+
+
+        double exactY =
+                yPercent
+                        * (rasterHeight - 1);
+
+
+        /*
+         * --------------------------------------------------------
+         * FOUR SURROUNDING PIXELS
+         * --------------------------------------------------------
+         */
+
+        int x0 =
+                (int) Math.floor(
+                        exactX
                 );
 
 
-        int pixelY =
-                (int) Math.round(
-                        yPercent
-                        * (elevationData.length - 1)
+        int y0 =
+                (int) Math.floor(
+                        exactY
                 );
 
 
-        return elevationData[
-                pixelY
-                ][
-                pixelX
-                ];
+        int x1 =
+                Math.min(
+                        x0 + 1,
+                        rasterWidth - 1
+                );
+
+
+        int y1 =
+                Math.min(
+                        y0 + 1,
+                        rasterHeight - 1
+                );
+
+
+        /*
+         * --------------------------------------------------------
+         * POSITION INSIDE THE FOUR-PIXEL CELL
+         * --------------------------------------------------------
+         */
+
+        double fractionX =
+                exactX - x0;
+
+
+        double fractionY =
+                exactY - y0;
+
+
+        /*
+         * --------------------------------------------------------
+         * READ FOUR USGS ELEVATIONS
+         * --------------------------------------------------------
+         *
+         * top-left     = elevation00
+         * top-right    = elevation10
+         * bottom-left  = elevation01
+         * bottom-right = elevation11
+         */
+
+        double elevation00 =
+                elevationData[
+                        y0
+                        ][
+                        x0
+                        ];
+
+
+        double elevation10 =
+                elevationData[
+                        y0
+                        ][
+                        x1
+                        ];
+
+
+        double elevation01 =
+                elevationData[
+                        y1
+                        ][
+                        x0
+                        ];
+
+
+        double elevation11 =
+                elevationData[
+                        y1
+                        ][
+                        x1
+                        ];
+
+
+        /*
+         * --------------------------------------------------------
+         * SAFETY FOR INVALID RASTER VALUES
+         * --------------------------------------------------------
+         *
+         * If the TIFF ever contains a non-finite value,
+         * fall back to the nearest valid sample instead of
+         * allowing NaN or Infinity into world generation.
+         */
+
+        if (!Double.isFinite(
+                elevation00
+        )) {
+
+            elevation00 =
+                    findSafeElevation(
+                            x0,
+                            y0
+                    );
+        }
+
+
+        if (!Double.isFinite(
+                elevation10
+        )) {
+
+            elevation10 =
+                    findSafeElevation(
+                            x1,
+                            y0
+                    );
+        }
+
+
+        if (!Double.isFinite(
+                elevation01
+        )) {
+
+            elevation01 =
+                    findSafeElevation(
+                            x0,
+                            y1
+                    );
+        }
+
+
+        if (!Double.isFinite(
+                elevation11
+        )) {
+
+            elevation11 =
+                    findSafeElevation(
+                            x1,
+                            y1
+                    );
+        }
+
+
+        /*
+         * --------------------------------------------------------
+         * HORIZONTAL INTERPOLATION
+         * --------------------------------------------------------
+         *
+         * Interpolate across the top pair.
+         */
+
+        double topElevation =
+                interpolate(
+                        elevation00,
+                        elevation10,
+                        fractionX
+                );
+
+
+        /*
+         * Interpolate across the bottom pair.
+         */
+
+        double bottomElevation =
+                interpolate(
+                        elevation01,
+                        elevation11,
+                        fractionX
+                );
+
+
+        /*
+         * --------------------------------------------------------
+         * VERTICAL INTERPOLATION
+         * --------------------------------------------------------
+         *
+         * Interpolate between the two horizontal results.
+         */
+
+        return interpolate(
+                topElevation,
+                bottomElevation,
+                fractionY
+        );
+
+    }
+
+
+    /*
+     * ============================================================
+     * LINEAR INTERPOLATION
+     * ============================================================
+     *
+     * fraction = 0.0
+     * returns start
+     *
+     * fraction = 1.0
+     * returns end
+     *
+     * fraction = 0.5
+     * returns halfway between the two.
+     */
+
+    private static double interpolate(
+            double start,
+            double end,
+            double fraction
+    ) {
+
+        return start
+                + (end - start)
+                * fraction;
+
+    }
+
+
+    /*
+     * ============================================================
+     * SAFE ELEVATION FALLBACK
+     * ============================================================
+     *
+     * Normally the USGS raster contains valid values everywhere
+     * we use it.
+     *
+     * This is only a protection against an unexpected NaN or
+     * Infinity value.
+     */
+
+    private static double findSafeElevation(
+            int centerX,
+            int centerY
+    ) {
+
+
+        int rasterWidth =
+                elevationData[0].length;
+
+
+        int rasterHeight =
+                elevationData.length;
+
+
+        /*
+         * Search a small area around the bad pixel.
+         */
+
+        for (int radius = 0;
+             radius <= 3;
+             radius++) {
+
+
+            for (int offsetY = -radius;
+                 offsetY <= radius;
+                 offsetY++) {
+
+
+                for (int offsetX = -radius;
+                     offsetX <= radius;
+                     offsetX++) {
+
+
+                    int sampleX =
+                            centerX
+                                    + offsetX;
+
+
+                    int sampleY =
+                            centerY
+                                    + offsetY;
+
+
+                    if (sampleX < 0
+                            || sampleX >= rasterWidth
+                            || sampleY < 0
+                            || sampleY >= rasterHeight) {
+
+                        continue;
+
+                    }
+
+
+                    double value =
+                            elevationData[
+                                    sampleY
+                                    ][
+                                    sampleX
+                                    ];
+
+
+                    if (Double.isFinite(
+                            value
+                    )) {
+
+                        return value;
+
+                    }
+
+                }
+            }
+        }
+
+
+        /*
+         * Last-resort fallback.
+         *
+         * Sea level / zero real-world elevation is safer than
+         * passing an invalid number into the terrain generator.
+         */
+
+        return 0.0;
 
     }
 
