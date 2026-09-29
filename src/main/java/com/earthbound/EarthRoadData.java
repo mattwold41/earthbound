@@ -10,7 +10,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -801,6 +800,90 @@ public final class EarthRoadData {
                 xDifference * xDifference
                         + yDifference * yDifference
         );
+    }
+
+    /*
+     * ============================================================
+     * DEVELOPMENT ROAD HELPERS
+     * ============================================================
+     *
+     * These methods allow the Guemes development generator
+     * to measure how close a location is to a real Census
+     * road centerline.
+     *
+     * They do NOT change or move any existing roads.
+     * ============================================================
+     */
+
+    public static double getDistanceToNearestRoadMeters(
+            double latitude,
+            double longitude
+    ) {
+
+        if (!loaded) {
+            return Double.POSITIVE_INFINITY;
+        }
+
+        double nearestDistance =
+                Double.POSITIVE_INFINITY;
+
+        nearestDistance =
+                Math.min(
+                        nearestDistance,
+                        getNearestDistance(
+                                primaryRoads,
+                                latitude,
+                                longitude
+                        )
+                );
+
+        nearestDistance =
+                Math.min(
+                        nearestDistance,
+                        getNearestDistance(
+                                secondaryRoads,
+                                latitude,
+                                longitude
+                        )
+                );
+
+        nearestDistance =
+                Math.min(
+                        nearestDistance,
+                        getNearestDistance(
+                                localRoads,
+                                latitude,
+                                longitude
+                        )
+                );
+
+        return nearestDistance;
+    }
+
+    private static double getNearestDistance(
+            List<RoadSegment> roads,
+            double latitude,
+            double longitude
+    ) {
+
+        double nearestDistance =
+                Double.POSITIVE_INFINITY;
+
+        for (RoadSegment segment : roads) {
+
+            double distance =
+                    distanceToSegmentMeters(
+                            latitude,
+                            longitude,
+                            segment
+                    );
+
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+            }
+        }
+
+        return nearestDistance;
     }
 
     public static boolean isLoaded() {
