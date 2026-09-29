@@ -14,7 +14,7 @@ public class EarthResidentialGenerator {
      * EARTHBOUND - GUEMES RESIDENTIAL AREA A
      * ============================================================
      *
-     * VERSION 6:
+     * VERSION 6 - REUSABLE HOUSE SYSTEM
      *
      * - Preserves natural USGS terrain.
      * - Keeps the approved neighborhood road.
@@ -26,6 +26,8 @@ public class EarthResidentialGenerator {
      * - Adds basic finished interiors.
      * - Adds simple house-to-house visual variation.
      * - Uses foundations instead of flattening entire properties.
+     * - Approved Area A behavior remains unchanged.
+     * - Homes can now use another east-west road center.
      *
      * IMPORTANT:
      * This class does NOT modify the General Store.
@@ -65,7 +67,7 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * MAIN GENERATION
+     * MAIN AREA A GENERATION
      * ============================================================
      */
 
@@ -239,7 +241,7 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * GENERATE ALL 8 HOMES
+     * GENERATE ALL 8 APPROVED AREA A HOMES
      * ============================================================
      */
 
@@ -308,8 +310,13 @@ public class EarthResidentialGenerator {
 
     /*
      * ============================================================
-     * PROCEDURAL HOME
+     * APPROVED AREA A HOME ENTRY POINT
      * ============================================================
+     *
+     * This keeps the original public method intact.
+     *
+     * Existing Area A calls automatically use the approved
+     * Area A road center.
      */
 
     public static void generateHome(
@@ -320,6 +327,42 @@ public class EarthResidentialGenerator {
             int plotMinZ,
             boolean northSide,
             int houseNumber
+    ) {
+
+        generateHome(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                plotMinX,
+                plotMinZ,
+                northSide,
+                houseNumber,
+                CENTER_Z
+        );
+    }
+
+    /*
+     * ============================================================
+     * REUSABLE GUEMES HOME ENTRY POINT
+     * ============================================================
+     *
+     * This version allows another east-west neighborhood road
+     * to provide its own center Z.
+     *
+     * This does NOT yet rotate houses for north-south roads.
+     * That will be handled separately when we add road-direction
+     * support.
+     */
+
+    public static void generateHome(
+            ChunkData chunkData,
+            int chunkMinX,
+            int chunkMinZ,
+            int plotMinX,
+            int plotMinZ,
+            boolean northSide,
+            int houseNumber,
+            int roadCenterZ
     ) {
 
         int houseMinX =
@@ -651,9 +694,6 @@ public class EarthResidentialGenerator {
                         ? houseMinZ
                         : houseMaxZ;
 
-        /*
-         * Clear doorway.
-         */
         setWorldBlock(
                 chunkData,
                 chunkMinX,
@@ -753,13 +793,14 @@ public class EarthResidentialGenerator {
             );
         }
 
-            generateWalkway(
+        generateWalkway(
                 chunkData,
                 chunkMinX,
                 chunkMinZ,
                 doorX,
                 porchZ,
-                northSide
+                northSide,
+                roadCenterZ
         );
 
         /*
@@ -785,12 +826,6 @@ public class EarthResidentialGenerator {
      * ============================================================
      * BASIC INTERIOR
      * ============================================================
-     *
-     * These are simple starter-home furnishings.
-     *
-     * The future NPC system can recognize these homes as
-     * residential properties without requiring world regeneration.
-     * ============================================================
      */
 
     private static void generateInterior(
@@ -805,9 +840,6 @@ public class EarthResidentialGenerator {
             int houseNumber
     ) {
 
-        /*
-         * Kitchen/work area.
-         */
         setWorldBlock(
                 chunkData,
                 chunkMinX,
@@ -838,9 +870,6 @@ public class EarthResidentialGenerator {
                 Material.BARREL
         );
 
-        /*
-         * Storage.
-         */
         setWorldBlock(
                 chunkData,
                 chunkMinX,
@@ -851,9 +880,6 @@ public class EarthResidentialGenerator {
                 Material.BARREL
         );
 
-        /*
-         * Bookshelf / living area.
-         */
         setWorldBlock(
                 chunkData,
                 chunkMinX,
@@ -874,9 +900,6 @@ public class EarthResidentialGenerator {
                 Material.BOOKSHELF
         );
 
-        /*
-         * Small table.
-         */
         int tableX =
                 (minX + maxX) / 2;
 
@@ -903,9 +926,6 @@ public class EarthResidentialGenerator {
                 Material.SPRUCE_PRESSURE_PLATE
         );
 
-        /*
-         * Simple seating.
-         */
         setWorldBlock(
                 chunkData,
                 chunkMinX,
@@ -926,13 +946,6 @@ public class EarthResidentialGenerator {
                 Material.SPRUCE_STAIRS
         );
 
-        /*
-         * Bedroom/storage corner.
-         *
-         * Beds themselves will eventually be tied into household
-         * behavior. For now this provides a finished bedroom area
-         * without creating NPC logic inside the terrain generator.
-         */
         setWorldBlock(
                 chunkData,
                 chunkMinX,
@@ -963,9 +976,6 @@ public class EarthResidentialGenerator {
                 Material.RED_CARPET
         );
 
-        /*
-         * Interior lighting.
-         */
         setWorldBlock(
                 chunkData,
                 chunkMinX,
@@ -986,9 +996,6 @@ public class EarthResidentialGenerator {
                 Material.GLOWSTONE
         );
 
-        /*
-         * Small decorative variation.
-         */
         if (houseNumber % 2 == 0) {
 
             setWorldBlock(
@@ -1027,13 +1034,14 @@ public class EarthResidentialGenerator {
             int chunkMinZ,
             int doorX,
             int porchZ,
-            boolean northSide
+            boolean northSide,
+            int roadCenterZ
     ) {
 
         if (northSide) {
 
             int sidewalkZ =
-                    CENTER_Z + ROAD_HALF_WIDTH + 1;
+                    roadCenterZ + ROAD_HALF_WIDTH + 1;
 
             for (int z = sidewalkZ + 1;
                  z < porchZ;
@@ -1052,7 +1060,7 @@ public class EarthResidentialGenerator {
         } else {
 
             int sidewalkZ =
-                    CENTER_Z - ROAD_HALF_WIDTH - 1;
+                    roadCenterZ - ROAD_HALF_WIDTH - 1;
 
             for (int z = sidewalkZ - 1;
                  z > porchZ;
