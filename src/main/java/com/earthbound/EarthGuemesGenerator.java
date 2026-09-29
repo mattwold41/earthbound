@@ -2,59 +2,51 @@ package com.earthbound;
 
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
-/**
- * ============================================================
- * EARTHBOUND - GUEMES ISLAND DEVELOPMENT CONTROLLER
- * ============================================================
- *
- * This class controls generated development outside the
- * already-approved Area A neighborhood.
- *
- * IMPORTANT DESIGN RULES:
- *
- * - Preserve the real USGS terrain.
- * - Preserve the real Census road network.
- * - Do not cover the entire island with houses.
- * - Keep large forested areas open.
- * - Keep Guemes Mountain undeveloped.
- * - Keep shoreline/coastal areas protected.
- * - Keep the approved Area A neighborhood separate.
- * - Buildings use foundations rather than flattening terrain.
- *
- * This is the beginning of the island-wide development system.
- * More Guemes districts can be added here without changing
- * the approved Area A generator.
- * ============================================================
- */
 public final class EarthGuemesGenerator {
 
     /*
      * ============================================================
-     * GUEMES ISLAND REFERENCE BOUNDS
+     * EARTHBOUND - GUEMES ISLAND DEVELOPMENT CONTROLLER
      * ============================================================
      *
-     * These match the Guemes geographic area already used by
-     * EarthBound's terrain/water systems.
+     * PURPOSE:
+     *
+     * This class controls development outside the approved
+     * Area A neighborhood and General Store.
+     *
+     * It does NOT replace:
+     *
+     * - USGS terrain
+     * - Census roads
+     * - coastline/water generation
+     * - Area A
+     * - General Store
+     *
+     * Development must pass safety checks before structures
+     * are generated.
+     * ============================================================
      */
-
-    private static final double WEST_LONGITUDE = -122.70;
-    private static final double EAST_LONGITUDE = -122.55;
-
-    private static final double SOUTH_LATITUDE = 48.47;
-    private static final double NORTH_LATITUDE = 48.60;
 
     /*
-     * ============================================================
-     * PROTECTED GUEMES MOUNTAIN AREA
-     * ============================================================
-     *
-     * Approximate development-protection zone.
-     *
-     * This does NOT alter the terrain.
-     * It simply prevents this generator from placing residential
-     * development in the mountain area.
+     * Current Guemes geographic bounds.
      */
+    private static final double WEST_LONGITUDE =
+            -122.70;
 
+    private static final double EAST_LONGITUDE =
+            -122.55;
+
+    private static final double SOUTH_LATITUDE =
+            48.47;
+
+    private static final double NORTH_LATITUDE =
+            48.60;
+
+    /*
+     * Approximate Guemes Mountain protection center.
+     *
+     * This remains protected from residential generation.
+     */
     private static final double GUEMES_MOUNTAIN_LATITUDE =
             48.5445;
 
@@ -62,50 +54,123 @@ public final class EarthGuemesGenerator {
             -122.5945;
 
     /*
-     * Rough real-world protection radius in meters.
-     *
-     * We can refine this later during the final Guemes walkthrough.
+     * Real-world protection radius.
      */
     private static final double GUEMES_MOUNTAIN_PROTECTION_METERS =
             850.0;
 
     /*
-     * ============================================================
-     * COASTLINE PROTECTION
-     * ============================================================
-     *
-     * Houses should not be automatically placed directly on
-     * beaches, tidal areas, or water.
-     *
-     * The final coastline remains controlled by EarthWaterData.
+     * Keep structures away from very low shoreline terrain.
      */
-
     private static final int MINIMUM_BUILD_HEIGHT =
             EarthWaterData.SEA_LEVEL + 3;
 
     /*
+     * Development must be reasonably close to a real
+     * Census road.
+     *
+     * This is measured in real-world meters.
+     */
+    private static final double MAXIMUM_ROAD_DISTANCE_METERS =
+            45.0;
+
+    /*
      * ============================================================
-     * FUTURE DEVELOPMENT SWITCH
+     * MASTER DEVELOPMENT SWITCH
      * ============================================================
      *
-     * We intentionally start false.
+     * TRUE:
+     * New Guemes development may generate.
      *
-     * This means adding this controller to EarthGenerator is safe:
-     * it will NOT suddenly cover Guemes with experimental houses.
+     * FALSE:
+     * Only the already-approved systems generate.
      *
-     * After the island-wide placement plan is verified, this can
-     * be enabled.
+     * We are enabling this for the controlled first Guemes
+     * development test.
+     */
+    private static final boolean ENABLE_ISLAND_HOMES =
+            true;
+
+    /*
+     * ============================================================
+     * FIRST CONTROLLED GUEMES RESIDENTIAL CLUSTER
+     * ============================================================
+     *
+     * This is intentionally small.
+     *
+     * We are NOT automatically filling every Guemes road
+     * with houses.
+     *
+     * The cluster is positioned relative to EarthBound
+     * coordinates and must still pass all development checks.
+     *
+     * This first batch gives us something visible to inspect
+     * on Xbox before we expand the system farther.
+     * ============================================================
      */
 
-    private static final boolean ENABLE_ISLAND_HOMES =
-            false;
+    /*
+     * Center of the first controlled district.
+     *
+     * This is south/central Guemes development territory,
+     * separate from Area A.
+     *
+     * The road-finding routine below searches around this
+     * starting point instead of blindly assuming the road
+     * is exactly at one Z coordinate.
+     */
+    private static final double FIRST_DISTRICT_LATITUDE =
+            48.5350;
+
+    private static final double FIRST_DISTRICT_LONGITUDE =
+            -122.6245;
+
+    /*
+     * Number of homes on each side of the road.
+     *
+     * 3 north + 3 south = 6 total.
+     */
+    private static final int HOMES_PER_SIDE =
+            3;
+
+    /*
+     * Existing Area A property dimensions.
+     *
+     * These match the reusable house generator.
+     */
+    private static final int PLOT_WIDTH =
+            16;
+
+    private static final int PLOT_DEPTH =
+            20;
+
+    private static final int PLOT_SPACING =
+            4;
+
+    /*
+     * Existing residential generator assumes an
+     * east-west road.
+     *
+     * We therefore only generate this first district when
+     * the real road near the district appears predominantly
+     * east-west.
+     */
+    private static final int ROAD_DIRECTION_SAMPLE_BLOCKS =
+            12;
+
+    /*
+     * Search distance for finding the real road near the
+     * district center.
+     */
+    private static final int ROAD_SEARCH_BLOCKS =
+            30;
 
     private EarthGuemesGenerator() {
     }
 
     /*
      * ============================================================
-     * MAIN GUEMES GENERATION ENTRY POINT
+     * MAIN GUEMES GENERATION
      * ============================================================
      */
 
@@ -115,15 +180,339 @@ public final class EarthGuemesGenerator {
             int chunkZ
     ) {
 
-        /*
-         * Development is deliberately disabled until the first
-         * island-wide placement map is approved.
-         *
-         * Keeping the controller connected but inactive lets us
-         * build the system safely without risking the approved
-         * Area A neighborhood.
-         */
         if (!ENABLE_ISLAND_HOMES) {
+            return;
+        }
+
+        if (!EarthRoadData.isLoaded()) {
+            return;
+        }
+
+        generateFirstResidentialDistrict(
+                chunkData,
+                chunkX,
+                chunkZ
+        );
+    }
+
+    /*
+     * ============================================================
+     * FIRST RESIDENTIAL DISTRICT
+     * ============================================================
+     */
+
+    private static void generateFirstResidentialDistrict(
+            ChunkData chunkData,
+            int chunkX,
+            int chunkZ
+    ) {
+
+        int districtCenterX =
+                EarthCoordinates.longitudeToMinecraftX(
+                        FIRST_DISTRICT_LONGITUDE
+                );
+
+        int approximateCenterZ =
+                EarthCoordinates.latitudeToMinecraftZ(
+                        FIRST_DISTRICT_LATITUDE
+                );
+
+        int roadCenterZ =
+                findRoadCenterZ(
+                        districtCenterX,
+                        approximateCenterZ
+                );
+
+        /*
+         * No real Census road was found close enough.
+         */
+        if (roadCenterZ == Integer.MIN_VALUE) {
+            return;
+        }
+
+        /*
+         * Our current approved house design faces
+         * north/south.
+         *
+         * Therefore this first reusable district should only
+         * generate beside a road that appears primarily
+         * east-west.
+         */
+        if (!isApproximatelyEastWestRoad(
+                districtCenterX,
+                roadCenterZ
+        )) {
+            return;
+        }
+
+        double roadLatitude =
+                EarthCoordinates.getLatitude(
+                        districtCenterX,
+                        roadCenterZ
+                );
+
+        double roadLongitude =
+                EarthCoordinates.getLongitude(
+                        districtCenterX,
+                        roadCenterZ
+                );
+
+        double roadDistance =
+                EarthRoadData
+                        .getDistanceToNearestRoadMeters(
+                                roadLatitude,
+                                roadLongitude
+                        );
+
+        if (roadDistance
+                > MAXIMUM_ROAD_DISTANCE_METERS) {
+
+            return;
+        }
+
+        /*
+         * Determine total district width.
+         */
+        int totalWidth =
+                (HOMES_PER_SIDE * PLOT_WIDTH)
+                        + ((HOMES_PER_SIDE - 1)
+                        * PLOT_SPACING);
+
+        int firstPlotX =
+                districtCenterX
+                        - (totalWidth / 2);
+
+        /*
+         * Keep properties beyond the actual road surface.
+         *
+         * The reusable residential house system handles
+         * the walkway toward roadCenterZ.
+         */
+        int northPlotMinZ =
+                roadCenterZ + 8;
+
+        int southPlotMaxZ =
+                roadCenterZ - 8;
+
+        int southPlotMinZ =
+                southPlotMaxZ - PLOT_DEPTH;
+
+        for (int plot = 0;
+             plot < HOMES_PER_SIDE;
+             plot++) {
+
+            int plotMinX =
+                    firstPlotX
+                            + plot
+                            * (PLOT_WIDTH
+                            + PLOT_SPACING);
+
+            /*
+             * NORTH PROPERTY
+             */
+            generateResidentialHome(
+                    chunkData,
+                    chunkX,
+                    chunkZ,
+                    plotMinX,
+                    northPlotMinZ,
+                    true,
+                    100 + plot,
+                    roadCenterZ
+            );
+
+            /*
+             * SOUTH PROPERTY
+             */
+            generateResidentialHome(
+                    chunkData,
+                    chunkX,
+                    chunkZ,
+                    plotMinX,
+                    southPlotMinZ,
+                    false,
+                    200 + plot,
+                    roadCenterZ
+            );
+        }
+    }
+
+    /*
+     * ============================================================
+     * FIND REAL ROAD CENTER
+     * ============================================================
+     *
+     * Search north/south from the approximate district
+     * coordinate.
+     *
+     * We collect road blocks and use the middle of the
+     * detected road as the working center.
+     * ============================================================
+     */
+
+    private static int findRoadCenterZ(
+            int worldX,
+            int approximateZ
+    ) {
+
+        int firstRoadZ =
+                Integer.MIN_VALUE;
+
+        int lastRoadZ =
+                Integer.MIN_VALUE;
+
+        for (int offset = -ROAD_SEARCH_BLOCKS;
+             offset <= ROAD_SEARCH_BLOCKS;
+             offset++) {
+
+            int worldZ =
+                    approximateZ + offset;
+
+            double latitude =
+                    EarthCoordinates.getLatitude(
+                            worldX,
+                            worldZ
+                    );
+
+            double longitude =
+                    EarthCoordinates.getLongitude(
+                            worldX,
+                            worldZ
+                    );
+
+            if (EarthRoadData.isRoad(
+                    latitude,
+                    longitude
+            )) {
+
+                if (firstRoadZ
+                        == Integer.MIN_VALUE) {
+
+                    firstRoadZ =
+                            worldZ;
+                }
+
+                lastRoadZ =
+                        worldZ;
+            }
+        }
+
+        if (firstRoadZ
+                == Integer.MIN_VALUE) {
+
+            return Integer.MIN_VALUE;
+        }
+
+        return (firstRoadZ + lastRoadZ) / 2;
+    }
+
+    /*
+     * ============================================================
+     * ROAD DIRECTION CHECK
+     * ============================================================
+     *
+     * The current reusable homes face north/south.
+     *
+     * We therefore verify that the road continues farther
+     * east/west than north/south before generating this
+     * first district.
+     * ============================================================
+     */
+
+    private static boolean isApproximatelyEastWestRoad(
+            int roadX,
+            int roadZ
+    ) {
+
+        int eastWestHits =
+                0;
+
+        int northSouthHits =
+                0;
+
+        for (int offset =
+                     -ROAD_DIRECTION_SAMPLE_BLOCKS;
+             offset <= ROAD_DIRECTION_SAMPLE_BLOCKS;
+             offset += 2) {
+
+            /*
+             * East / west sample.
+             */
+            double eastWestLatitude =
+                    EarthCoordinates.getLatitude(
+                            roadX + offset,
+                            roadZ
+                    );
+
+            double eastWestLongitude =
+                    EarthCoordinates.getLongitude(
+                            roadX + offset,
+                            roadZ
+                    );
+
+            if (EarthRoadData.isRoad(
+                    eastWestLatitude,
+                    eastWestLongitude
+            )) {
+
+                eastWestHits++;
+            }
+
+            /*
+             * North / south sample.
+             */
+            double northSouthLatitude =
+                    EarthCoordinates.getLatitude(
+                            roadX,
+                            roadZ + offset
+                    );
+
+            double northSouthLongitude =
+                    EarthCoordinates.getLongitude(
+                            roadX,
+                            roadZ + offset
+                    );
+
+            if (EarthRoadData.isRoad(
+                    northSouthLatitude,
+                    northSouthLongitude
+            )) {
+
+                northSouthHits++;
+            }
+        }
+
+        return eastWestHits
+                >= northSouthHits;
+    }
+
+    /*
+     * ============================================================
+     * RESIDENTIAL HOME GENERATION
+     * ============================================================
+     */
+
+    public static void generateResidentialHome(
+            ChunkData chunkData,
+            int chunkX,
+            int chunkZ,
+            int plotMinX,
+            int plotMinZ,
+            boolean northSide,
+            int houseNumber,
+            int roadCenterZ
+    ) {
+
+        int propertyCenterX =
+                plotMinX + (PLOT_WIDTH / 2);
+
+        int propertyCenterZ =
+                plotMinZ + (PLOT_DEPTH / 2);
+
+        if (!isSuitableForDevelopment(
+                propertyCenterX,
+                propertyCenterZ
+        )) {
             return;
         }
 
@@ -133,64 +522,110 @@ public final class EarthGuemesGenerator {
         int chunkMinZ =
                 chunkZ << 4;
 
-        int chunkCenterX =
-                chunkMinX + 8;
+        EarthResidentialGenerator.generateHome(
+                chunkData,
+                chunkMinX,
+                chunkMinZ,
+                plotMinX,
+                plotMinZ,
+                northSide,
+                houseNumber,
+                roadCenterZ
+        );
+    }
 
-        int chunkCenterZ =
-                chunkMinZ + 8;
+    /*
+     * ============================================================
+     * DEVELOPMENT SUITABILITY
+     * ============================================================
+     */
+
+    public static boolean isSuitableForDevelopment(
+            int worldX,
+            int worldZ
+    ) {
 
         double latitude =
                 EarthCoordinates.getLatitude(
-                        chunkCenterX,
-                        chunkCenterZ
+                        worldX,
+                        worldZ
                 );
 
         double longitude =
                 EarthCoordinates.getLongitude(
-                        chunkCenterX,
-                        chunkCenterZ
+                        worldX,
+                        worldZ
                 );
 
         /*
-         * Never generate Guemes development outside the
-         * Guemes geographic working area.
+         * Must remain inside current Guemes bounds.
          */
         if (!isInsideGuemesBounds(
                 latitude,
                 longitude
         )) {
-            return;
+
+            return false;
         }
 
         /*
-         * Preserve Guemes Mountain and the surrounding
-         * natural/conservation area.
+         * Protect Guemes Mountain.
          */
         if (isInsideGuemesMountainProtection(
                 latitude,
                 longitude
         )) {
-            return;
+
+            return false;
         }
 
         /*
-         * Additional Guemes districts will be called from here.
-         *
-         * Examples later:
-         *
-         * generateSouthGuemesResidential(...);
-         * generateCentralGuemesResidential(...);
-         * generateNorthGuemesResidential(...);
-         * generateCommunityArea(...);
-         *
-         * We will only add them after their locations have been
-         * checked against the real roads and the island plan.
+         * Keep development close to real roads.
          */
+        double roadDistance =
+                EarthRoadData
+                        .getDistanceToNearestRoadMeters(
+                                latitude,
+                                longitude
+                        );
+
+        if (roadDistance
+                > MAXIMUM_ROAD_DISTANCE_METERS) {
+
+            return false;
+        }
+
+        /*
+         * Check real USGS elevation.
+         */
+        double elevationMeters =
+                EarthTerrainLoader
+                        .getGuemesElevation(
+                                latitude,
+                                longitude
+                        );
+
+        int minecraftHeight =
+                EarthElevation
+                        .getMinecraftHeight(
+                                elevationMeters
+                        );
+
+        /*
+         * Protect shoreline / very low terrain.
+         */
+        if (minecraftHeight
+                < MINIMUM_BUILD_HEIGHT) {
+
+            return false;
+        }
+
+        return true;
     }
 
     /*
      * ============================================================
-     * GUEMES BOUNDARY CHECK
+     * GUEMES BOUNDS
      * ============================================================
      */
 
@@ -199,10 +634,14 @@ public final class EarthGuemesGenerator {
             double longitude
     ) {
 
-        return latitude >= SOUTH_LATITUDE
-                && latitude <= NORTH_LATITUDE
-                && longitude >= WEST_LONGITUDE
-                && longitude <= EAST_LONGITUDE;
+        return latitude
+                >= SOUTH_LATITUDE
+                && latitude
+                <= NORTH_LATITUDE
+                && longitude
+                >= WEST_LONGITUDE
+                && longitude
+                <= EAST_LONGITUDE;
     }
 
     /*
@@ -230,120 +669,8 @@ public final class EarthGuemesGenerator {
 
     /*
      * ============================================================
-     * TERRAIN DEVELOPMENT CHECK
-     * ============================================================
-     *
-     * This can be used before placing future homes or businesses.
-     */
-
-    public static boolean isSuitableForDevelopment(
-            int worldX,
-            int worldZ
-    ) {
-
-        double latitude =
-                EarthCoordinates.getLatitude(
-                        worldX,
-                        worldZ
-                );
-
-        double longitude =
-                EarthCoordinates.getLongitude(
-                        worldX,
-                        worldZ
-                );
-
-        if (!isInsideGuemesBounds(
-                latitude,
-                longitude
-        )) {
-            return false;
-        }
-
-        if (isInsideGuemesMountainProtection(
-                latitude,
-                longitude
-        )) {
-            return false;
-        }
-
-        double elevationMeters =
-                EarthTerrainLoader.getGuemesElevation(
-                        latitude,
-                        longitude
-                );
-
-        int minecraftHeight =
-                EarthElevation.getMinecraftHeight(
-                        elevationMeters
-                );
-
-        /*
-         * Protect shoreline / very-low coastal ground.
-         */
-        if (minecraftHeight < MINIMUM_BUILD_HEIGHT) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /*
-     * ============================================================
-     * REUSABLE RESIDENTIAL HOME
-     * ============================================================
-     *
-     * This provides one controlled doorway into the approved
-     * Version 6 house generator.
-     *
-     * Future Guemes districts can use the same approved house
-     * design instead of duplicating it.
-     */
-
-    public static void generateResidentialHome(
-            ChunkData chunkData,
-            int chunkMinX,
-            int chunkMinZ,
-            int plotMinX,
-            int plotMinZ,
-            boolean northSide,
-            int houseNumber
-    ) {
-
-        /*
-         * Use the center of the future property as a quick
-         * development-safety check.
-         */
-        int propertyCenterX =
-                plotMinX + 8;
-
-        int propertyCenterZ =
-                plotMinZ + 10;
-
-        if (!isSuitableForDevelopment(
-                propertyCenterX,
-                propertyCenterZ
-        )) {
-            return;
-        }
-
-        EarthResidentialGenerator.generateHome(
-                chunkData,
-                chunkMinX,
-                chunkMinZ,
-                plotMinX,
-                plotMinZ,
-                northSide,
-                houseNumber
-        );
-    }
-
-    /*
-     * ============================================================
      * DISTANCE HELPER
      * ============================================================
-     *
-     * Haversine distance between two geographic coordinates.
      */
 
     private static double distanceMeters(
@@ -353,7 +680,7 @@ public final class EarthGuemesGenerator {
             double longitude2
     ) {
 
-        final double earthRadiusMeters =
+        double earthRadiusMeters =
                 6371000.0;
 
         double latitude1Radians =
@@ -368,41 +695,42 @@ public final class EarthGuemesGenerator {
 
         double latitudeDifference =
                 Math.toRadians(
-                        latitude2 - latitude1
+                        latitude2
+                                - latitude1
                 );
 
         double longitudeDifference =
                 Math.toRadians(
-                        longitude2 - longitude1
-                );
-
-        double sinLatitude =
-                Math.sin(
-                        latitudeDifference / 2.0
-                );
-
-        double sinLongitude =
-                Math.sin(
-                        longitudeDifference / 2.0
+                        longitude2
+                                - longitude1
                 );
 
         double a =
-                sinLatitude * sinLatitude
+                Math.sin(
+                        latitudeDifference / 2.0
+                )
+                        * Math.sin(
+                        latitudeDifference / 2.0
+                )
                         + Math.cos(
-                                latitude1Radians
-                        )
+                        latitude1Radians
+                )
                         * Math.cos(
-                                latitude2Radians
-                        )
-                        * sinLongitude
-                        * sinLongitude;
+                        latitude2Radians
+                )
+                        * Math.sin(
+                        longitudeDifference / 2.0
+                )
+                        * Math.sin(
+                        longitudeDifference / 2.0
+                );
 
         double c =
                 2.0
                         * Math.atan2(
-                                Math.sqrt(a),
-                                Math.sqrt(1.0 - a)
-                        );
+                        Math.sqrt(a),
+                        Math.sqrt(1.0 - a)
+                );
 
         return earthRadiusMeters * c;
     }
