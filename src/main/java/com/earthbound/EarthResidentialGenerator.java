@@ -12,11 +12,12 @@ public class EarthResidentialGenerator {
      *
      * Area A
      *
-     * VERSION 4:
+     * VERSION 5:
      * - Keeps existing natural USGS terrain.
      * - Keeps neighborhood road and sidewalks.
      * - Keeps all 8 test property markers.
-     * - Adds ONE test starter house.
+     * - Keeps ONE test starter house.
+     * - Fills the front and rear gable walls beneath the roof.
      * - House uses a small foundation instead of grading terrain.
      *
      * IMPORTANT:
@@ -50,15 +51,6 @@ public class EarthResidentialGenerator {
      * ============================================================
      * FIRST TEST HOUSE
      * ============================================================
-     *
-     * Uses the first NORTH property.
-     *
-     * The road is south of this house, so the front door faces
-     * SOUTH toward the neighborhood road.
-     *
-     * House footprint:
-     * 11 blocks wide
-     * 13 blocks deep
      */
 
     private static final int TEST_HOUSE_WIDTH = 11;
@@ -105,9 +97,6 @@ public class EarthResidentialGenerator {
                 chunkMinZ
         );
 
-        /*
-         * Generate ONE house only.
-         */
         generateFirstTestHouse(
                 chunkData,
                 chunkMinX,
@@ -293,9 +282,6 @@ public class EarthResidentialGenerator {
         int plotMinZ =
                 CENTER_Z + ROAD_HALF_WIDTH + 5;
 
-        /*
-         * Center the house inside the first north plot.
-         */
         int houseMinX =
                 plotMinX
                         + ((PLOT_WIDTH - TEST_HOUSE_WIDTH) / 2);
@@ -303,19 +289,12 @@ public class EarthResidentialGenerator {
         int houseMaxX =
                 houseMinX + TEST_HOUSE_WIDTH - 1;
 
-        /*
-         * Leave a small front yard between the road and house.
-         */
         int houseMinZ =
                 plotMinZ + 5;
 
         int houseMaxZ =
                 houseMinZ + TEST_HOUSE_DEPTH - 1;
 
-        /*
-         * Use the terrain height at the center of the house.
-         * We do NOT flatten the surrounding property.
-         */
         int centerHouseX =
                 (houseMinX + houseMaxX) / 2;
 
@@ -332,9 +311,6 @@ public class EarthResidentialGenerator {
          * ========================================================
          * FOUNDATION
          * ========================================================
-         *
-         * Stone foundation reaches downward into the natural land.
-         * This lets the house remain level without grading the plot.
          */
 
         for (int worldX = houseMinX;
@@ -381,9 +357,6 @@ public class EarthResidentialGenerator {
                     );
                 }
 
-                /*
-                 * Clear space above the house foundation.
-                 */
                 for (int y = groundY + 1;
                      y <= groundY + 9;
                      y++) {
@@ -399,9 +372,6 @@ public class EarthResidentialGenerator {
                     );
                 }
 
-                /*
-                 * Interior floor.
-                 */
                 setWorldBlock(
                         chunkData,
                         chunkMinX,
@@ -465,9 +435,6 @@ public class EarthResidentialGenerator {
                     );
                 }
 
-                /*
-                 * Corner timber posts.
-                 */
                 boolean corner =
                         (westWall || eastWall)
                                 && (southWall || northWall);
@@ -494,12 +461,62 @@ public class EarthResidentialGenerator {
 
         /*
          * ========================================================
+         * FRONT AND REAR GABLE WALLS
+         * ========================================================
+         *
+         * Fill the triangular space beneath the pitched roof.
+         */
+
+        int houseCenterX =
+                (houseMinX + houseMaxX) / 2;
+
+        for (int worldX = houseMinX;
+             worldX <= houseMaxX;
+             worldX++) {
+
+            int distanceFromSide =
+                    Math.min(
+                            worldX - houseMinX,
+                            houseMaxX - worldX
+                    );
+
+            int gableTopY =
+                    groundY + 5 + distanceFromSide;
+
+            for (int y = groundY + 6;
+                 y <= gableTopY;
+                 y++) {
+
+                setWorldBlock(
+                        chunkData,
+                        chunkMinX,
+                        chunkMinZ,
+                        worldX,
+                        y,
+                        houseMinZ,
+                        Material.WHITE_TERRACOTTA
+                );
+
+                setWorldBlock(
+                        chunkData,
+                        chunkMinX,
+                        chunkMinZ,
+                        worldX,
+                        y,
+                        houseMaxZ,
+                        Material.WHITE_TERRACOTTA
+                );
+            }
+        }
+
+        /*
+         * ========================================================
          * FRONT DOOR - SOUTH / ROAD SIDE
          * ========================================================
          */
 
         int doorX =
-                (houseMinX + houseMaxX) / 2;
+                houseCenterX;
 
         setWorldBlock(
                 chunkData,
@@ -527,9 +544,6 @@ public class EarthResidentialGenerator {
          * ========================================================
          */
 
-        /*
-         * Front windows.
-         */
         placeWindow(
                 chunkData,
                 chunkMinX,
@@ -548,9 +562,6 @@ public class EarthResidentialGenerator {
                 houseMinZ
         );
 
-        /*
-         * Rear windows.
-         */
         placeWindow(
                 chunkData,
                 chunkMinX,
@@ -569,9 +580,6 @@ public class EarthResidentialGenerator {
                 houseMaxZ
         );
 
-        /*
-         * Side windows.
-         */
         placeWindow(
                 chunkData,
                 chunkMinX,
@@ -653,8 +661,6 @@ public class EarthResidentialGenerator {
          * ========================================================
          * WALKWAY
          * ========================================================
-         *
-         * Follow natural terrain from the sidewalk toward the porch.
          */
 
         int sidewalkZ =
