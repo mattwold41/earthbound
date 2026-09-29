@@ -3,8 +3,10 @@ version: 0.1.0
 main: com.earthbound.EarthBound
 load: STARTUP
 api-version: '26.2'
+
 description: Real Earth simulation server for Minecraft
 author: EarthBound
+
 
 commands:
 
@@ -17,6 +19,12 @@ commands:
   balance:
     description: View your EarthBound money balance
     usage: /balance
+
+
+  store:
+    description: EarthBound Store
+    usage: /store
+
 
 
 permissions:
