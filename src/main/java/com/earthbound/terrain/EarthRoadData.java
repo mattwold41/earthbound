@@ -7,10 +7,6 @@ package com.earthbound.roads;
  *
  * Stores road mask information.
  *
- * Loaded from:
- * - GIS road data
- * - road masks
- *
  * Used by:
  * EarthRoadGenerator
  *
@@ -21,24 +17,18 @@ package com.earthbound.roads;
 public class EarthRoadData {
 
 
+    public static final int LOCAL_WIDTH = 2;
+
+
     private static boolean loaded = false;
 
 
 
     /*
-     * Load road data
+     * Original loader
      */
 
     public static void load() {
-
-
-        /*
-         * Future:
-         *
-         * Load TIGER/road centerlines
-         * Convert to road mask
-         *
-         */
 
 
         loaded = true;
@@ -52,7 +42,28 @@ public class EarthRoadData {
 
 
 
+
+    /*
+     * Compatibility loader
+     *
+     * Used by EarthBound.java
+     */
+
+    public static boolean loadGuemesRoadMask() {
+
+
+        load();
+
+
+        return true;
+
+    }
+
+
+
+
     public static boolean isLoaded() {
+
 
         return loaded;
 
@@ -60,9 +71,9 @@ public class EarthRoadData {
 
 
 
+
     /*
-     * Check if a Minecraft location
-     * contains a road.
+     * Check if location contains road
      */
 
     public static boolean isRoad(
@@ -71,18 +82,19 @@ public class EarthRoadData {
     ) {
 
 
-        /*
-         * Temporary testing logic.
-         *
-         * Replace with real road mask.
-         */
-
-
         if (!loaded) {
 
             return false;
 
         }
+
+
+        /*
+         * Temporary.
+         *
+         * Real Guemes road mask
+         * will replace this.
+         */
 
 
         return false;
