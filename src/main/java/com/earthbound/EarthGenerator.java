@@ -1,6 +1,5 @@
 package com.earthbound;
 
-
 import java.util.Random;
 
 import org.bukkit.World;
@@ -8,48 +7,38 @@ import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 
-
 /*
  * ============================================================
  * EARTHBOUND WORLD GENERATOR
  *
- * Main world generation coordinator.
+ * DIAGNOSTIC VERSION
  *
- * Current:
+ * Purpose:
+ * Test whether Paper can generate new chunks normally
+ * without calling the elevation raster.
  *
- * - Real terrain elevation
- *
- * Future:
- *
- * - Water
- * - Roads
- * - Vegetation
- * - Buildings
+ * If chunks load with this version, the problem is in the
+ * elevation lookup/data path rather than the Paper generator.
  *
  * ============================================================
  */
 
-
 public class EarthGenerator extends ChunkGenerator {
 
 
+    private static final int TEST_TERRAIN_HEIGHT = 70;
+
 
     public EarthGenerator() {
-
 
         System.out.println(
                 "=== EARTHBOUND GENERATOR ACTIVE ==="
         );
 
-
         System.out.println(
-                "[EarthBound] Real terrain generator loaded"
+                "[EarthBound] Diagnostic terrain generator loaded"
         );
-
-
     }
-
-
 
 
     @Override
@@ -61,47 +50,45 @@ public class EarthGenerator extends ChunkGenerator {
             BiomeGrid biome
     ) {
 
-
         ChunkData chunkData =
                 createChunkData(world);
 
 
+        /*
+         * Convert the chunk position into
+         * its first world block position.
+         */
 
         int startX =
                 chunkX << 4;
-
 
         int startZ =
                 chunkZ << 4;
 
 
+        /*
+         * Generate all 256 columns
+         * inside this chunk.
+         */
 
-        for (
-                int x = 0;
-                x < 16;
-                x++
-        ) {
+        for (int x = 0; x < 16; x++) {
 
-
-            for (
-                    int z = 0;
-                    z < 16;
-                    z++
-            ) {
+            for (int z = 0; z < 16; z++) {
 
 
                 int worldX =
                         startX + x;
 
-
                 int worldZ =
                         startZ + z;
 
 
-
                 /*
-                 * Convert Minecraft position
-                 * into Earth coordinates
+                 * Verify that our coordinate conversion
+                 * can still be called successfully.
+                 *
+                 * We are intentionally NOT using the
+                 * elevation raster during this test.
                  */
 
                 double latitude =
@@ -110,7 +97,6 @@ public class EarthGenerator extends ChunkGenerator {
                                 worldZ
                         );
 
-
                 double longitude =
                         EarthCoordinates.getLongitude(
                                 worldX,
@@ -118,41 +104,39 @@ public class EarthGenerator extends ChunkGenerator {
                         );
 
 
-
                 /*
-                 * Get real elevation
+                 * Keep these values referenced so this
+                 * diagnostic still exercises the
+                 * coordinate conversion.
                  */
 
-                int height =
-                        EarthTerrainGenerator.getTerrainHeight(
-                                latitude,
-                                longitude
+                if (Double.isNaN(latitude)
+                        || Double.isNaN(longitude)) {
+
+                    continue;
+                }
+
+
+                /*
+                 * Temporary flat terrain.
+                 *
+                 * If new chunks now load, we know
+                 * EarthTerrainGenerator /
+                 * EarthTerrainLoader is where we
+                 * need to investigate next.
+                 */
+
+                EarthTerrainGenerator
+                        .generateNaturalLandColumn(
+                                chunkData,
+                                x,
+                                z,
+                                TEST_TERRAIN_HEIGHT
                         );
-
-
-
-                /*
-                 * Generate terrain column
-                 */
-
-                EarthTerrainGenerator.generateNaturalLandColumn(
-                        chunkData,
-                        x,
-                        z,
-                        height
-                );
-
-
             }
-
         }
 
 
-
         return chunkData;
-
     }
-
-
-
 }
