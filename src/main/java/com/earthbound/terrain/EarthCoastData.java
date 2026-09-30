@@ -2,7 +2,7 @@ package com.earthbound.terrain;
 
 
 import com.earthbound.water.EarthWaterData;
-import com.earthbound.terrain.EarthTerrainLoader;
+
 
 /*
  * ============================================================
@@ -24,7 +24,7 @@ public class EarthCoastData {
 
 
     /*
-     * Check if location is coastline/water edge
+     * Check if a location is water/coast
      */
 
     public static boolean isCoast(
@@ -44,7 +44,7 @@ public class EarthCoastData {
 
 
     /*
-     * Get terrain height near coast
+     * Get elevation near coastline
      */
 
     public static double getCoastElevation(
