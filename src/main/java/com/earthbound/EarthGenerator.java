@@ -15,11 +15,11 @@ import org.bukkit.generator.ChunkGenerator.ChunkData;
  *
  * Main world generation coordinator.
  *
- * Current systems:
+ * Current:
  *
- * - Terrain
+ * - Real terrain elevation
  *
- * Future connections:
+ * Future:
  *
  * - Water
  * - Roads
@@ -43,7 +43,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         System.out.println(
-                "[EarthBound] Terrain generator loaded"
+                "[EarthBound] Real terrain generator loaded"
         );
 
 
@@ -67,10 +67,6 @@ public class EarthGenerator extends ChunkGenerator {
 
 
 
-        /*
-         * Convert chunk coordinates
-         */
-
         int startX =
                 chunkX << 4;
 
@@ -79,10 +75,6 @@ public class EarthGenerator extends ChunkGenerator {
                 chunkZ << 4;
 
 
-
-        /*
-         * Generate terrain
-         */
 
         for (
                 int x = 0;
@@ -108,16 +100,40 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Temporary terrain height.
-                 *
-                 * Next step:
-                 * connect real USGS elevation.
+                 * Convert Minecraft position
+                 * into Earth coordinates
+                 */
+
+                double latitude =
+                        EarthCoordinates.getLatitude(
+                                worldX,
+                                worldZ
+                        );
+
+
+                double longitude =
+                        EarthCoordinates.getLongitude(
+                                worldX,
+                                worldZ
+                        );
+
+
+
+                /*
+                 * Get real elevation
                  */
 
                 int height =
-                        70;
+                        EarthTerrainGenerator.getTerrainHeight(
+                                latitude,
+                                longitude
+                        );
 
 
+
+                /*
+                 * Generate terrain column
+                 */
 
                 EarthTerrainGenerator.generateNaturalLandColumn(
                         chunkData,
