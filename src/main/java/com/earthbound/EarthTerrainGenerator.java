@@ -5,8 +5,9 @@ import org.bukkit.Material;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 
-import com.earthbound.EarthTerrainGenerator;
+import com.earthbound.terrain.EarthTerrainLoader;
 import com.earthbound.terrain.EarthElevation;
+
 
 /*
  * ============================================================
@@ -26,10 +27,10 @@ import com.earthbound.terrain.EarthElevation;
 public class EarthTerrainGenerator {
 
 
-    /*
-     * Generate natural land column
-     */
 
+    /*
+     * Generate a natural terrain column
+     */
 
     public static void generateNaturalLandColumn(
             ChunkData chunkData,
@@ -96,9 +97,8 @@ public class EarthTerrainGenerator {
 
 
     /*
-     * Get real world terrain height
+     * Get real Earth elevation
      */
-
 
     public static int getTerrainHeight(
             double latitude,
@@ -118,6 +118,7 @@ public class EarthTerrainGenerator {
         );
 
     }
+
 
 
 }
