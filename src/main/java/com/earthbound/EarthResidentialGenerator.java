@@ -1,11 +1,18 @@
 package com.earthbound;
 
+
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Bisected;
 import org.bukkit.block.data.type.Door;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
+
+
+import com.earthbound.roads.EarthRoadData;
+import com.earthbound.terrain.EarthTerrainLoader;
+import com.earthbound.terrain.EarthElevation;
+
 
 public class EarthResidentialGenerator {
 
