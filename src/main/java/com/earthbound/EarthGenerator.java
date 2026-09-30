@@ -1549,7 +1549,7 @@ public class EarthGenerator extends ChunkGenerator {
 
                 + storeTerrainHeight
                 * storeInfluence;
-    }
+    
   }
 
 
