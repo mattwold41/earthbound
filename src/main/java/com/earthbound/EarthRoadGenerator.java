@@ -9,15 +9,26 @@ import org.bukkit.generator.ChunkGenerator.ChunkData;
  * EARTHBOUND ROAD GENERATOR
  *
  * Handles:
- * - road detection
- * - road heights
- * - road blocks
- * - road information
+ *
+ * - Real road detection
+ * - Road height smoothing
+ * - Road blocks
+ * - Road borders
+ * - Road information
  *
  * ============================================================
  */
 
+
 public class EarthRoadGenerator {
+
+
+    private static final Material ROAD_SURFACE =
+            Material.POLISHED_BLACKSTONE_BRICKS;
+
+
+    private static final Material ROAD_BORDER =
+            Material.STONE_BRICKS;
 
 
     private static final int SEA_LEVEL = 63;
@@ -25,8 +36,11 @@ public class EarthRoadGenerator {
 
 
     /*
-     * Get road information for a location
+     * ============================================================
+     * ROAD LOOKUP
+     * ============================================================
      */
+
 
     public static RoadInfo getRoadInfo(
             int x,
@@ -36,14 +50,15 @@ public class EarthRoadGenerator {
     ) {
 
 
-        boolean road =
+        boolean isRoad =
                 EarthRoadData.isRoad(
                         x,
                         z
                 );
 
 
-        if (!road) {
+        if (!isRoad) {
+
 
             return RoadInfo.none();
 
@@ -62,14 +77,19 @@ public class EarthRoadGenerator {
 
 
     /*
-     * Generate a road column
+     * ============================================================
+     * ROAD GENERATION
+     * ============================================================
      */
+
 
     public static void generateRoadColumn(
             ChunkData chunkData,
             int x,
             int z,
-            int height
+            double height,
+            Material surface,
+            Material border
     ) {
 
 
@@ -79,37 +99,31 @@ public class EarthRoadGenerator {
                 );
 
 
+
         for (
                 int y = SEA_LEVEL;
-                y <= roadHeight;
+                y < roadHeight;
                 y++
         ) {
 
 
-            if (y == roadHeight) {
-
-
-                chunkData.setBlock(
-                        x,
-                        y,
-                        z,
-                        Material.DIRT_PATH
-                );
-
-
-            } else {
-
-
-                chunkData.setBlock(
-                        x,
-                        y,
-                        z,
-                        Material.STONE
-                );
-
-            }
+            chunkData.setBlock(
+                    x,
+                    y,
+                    z,
+                    Material.STONE
+            );
 
         }
+
+
+
+        chunkData.setBlock(
+                x,
+                roadHeight,
+                z,
+                surface
+        );
 
 
     }
@@ -118,45 +132,43 @@ public class EarthRoadGenerator {
 
 
     /*
-     * Smooth road elevation
+     * ============================================================
+     * ROAD HEIGHT SMOOTHING
+     * ============================================================
      */
 
-    public static int getSmoothedRoadHeightPrecise(
+
+    public static double getSmoothedRoadHeightPrecise(
             int x,
             int z
     ) {
 
 
-        int height =
-                EarthTerrainLoader
-                        .getGuemesElevation(
-                                x,
-                                z
-                        );
+        double latitude =
+                EarthCoordinates.getLatitude(
+                        x,
+                        z
+                );
 
 
-        return height;
-
-    }
-
-
-
-
-    /*
-     * Store compatible road height
-     */
-
-    public static int getStoreCompatibleRoadHeightPrecise(
-            int x,
-            int z,
-            double storeHeight,
-            int roadHeight
-    ) {
+        double longitude =
+                EarthCoordinates.getLongitude(
+                        x,
+                        z
+                );
 
 
-        return Math.max(
-                roadHeight,
-                (int) storeHeight
+
+        double elevation =
+                EarthTerrainLoader.getGuemesElevation(
+                        latitude,
+                        longitude
+                );
+
+
+
+        return EarthElevation.getMinecraftHeight(
+                elevation
         );
 
     }
@@ -165,8 +177,36 @@ public class EarthRoadGenerator {
 
 
     /*
-     * Round terrain heights
+     * ============================================================
+     * STORE COMPATIBLE ROAD HEIGHT
+     * ============================================================
      */
+
+
+    public static double getStoreCompatibleRoadHeightPrecise(
+            int x,
+            int z,
+            double roadHeight,
+            int terrainHeight
+    ) {
+
+
+        return Math.max(
+                roadHeight,
+                terrainHeight
+        );
+
+    }
+
+
+
+
+    /*
+     * ============================================================
+     * HALF BLOCK HEIGHT
+     * ============================================================
+     */
+
 
     public static int quantizeToHalfBlock(
             double height
@@ -175,8 +215,9 @@ public class EarthRoadGenerator {
 
         return (int)
                 Math.round(
-                        height
-                );
+                        height * 2
+                )
+                / 2;
 
     }
 
@@ -184,8 +225,11 @@ public class EarthRoadGenerator {
 
 
     /*
-     * Road information container
+     * ============================================================
+     * ROAD INFORMATION
+     * ============================================================
      */
+
 
     public static class RoadInfo {
 
@@ -224,6 +268,21 @@ public class EarthRoadGenerator {
 
 
 
+        public Material getSurface() {
+
+            return ROAD_SURFACE;
+
+        }
+
+
+
+        public Material getBorder() {
+
+            return ROAD_BORDER;
+
+        }
+
+
 
         public static RoadInfo none() {
 
@@ -237,6 +296,5 @@ public class EarthRoadGenerator {
 
 
     }
-
 
 }
