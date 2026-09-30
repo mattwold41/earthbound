@@ -1,12 +1,23 @@
 package com.earthbound;
 
+import java.util.Random;
+
 import org.bukkit.World;
-import org.bukkit.generator.BlockPopulator;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
-import java.util.List;
-import java.util.Random;
+
+/*
+ * ============================================================
+ * EARTHBOUND WORLD GENERATOR
+ *
+ * Main coordinator.
+ *
+ * Terrain, roads, water, vegetation,
+ * and buildings will connect here.
+ *
+ * ============================================================
+ */
 
 
 public class EarthGenerator extends ChunkGenerator {
@@ -23,3 +34,40 @@ public class EarthGenerator extends ChunkGenerator {
         );
 
     }
+
+
+
+    @Override
+    public ChunkData generateChunkData(
+            World world,
+            Random random,
+            int chunkX,
+            int chunkZ,
+            BiomeGrid biome
+    ) {
+
+
+        ChunkData chunkData =
+                createChunkData(world);
+
+
+
+        /*
+         * Systems will be added here:
+         *
+         * Terrain
+         * Water
+         * Roads
+         * Vegetation
+         * Buildings
+         *
+         */
+
+
+
+        return chunkData;
+
+    }
+
+
+}
