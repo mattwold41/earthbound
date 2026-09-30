@@ -1,9 +1,8 @@
-package com.earthbound.terrain;
+package com.earthbound;
 
 
 import com.earthbound.water.EarthWaterData;
-
-
+import com.earthbound.terrain.EarthTerrainLoader;
 
 /*
  * ============================================================
