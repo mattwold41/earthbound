@@ -1,5 +1,9 @@
 package com.earthbound;
 
+
+import com.earthbound.terrain.EarthTerrainLoader;
+
+
 import org.bukkit.Material;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
