@@ -1,70 +1,98 @@
-package com.earthbound;
+package com.earthbound.terrain;
+
+
+/*
+ * ============================================================
+ * EARTHBOUND GUEMES ELEVATION
+ *
+ * Stores Guemes Island elevation settings.
+ *
+ * ============================================================
+ */
+
 
 public class GuemesElevation {
 
-    private GuemesElevation() {
-    }
+
+    /*
+     * Guemes Island bounds
+     */
+
+    public static final double WEST =
+            -122.70;
+
+    public static final double EAST =
+            -122.55;
+
+
+    public static final double SOUTH =
+            48.47;
+
+    public static final double NORTH =
+            48.60;
+
 
 
     /*
-     * Gets the real USGS elevation for a
-     * Minecraft X/Z coordinate.
+     * Raster size
      */
-    public static double getElevation(
-            int x,
-            int z
+
+    public static final int RASTER_WIDTH =
+            512;
+
+
+    public static final int RASTER_HEIGHT =
+            512;
+
+
+
+    /*
+     * Convert latitude to raster X
+     */
+
+    public static int latitudeToX(
+            double latitude
     ) {
 
-        /*
-         * Convert Minecraft coordinates
-         * into real Earth coordinates.
-         */
-        double latitude =
-                EarthCoordinates.minecraftToLatitude(
-                        z
+
+        double percent =
+                (latitude - SOUTH)
+                /
+                (NORTH - SOUTH);
+
+
+        return (int)
+                Math.round(
+                        percent
+                        * (RASTER_WIDTH - 1)
                 );
 
-
-        double longitude =
-                EarthCoordinates.minecraftToLongitude(
-                        x
-                );
-
-
-        /*
-         * Make sure the real USGS elevation
-         * tile has been loaded.
-         */
-        if (!EarthTerrainDownloader.isLoaded()) {
-
-            return 0.0;
-
-        }
-
-
-        /*
-         * Look up the elevation in meters
-         * from the downloaded USGS raster.
-         */
-        double elevation =
-                EarthTerrainDownloader.getElevation(
-                        latitude,
-                        longitude
-                );
-
-
-        /*
-         * Protect terrain generation from
-         * invalid negative/no-data values.
-         */
-        if (Double.isNaN(elevation)
-                || Double.isInfinite(elevation)) {
-
-            return 0.0;
-
-        }
-
-
-        return elevation;
     }
+
+
+
+    /*
+     * Convert longitude to raster Z
+     */
+
+    public static int longitudeToZ(
+            double longitude
+    ) {
+
+
+        double percent =
+                (longitude - WEST)
+                /
+                (EAST - WEST);
+
+
+        return (int)
+                Math.round(
+                        percent
+                        * (RASTER_HEIGHT - 1)
+                );
+
+    }
+
+
 }
