@@ -11,9 +11,9 @@ import org.bukkit.generator.BlockPopulator;
 import java.util.Random;
 import java.util.List;
 
-import org.bukkit.generator.BlockPopulator;
-
 public class EarthGenerator extends ChunkGenerator {
+
+}
 
     /*
      * ============================================================
@@ -470,4 +470,3 @@ public class EarthGenerator extends ChunkGenerator {
     }
 
 }
-    
