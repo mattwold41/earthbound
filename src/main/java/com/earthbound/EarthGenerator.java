@@ -13,7 +13,6 @@ import java.util.List;
 
 public class EarthGenerator extends ChunkGenerator {
 
-}
 
     /*
      * ============================================================
@@ -442,7 +441,9 @@ public class EarthGenerator extends ChunkGenerator {
 
 
 
-        return chunkData;
+          return chunkData;
+
+    }
 
       /*
      * ============================================================
