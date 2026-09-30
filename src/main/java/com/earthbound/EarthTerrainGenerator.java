@@ -5,7 +5,7 @@ import org.bukkit.Material;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 
-import com.earthbound.terrain.EarthTerrainLoader;
+import com.earthbound.EarthTerrainGenerator;
 import com.earthbound.terrain.EarthElevation;
 
 /*
