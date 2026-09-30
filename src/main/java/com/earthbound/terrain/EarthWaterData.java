@@ -17,24 +17,18 @@ package com.earthbound.water;
 public class EarthWaterData {
 
 
+    public static final int SEA_LEVEL = 63;
+
+
     private static boolean loaded = false;
 
 
 
     /*
-     * Load water data
+     * Original loader
      */
 
     public static void load() {
-
-
-        /*
-         * Future:
-         *
-         * Load GIS water polygons
-         * Convert to water mask
-         *
-         */
 
 
         loaded = true;
@@ -43,6 +37,24 @@ public class EarthWaterData {
         System.out.println(
                 "[EarthBound] Water data loaded"
         );
+
+    }
+
+
+
+    /*
+     * Compatibility loader
+     *
+     * Used by EarthBound.java
+     */
+
+    public static boolean loadGuemesWaterMask() {
+
+
+        load();
+
+
+        return true;
 
     }
 
@@ -75,9 +87,8 @@ public class EarthWaterData {
         }
 
 
-
         /*
-         * Temporary value.
+         * Temporary.
          *
          * Real Guemes water mask
          * will replace this.
