@@ -170,7 +170,7 @@ import com.earthbound.terrain.EarthElevation;
     private static final int ROAD_SEARCH_BLOCKS =
             30;
 
-    private EarthGuemesGenerator() {
+    private EarthGuemesGenerator() 
 
     /*
      * ============================================================
