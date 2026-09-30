@@ -1,8 +1,13 @@
 package com.earthbound;
 
+
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
-public final class EarthGuemesGenerator {
+
+import com.earthbound.water.EarthWaterData;
+import com.earthbound.roads.EarthRoadData;
+import com.earthbound.terrain.EarthTerrainLoader;
+import com.earthbound.terrain.EarthElevation;
 
     /*
      * ============================================================
