@@ -11,6 +11,7 @@ import org.bukkit.generator.BlockPopulator;
 import java.util.Random;
 import java.util.List;
 
+
 public class EarthGenerator extends ChunkGenerator {
 
 
@@ -46,7 +47,9 @@ public class EarthGenerator extends ChunkGenerator {
     private static final double STORE_SLOPE_RUN = 4.0;
 
 
+
     public EarthGenerator() {
+
 
         System.out.println(
                 "=== EARTHBOUND REAL TERRAIN GENERATOR ACTIVE ==="
@@ -68,6 +71,7 @@ public class EarthGenerator extends ChunkGenerator {
                 "[EarthBound] Continuous Stone Brick road borders enabled."
         );
 
+
     }
      @Override
     public ChunkData generateChunkData(
@@ -78,8 +82,10 @@ public class EarthGenerator extends ChunkGenerator {
             BiomeGrid biome
     ) {
 
+
         ChunkData chunkData =
                 createChunkData(world);
+
 
 
         int chunkMinX =
@@ -96,6 +102,7 @@ public class EarthGenerator extends ChunkGenerator {
          * GENERATE EARTH TERRAIN
          * ========================================================
          */
+
 
         for (int localX = 0;
              localX < 16;
@@ -138,6 +145,7 @@ public class EarthGenerator extends ChunkGenerator {
                  * =================================================
                  */
 
+
                 double elevationMeters =
                         EarthTerrainLoader.getGuemesElevation(
                                 latitude,
@@ -158,6 +166,7 @@ public class EarthGenerator extends ChunkGenerator {
                  * =================================================
                  */
 
+
                 boolean water =
                         EarthWaterData.isWater(
                                 latitude,
@@ -167,27 +176,28 @@ public class EarthGenerator extends ChunkGenerator {
 
                 if (water) {
 
+
                     generateWaterColumn(
                             chunkData,
                             localX,
                             localZ
                     );
 
+
                     continue;
+
                 }
 
 
 
                 int terrainHeight =
                         naturalHeight;
-
-
-
-                /*
+                       /*
                  * =================================================
                  * GENERAL STORE TERRAIN BLEND
                  * =================================================
                  */
+
 
                 if (EarthBuildingGenerator
                         .isInsideGuemesStoreBlendArea(
@@ -199,6 +209,7 @@ public class EarthGenerator extends ChunkGenerator {
                     int storeHeight =
                             EarthBuildingGenerator
                                     .getGuemesStoreGroundY();
+
 
 
                     double distance =
@@ -229,6 +240,7 @@ public class EarthGenerator extends ChunkGenerator {
                                         / STORE_BLEND_DISTANCE;
 
 
+
                         blend =
                                 Math.max(
                                         0.0,
@@ -239,6 +251,7 @@ public class EarthGenerator extends ChunkGenerator {
                                 );
 
 
+
                         double smoothBlend =
                                 blend
                                         * blend
@@ -247,11 +260,13 @@ public class EarthGenerator extends ChunkGenerator {
                                         * blend);
 
 
+
                         double blendedHeight =
                                 storeHeight
                                         + (naturalHeight
                                         - storeHeight)
                                         * smoothBlend;
+
 
 
                         int allowedDifference =
@@ -264,9 +279,11 @@ public class EarthGenerator extends ChunkGenerator {
                                 );
 
 
+
                         int minimumHeight =
                                 storeHeight
                                         - allowedDifference;
+
 
 
                         int maximumHeight =
@@ -274,10 +291,12 @@ public class EarthGenerator extends ChunkGenerator {
                                         + allowedDifference;
 
 
+
                         terrainHeight =
                                 (int) Math.round(
                                         blendedHeight
                                 );
+
 
 
                         terrainHeight =
@@ -292,11 +311,15 @@ public class EarthGenerator extends ChunkGenerator {
                     }
 
                 }
-                    /*
+
+
+
+                /*
                  * =================================================
                  * EARTHBOUND ROAD CLASSIFICATION
                  * =================================================
                  */
+
 
                 RoadInfo roadInfo =
                         getRoadInfo(
@@ -313,6 +336,7 @@ public class EarthGenerator extends ChunkGenerator {
                  * GENERAL STORE ROAD PROTECTION
                  * =================================================
                  */
+
 
                 if (EarthBuildingGenerator
                         .isInsideGuemesStoreFoundation(
@@ -333,6 +357,7 @@ public class EarthGenerator extends ChunkGenerator {
                  * ROAD HEIGHT
                  * =================================================
                  */
+
 
                 if (roadInfo.isRoad()) {
 
@@ -396,14 +421,12 @@ public class EarthGenerator extends ChunkGenerator {
             }
 
         }
-
-
-
-        /*
+               /*
          * ========================================================
          * GUEMES GENERAL STORE
          * ========================================================
          */
+
 
         EarthBuildingGenerator.generateGuemesStore(
                 chunkData,
@@ -419,6 +442,7 @@ public class EarthGenerator extends ChunkGenerator {
          * ========================================================
          */
 
+
         EarthResidentialGenerator.generate(
                 chunkData,
                 chunkX,
@@ -433,6 +457,7 @@ public class EarthGenerator extends ChunkGenerator {
          * ========================================================
          */
 
+
         EarthGuemesGenerator.generate(
                 chunkData,
                 chunkX,
@@ -441,15 +466,17 @@ public class EarthGenerator extends ChunkGenerator {
 
 
 
-          return chunkData;
+        return chunkData;
 
     }
 
-      /*
+
+
+    /*
      * ============================================================
      * EARTHBOUND VEGETATION SYSTEM
      *
-     * New chunks only.
+     * Adds trees and plants to newly generated chunks.
      *
      * Guemes Island regional vegetation:
      *
@@ -459,14 +486,17 @@ public class EarthGenerator extends ChunkGenerator {
      * ============================================================
      */
 
+
     @Override
     public List<BlockPopulator> getDefaultPopulators(
             World world
     ) {
 
+
         return List.of(
                 new EarthVegetationPopulator()
         );
+
 
     }
 
