@@ -8,26 +8,23 @@ import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 
-import com.earthbound.terrain.EarthTerrainGenerator;
-import com.earthbound.water.EarthWaterGenerator;
-import com.earthbound.roads.EarthRoadGenerator;
-import com.earthbound.vegetation.EarthVegetationGenerator;
-
-
 
 /*
  * ============================================================
  * EARTHBOUND WORLD GENERATOR
  *
- * Main coordinator.
+ * Main world generation coordinator.
  *
- * Connects:
+ * Current systems:
  *
- * Terrain
- * Water
- * Roads
- * Vegetation
- * Buildings
+ * - Terrain
+ *
+ * Future connections:
+ *
+ * - Water
+ * - Roads
+ * - Vegetation
+ * - Buildings
  *
  * ============================================================
  */
@@ -46,7 +43,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         System.out.println(
-                "[EarthBound] Modular terrain system loaded"
+                "[EarthBound] Terrain generator loaded"
         );
 
 
@@ -72,11 +69,11 @@ public class EarthGenerator extends ChunkGenerator {
 
         /*
          * Convert chunk coordinates
-         * into block coordinates
          */
 
         int startX =
                 chunkX << 4;
+
 
         int startZ =
                 chunkZ << 4;
@@ -111,11 +108,10 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Temporary height.
+                 * Temporary terrain height.
                  *
-                 * Next step will connect
-                 * real latitude/longitude
-                 * elevation here.
+                 * Next step:
+                 * connect real USGS elevation.
                  */
 
                 int height =
@@ -134,42 +130,6 @@ public class EarthGenerator extends ChunkGenerator {
             }
 
         }
-
-
-
-        /*
-         * Add water
-         */
-
-        EarthWaterGenerator.generate(
-                chunkData,
-                chunkX,
-                chunkZ
-        );
-
-
-
-        /*
-         * Add roads
-         */
-
-        EarthRoadGenerator.generate(
-                chunkData,
-                chunkX,
-                chunkZ
-        );
-
-
-
-        /*
-         * Add vegetation
-         */
-
-        EarthVegetationGenerator.generate(
-                chunkData,
-                chunkX,
-                chunkZ
-        );
 
 
 
