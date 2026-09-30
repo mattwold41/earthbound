@@ -1550,4 +1550,32 @@ public class EarthGenerator extends ChunkGenerator {
                 + storeTerrainHeight
                 * storeInfluence;
     }
+  }
+
+
+    /*
+     * ============================================================
+     * EARTHBOUND VEGETATION SYSTEM
+     *
+     * New chunks only.
+     *
+     * Guemes Island regional vegetation:
+     *
+     * Spruce = Douglas Fir / Cedar
+     * Oak = Maple / Alder
+     *
+     * ============================================================
+     */
+
+    @Override
+    public List<BlockPopulator> getDefaultPopulators(
+            World world
+    ) {
+
+        return List.of(
+                new EarthVegetationPopulator()
+        );
+
+    }
+
 }
