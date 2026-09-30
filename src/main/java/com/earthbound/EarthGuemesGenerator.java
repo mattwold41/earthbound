@@ -171,7 +171,6 @@ import com.earthbound.terrain.EarthElevation;
             30;
 
     private EarthGuemesGenerator() {
-    }
 
     /*
      * ============================================================
