@@ -1,239 +1,182 @@
 package com.earthbound;
 
-public class EarthCoordinates {
+/**
+ * Converts between Minecraft coordinates and real-world
+ * latitude / longitude for EarthBound.
+ *
+ * EarthBound scale:
+ * 1 Minecraft block = 2 real-world meters.
+ *
+ * Orientation:
+ *
+ * Minecraft -Z = North
+ * Minecraft +Z = South
+ *
+ * Minecraft -X = East
+ * Minecraft +X = West
+ *
+ * Therefore:
+ *
+ * Moving north:
+ *     Minecraft Z decreases
+ *     Latitude increases
+ *
+ * Moving south:
+ *     Minecraft Z increases
+ *     Latitude decreases
+ *
+ * Moving east:
+ *     Minecraft X decreases
+ *     Longitude increases
+ *
+ * Moving west:
+ *     Minecraft X increases
+ *     Longitude decreases
+ */
+public final class EarthCoordinates {
 
     /*
      * EarthBound geographic anchor.
      *
-     * Guemes Island ferry landing.
-     *
-     * Minecraft:
-     * X = -660
-     * Z = -446
-     *
-     * Real Earth:
-     * Latitude  = 48.528160
-     * Longitude = -122.624600
+     * This point anchors the Minecraft world to Guemes Island.
      */
-
-    private static final double START_LAT =
-            48.528160;
-
-    private static final double START_LON =
-            -122.624600;
-
-    private static final int START_X =
-            -660;
-
-    private static final int START_Z =
-            -446;
-
+    public static final double START_LAT = 48.528160;
+    public static final double START_LON = -122.624600;
 
     /*
-     * EarthBound horizontal scale.
+     * Minecraft coordinates corresponding to the anchor above.
+     */
+    public static final int START_X = -660;
+    public static final int START_Z = -446;
+
+    /*
+     * EarthBound world scale.
      *
      * 1 Minecraft block = 2 real-world meters.
-     * EarthBound scale = 1:2.
-     *
-     * Changing this value later allows
-     * EarthBound geographic locations
-     * to be recalculated for another scale.
      */
-    private static final double METERS_PER_BLOCK =
-            2.0;
+    public static final double METERS_PER_BLOCK = 2.0;
 
+    /*
+     * Approximate number of meters in one degree of latitude.
+     */
+    private static final double METERS_PER_DEGREE_LATITUDE = 111320.0;
+
+    /*
+     * Longitude distance depends on latitude.
+     */
+    private static final double METERS_PER_DEGREE_LONGITUDE =
+            METERS_PER_DEGREE_LATITUDE *
+            Math.cos(Math.toRadians(START_LAT));
 
     private EarthCoordinates() {
+        // Utility class
     }
 
-
-    /*
-     * Minecraft X/Z -> latitude.
+    /**
+     * Convert Minecraft X/Z into real-world latitude.
      *
-     * EarthBound orientation:
+     * North is negative Minecraft Z.
      *
-     * Z increasing = north
-     * Z decreasing = south
+     * Therefore, when Z decreases,
+     * latitude increases.
      */
-    public static double getLatitude(
-            int x,
-            int z) {
+    public static double getLatitude(int x, int z) {
 
         double metersNorth =
-                (z - START_Z)
-                        * METERS_PER_BLOCK;
+                (START_Z - z) * METERS_PER_BLOCK;
 
-        double latitudeChange =
-                metersNorth
-                        / 111320.0;
-
-        return START_LAT
-                + latitudeChange;
+        return START_LAT +
+                (metersNorth / METERS_PER_DEGREE_LATITUDE);
     }
 
-
-    /*
-     * Minecraft X/Z -> longitude.
+    /**
+     * Convert Minecraft X/Z into real-world longitude.
      *
-     * EarthBound orientation:
+     * East is negative Minecraft X.
      *
-     * X decreasing = east
-     * X increasing = west
+     * Therefore, when X decreases,
+     * longitude increases.
      */
-    public static double getLongitude(
-            int x,
-            int z) {
+    public static double getLongitude(int x, int z) {
 
         double metersEast =
-                (START_X - x)
-                        * METERS_PER_BLOCK;
+                (START_X - x) * METERS_PER_BLOCK;
 
-        double metersPerLongitudeDegree =
-                getMetersPerLongitudeDegree();
-
-        double longitudeChange =
-                metersEast
-                        / metersPerLongitudeDegree;
-
-        return START_LON
-                + longitudeChange;
+        return START_LON +
+                (metersEast / METERS_PER_DEGREE_LONGITUDE);
     }
 
-
-    /*
-     * Real-world latitude -> Minecraft Z.
+    /**
+     * Convert real-world latitude into Minecraft Z.
      *
-     * This is the reverse of getLatitude().
-     *
-     * Because EarthBound uses real-world
-     * coordinates for buildings, this lets
-     * structures automatically move to the
-     * correct Minecraft Z coordinate if the
-     * horizontal scale changes later.
+     * Higher latitude = farther north = more negative Z.
      */
-    public static int latitudeToMinecraftZ(
-            double latitude) {
-
-        double latitudeDifference =
-                latitude - START_LAT;
+    public static int latitudeToMinecraftZ(double latitude) {
 
         double metersNorth =
-                latitudeDifference
-                        * 111320.0;
+                (latitude - START_LAT) *
+                METERS_PER_DEGREE_LATITUDE;
 
-        double blocksNorth =
-                metersNorth
-                        / METERS_PER_BLOCK;
-
-        return START_Z
-                + (int) Math.round(
-                        blocksNorth
-                );
+        return (int) Math.round(
+                START_Z -
+                (metersNorth / METERS_PER_BLOCK)
+        );
     }
 
-
-    /*
-     * Real-world longitude -> Minecraft X.
+    /**
+     * Convert real-world longitude into Minecraft X.
      *
-     * This is the reverse of getLongitude().
-     *
-     * EarthBound orientation:
-     *
-     * East = X decreases
-     * West = X increases
+     * Higher longitude = farther east = more negative X.
      */
-    public static int longitudeToMinecraftX(
-            double longitude) {
-
-        double longitudeDifference =
-                longitude - START_LON;
+    public static int longitudeToMinecraftX(double longitude) {
 
         double metersEast =
-                longitudeDifference
-                        * getMetersPerLongitudeDegree();
+                (longitude - START_LON) *
+                METERS_PER_DEGREE_LONGITUDE;
 
-        double blocksEast =
-                metersEast
-                        / METERS_PER_BLOCK;
-
-        return START_X
-                - (int) Math.round(
-                        blocksEast
-                );
+        return (int) Math.round(
+                START_X -
+                (metersEast / METERS_PER_BLOCK)
+        );
     }
 
-
-    /*
-     * Convert a complete real-world location
-     * into Minecraft X/Z coordinates.
+    /**
+     * Convert latitude / longitude into Minecraft X/Z.
      *
-     * Result:
-     *
-     * [0] = Minecraft X
-     * [1] = Minecraft Z
+     * result[0] = X
+     * result[1] = Z
      */
     public static int[] earthToMinecraft(
             double latitude,
             double longitude) {
 
-        int minecraftX =
-                longitudeToMinecraftX(
-                        longitude
-                );
+        int x = longitudeToMinecraftX(longitude);
+        int z = latitudeToMinecraftZ(latitude);
 
-        int minecraftZ =
-                latitudeToMinecraftZ(
-                        latitude
-                );
-
-        return new int[]{
-                minecraftX,
-                minecraftZ
-        };
+        return new int[] { x, z };
     }
 
-
-    /*
-     * Approximate number of real-world
-     * meters in one degree of longitude
-     * at the EarthBound anchor latitude.
+    /**
+     * Convert Minecraft Z directly into latitude.
      */
-    private static double
-    getMetersPerLongitudeDegree() {
+    public static double minecraftToLatitude(int z) {
 
-        return 111320.0
-                * Math.cos(
-                        Math.toRadians(
-                                START_LAT
-                        )
-                );
+        double metersNorth =
+                (START_Z - z) * METERS_PER_BLOCK;
+
+        return START_LAT +
+                (metersNorth / METERS_PER_DEGREE_LATITUDE);
     }
 
-
-    /*
-     * Compatibility method used by
-     * EarthLocation.java.
+    /**
+     * Convert Minecraft X directly into longitude.
      */
-    public static double minecraftToLatitude(
-            int z) {
+    public static double minecraftToLongitude(int x) {
 
-        return getLatitude(
-                START_X,
-                z
-        );
-    }
+        double metersEast =
+                (START_X - x) * METERS_PER_BLOCK;
 
-
-    /*
-     * Compatibility method used by
-     * EarthLocation.java.
-     */
-    public static double minecraftToLongitude(
-            int x) {
-
-        return getLongitude(
-                x,
-                START_Z
-        );
+        return START_LON +
+                (metersEast / METERS_PER_DEGREE_LONGITUDE);
     }
 }
