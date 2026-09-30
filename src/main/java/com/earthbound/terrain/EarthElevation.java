@@ -8,6 +8,9 @@ package com.earthbound.terrain;
  * Converts real world elevation meters
  * into Minecraft block heights.
  *
+ * Also provides coordinate-based elevation lookup
+ * for older EarthBound systems.
+ *
  * ============================================================
  */
 
@@ -26,19 +29,24 @@ public class EarthElevation {
     /*
      * Vertical scale.
      *
-     * 1.0 = real elevation
-     * 0.5 = half scale
+     * 1.0 = full elevation
+     * 0.5 = reduced elevation
      *
-     * We can adjust this later
-     * for 1:1 or 1:2 Earth.
+     * Adjustable later for:
+     *
+     * 1:1 Earth
+     * 1:2 Earth
+     *
      */
 
     private static final double ELEVATION_SCALE = 1.0;
 
 
 
+
     /*
-     * Convert meters to Minecraft Y level
+     * Convert real elevation meters
+     * into Minecraft Y height
      */
 
     public static int getMinecraftHeight(
@@ -46,23 +54,21 @@ public class EarthElevation {
     ) {
 
 
-        int height =
-                SEA_LEVEL
+        return SEA_LEVEL
                 +
                 (int) Math.round(
                         elevationMeters
-                        * ELEVATION_SCALE
+                                * ELEVATION_SCALE
                 );
-
-
-        return height;
 
     }
 
 
 
+
     /*
-     * Convert Minecraft height back to meters
+     * Convert Minecraft height
+     * back into real elevation meters
      */
 
     public static double getRealElevation(
@@ -72,10 +78,37 @@ public class EarthElevation {
 
         return
                 (minecraftHeight - SEA_LEVEL)
-                /
-                ELEVATION_SCALE;
+                        /
+                        ELEVATION_SCALE;
 
     }
+
+
+
+
+    /*
+     * Get real elevation from coordinates
+     *
+     * Used by:
+     *
+     * EarthCommand
+     * EarthLocation
+     *
+     */
+
+    public static double getElevation(
+            double latitude,
+            double longitude
+    ) {
+
+
+        return EarthTerrainLoader.getGuemesElevation(
+                latitude,
+                longitude
+        );
+
+    }
+
 
 
 
