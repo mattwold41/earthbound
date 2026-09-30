@@ -11,14 +11,12 @@ import org.bukkit.generator.ChunkGenerator.ChunkData;
  * ============================================================
  * EARTHBOUND WORLD GENERATOR
  *
- * DIAGNOSTIC VERSION
+ * CHUNK DEBUG VERSION
  *
- * Purpose:
- * Test whether Paper can generate new chunks normally
- * without calling the elevation raster.
+ * This version logs every chunk that Paper asks
+ * EarthBound to generate.
  *
- * If chunks load with this version, the problem is in the
- * elevation lookup/data path rather than the Paper generator.
+ * Terrain is temporarily flat at Y=70.
  *
  * ============================================================
  */
@@ -36,7 +34,7 @@ public class EarthGenerator extends ChunkGenerator {
         );
 
         System.out.println(
-                "[EarthBound] Diagnostic terrain generator loaded"
+                "[EarthBound] Chunk debug generator loaded"
         );
     }
 
@@ -50,81 +48,34 @@ public class EarthGenerator extends ChunkGenerator {
             BiomeGrid biome
     ) {
 
+
+        /*
+         * IMPORTANT DEBUG MESSAGE
+         *
+         * If Paper asks EarthBound to create a new chunk,
+         * this message MUST appear in the console.
+         */
+
+        System.out.println(
+                "[EarthBound] GENERATING CHUNK: "
+                        + chunkX
+                        + ", "
+                        + chunkZ
+        );
+
+
         ChunkData chunkData =
                 createChunkData(world);
 
 
         /*
-         * Convert the chunk position into
-         * its first world block position.
-         */
-
-        int startX =
-                chunkX << 4;
-
-        int startZ =
-                chunkZ << 4;
-
-
-        /*
-         * Generate all 256 columns
-         * inside this chunk.
+         * Generate simple flat terrain.
          */
 
         for (int x = 0; x < 16; x++) {
 
             for (int z = 0; z < 16; z++) {
 
-
-                int worldX =
-                        startX + x;
-
-                int worldZ =
-                        startZ + z;
-
-
-                /*
-                 * Verify that our coordinate conversion
-                 * can still be called successfully.
-                 *
-                 * We are intentionally NOT using the
-                 * elevation raster during this test.
-                 */
-
-                double latitude =
-                        EarthCoordinates.getLatitude(
-                                worldX,
-                                worldZ
-                        );
-
-                double longitude =
-                        EarthCoordinates.getLongitude(
-                                worldX,
-                                worldZ
-                        );
-
-
-                /*
-                 * Keep these values referenced so this
-                 * diagnostic still exercises the
-                 * coordinate conversion.
-                 */
-
-                if (Double.isNaN(latitude)
-                        || Double.isNaN(longitude)) {
-
-                    continue;
-                }
-
-
-                /*
-                 * Temporary flat terrain.
-                 *
-                 * If new chunks now load, we know
-                 * EarthTerrainGenerator /
-                 * EarthTerrainLoader is where we
-                 * need to investigate next.
-                 */
 
                 EarthTerrainGenerator
                         .generateNaturalLandColumn(
@@ -135,6 +86,14 @@ public class EarthGenerator extends ChunkGenerator {
                         );
             }
         }
+
+
+        System.out.println(
+                "[EarthBound] FINISHED CHUNK: "
+                        + chunkX
+                        + ", "
+                        + chunkZ
+        );
 
 
         return chunkData;
