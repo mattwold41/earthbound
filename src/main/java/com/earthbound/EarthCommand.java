@@ -1,5 +1,8 @@
 package com.earthbound;
 
+
+import com.earthbound.terrain.EarthElevation;
+
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
