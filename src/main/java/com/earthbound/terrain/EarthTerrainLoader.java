@@ -8,12 +8,8 @@ package com.earthbound.terrain;
  * Stores the loaded Guemes elevation raster and converts
  * real-world latitude / longitude into raster coordinates.
  *
- * Guemes raster bounds must match EarthTerrainDownloader:
- *
- * West:  -122.70
- * South:   48.47
- * East:  -122.55
- * North:   48.60
+ * Uses bilinear interpolation between elevation samples
+ * to produce smoother terrain.
  *
  * ============================================================
  */
@@ -26,11 +22,7 @@ public class EarthTerrainLoader {
 
 
     /*
-     * Guemes Island geographic bounds.
-     *
-     * These are taken directly from
-     * EarthTerrainDownloader so the downloader and
-     * lookup system always use the same area.
+     * Guemes Island geographic bounds
      */
 
     private static final double WEST =
@@ -94,7 +86,7 @@ public class EarthTerrainLoader {
 
     /*
      * ========================================================
-     * DIRECT RASTER ELEVATION LOOKUP
+     * DIRECT RASTER LOOKUP
      * ========================================================
      */
 
@@ -123,15 +115,11 @@ public class EarthTerrainLoader {
 
     /*
      * ========================================================
-     * REAL-WORLD GUEMES ELEVATION LOOKUP
+     * GUEMES REAL-WORLD ELEVATION LOOKUP
      *
-     * Converts:
-     *
-     * latitude / longitude
-     *
-     * into:
-     *
-     * raster X / raster Z
+     * Converts latitude / longitude to a fractional
+     * raster position and interpolates between the
+     * four surrounding USGS elevation samples.
      *
      * ========================================================
      */
@@ -152,12 +140,7 @@ public class EarthTerrainLoader {
 
 
         /*
-         * If the requested point is outside the Guemes
-         * elevation raster, return sea-level elevation.
-         *
-         * Later, when EarthBound expands beyond Guemes,
-         * this can route the request to neighboring
-         * elevation tiles.
+         * Outside the currently loaded Guemes raster.
          */
 
         if (
@@ -186,83 +169,168 @@ public class EarthTerrainLoader {
 
 
         /*
-         * ----------------------------------------------------
-         * LONGITUDE -> RASTER X
+         * Longitude:
          *
-         * WEST  = pixel 0
-         * EAST  = pixel width - 1
-         * ----------------------------------------------------
+         * WEST -> 0
+         * EAST -> width - 1
          */
 
-        double normalizedX =
-                (longitude - WEST)
+        double rasterX =
+                ((longitude - WEST)
                         /
-                (EAST - WEST);
-
-
-        int rasterX =
-                (int) Math.round(
-                        normalizedX
-                                *
-                        (width - 1)
-                );
+                        (EAST - WEST))
+                        *
+                        (width - 1);
 
 
 
         /*
-         * ----------------------------------------------------
-         * LATITUDE -> RASTER Z
+         * Latitude:
          *
-         * Image rasters start at the TOP.
+         * NORTH -> 0
+         * SOUTH -> height - 1
          *
-         * NORTH = pixel 0
-         * SOUTH = pixel height - 1
-         *
-         * This is intentionally reversed compared with
-         * normal mathematical Y coordinates.
-         * ----------------------------------------------------
+         * Raster images run from top to bottom.
          */
 
-        double normalizedZ =
-                (NORTH - latitude)
+        double rasterZ =
+                ((NORTH - latitude)
                         /
-                (NORTH - SOUTH);
-
-
-        int rasterZ =
-                (int) Math.round(
-                        normalizedZ
-                                *
-                        (height - 1)
-                );
+                        (NORTH - SOUTH))
+                        *
+                        (height - 1);
 
 
 
         /*
-         * Protect against floating-point rounding at
-         * the exact geographic boundaries.
+         * Find the four surrounding raster cells.
          */
 
-        rasterX =
-                clamp(
-                        rasterX,
-                        0,
-                        width - 1
-                );
+        int x0 =
+                (int) Math.floor(rasterX);
+
+        int z0 =
+                (int) Math.floor(rasterZ);
 
 
-        rasterZ =
-                clamp(
-                        rasterZ,
-                        0,
-                        height - 1
-                );
+        int x1 =
+                x0 + 1;
+
+        int z1 =
+                z0 + 1;
 
 
 
-        return terrainData.getElevation(
-                rasterX,
+        /*
+         * Keep all four samples inside the raster.
+         */
+
+        x0 = clamp(
+                x0,
+                0,
+                width - 1
+        );
+
+        x1 = clamp(
+                x1,
+                0,
+                width - 1
+        );
+
+        z0 = clamp(
+                z0,
+                0,
+                height - 1
+        );
+
+        z1 = clamp(
+                z1,
+                0,
+                height - 1
+        );
+
+
+
+        /*
+         * Fractional position between the samples.
+         */
+
+        double fractionX =
+                rasterX
+                        -
+                        Math.floor(rasterX);
+
+        double fractionZ =
                 rasterZ
+                        -
+                        Math.floor(rasterZ);
+
+
+
+        /*
+         * Read the four real USGS elevations.
+         *
+         * q00 ----- q10
+         *  |         |
+         *  |         |
+         * q01 ----- q11
+         */
+
+        double q00 =
+                terrainData.getElevation(
+                        x0,
+                        z0
+                );
+
+        double q10 =
+                terrainData.getElevation(
+                        x1,
+                        z0
+                );
+
+        double q01 =
+                terrainData.getElevation(
+                        x0,
+                        z1
+                );
+
+        double q11 =
+                terrainData.getElevation(
+                        x1,
+                        z1
+                );
+
+
+
+        /*
+         * Interpolate west -> east.
+         */
+
+        double northElevation =
+                lerp(
+                        q00,
+                        q10,
+                        fractionX
+                );
+
+
+        double southElevation =
+                lerp(
+                        q01,
+                        q11,
+                        fractionX
+                );
+
+
+
+        /*
+         * Interpolate north -> south.
+         */
+
+        return lerp(
+                northElevation,
+                southElevation,
+                fractionZ
         );
 
     }
@@ -271,7 +339,29 @@ public class EarthTerrainLoader {
 
     /*
      * ========================================================
-     * SMALL UTILITY
+     * LINEAR INTERPOLATION
+     * ========================================================
+     */
+
+    private static double lerp(
+            double start,
+            double end,
+            double amount
+    ) {
+
+
+        return start
+                +
+                ((end - start)
+                        * amount);
+
+    }
+
+
+
+    /*
+     * ========================================================
+     * INTEGER CLAMP
      * ========================================================
      */
 
