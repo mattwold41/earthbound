@@ -13,24 +13,19 @@ import javax.imageio.ImageIO;
  * ============================================================
  * EARTHBOUND WATER DATA
  *
- * Downloads and stores the real Guemes Island hydrography mask.
+ * Loads the real Guemes Island water mask.
  *
- * Primary data source:
+ * Data source:
  * U.S. Census Bureau TIGERweb
  * Hydro / Areal Hydrography
  *
- * A small measured shoreline correction is applied around the
- * South Guemes ferry landing.
+ * TEST VERSION:
+ * - Uses the original 512 x 512 water mask
+ * - NO manual ferry shoreline correction
+ * - NO GPS shoreline interpolation
+ * - NO rectangular shoreline override
  *
- * The correction is based on real shoreline GPS measurements
- * taken from satellite imagery and verified against the
- * generated Minecraft shoreline.
- *
- * IMPORTANT:
- * This correction does NOT move roads.
- * It does NOT shift the entire Guemes coastline.
- * It only corrects the measured South Guemes ferry section.
- *
+ * This lets us test the older EarthBound water system cleanly.
  * ============================================================
  */
 public class EarthWaterData {
@@ -51,15 +46,19 @@ public class EarthWaterData {
     /*
      * ========================================================
      * WATER MASK SIZE
+     *
+     * ORIGINAL TEST RESOLUTION
      * ========================================================
      */
 
-    private static final int MASK_WIDTH = 2048;
-    private static final int MASK_HEIGHT = 2048;
+    private static final int MASK_WIDTH = 512;
+    private static final int MASK_HEIGHT = 512;
 
     /*
      * ========================================================
      * TIGERWEB HYDROGRAPHY SERVICE
+     *
+     * Layer 1 = Areal Hydrography
      * ========================================================
      */
 
@@ -67,62 +66,6 @@ public class EarthWaterData {
             "https://tigerweb.geo.census.gov/"
                     + "arcgis/rest/services/"
                     + "TIGERweb/Hydro/MapServer/export";
-
-    /*
-     * ========================================================
-     * SOUTH GUEMES MEASURED SHORELINE CONTROL POINTS
-     * ========================================================
-     *
-     * These are ordered WEST -> EAST.
-     *
-     * West shoreline:
-     * 48.528440, -122.625163
-     *
-     * Ferry shoreline:
-     * 48.528507, -122.624792
-     *
-     * East shoreline:
-     * 48.528460, -122.624121
-     *
-     * Minecraft measurements showed the untouched TIGER mask
-     * placing first land roughly 51-57 blocks too far north
-     * through this specific section.
-     *
-     * We interpolate between the measured real shoreline
-     * points instead of creating a rectangular override.
-     * ========================================================
-     */
-
-    private static final double SOUTH_SHORE_WEST_LON =
-            -122.625163;
-
-    private static final double SOUTH_SHORE_WEST_LAT =
-            48.528440;
-
-    private static final double SOUTH_SHORE_CENTER_LON =
-            -122.624792;
-
-    private static final double SOUTH_SHORE_CENTER_LAT =
-            48.528507;
-
-    private static final double SOUTH_SHORE_EAST_LON =
-            -122.624121;
-
-    private static final double SOUTH_SHORE_EAST_LAT =
-            48.528460;
-
-    /*
-     * Small tolerance north of the measured shoreline.
-     *
-     * The actual land correction extends northward from the
-     * measured shoreline until it naturally reconnects with
-     * land already present in the TIGER mask.
-     *
-     * This latitude is deliberately local to the ferry area.
-     */
-
-    private static final double SOUTH_SHORE_CORRECTION_NORTH =
-            48.529600;
 
     /*
      * ========================================================
@@ -136,7 +79,7 @@ public class EarthWaterData {
 
     /*
      * ========================================================
-     * LOADER
+     * STANDARD LOADER
      * ========================================================
      */
 
@@ -148,14 +91,14 @@ public class EarthWaterData {
 
     /*
      * ========================================================
-     * LOAD REAL GUEMES WATER MASK
+     * LOAD GUEMES WATER MASK
      * ========================================================
      */
 
     public static boolean loadGuemesWaterMask() {
 
         System.out.println(
-                "[EarthBound] Loading real Guemes water mask..."
+                "[EarthBound] Loading original 512x512 Guemes water mask..."
         );
 
         try {
@@ -191,22 +134,24 @@ public class EarthWaterData {
             );
 
             System.out.println(
-                    "[EarthBound] South Guemes ferry shoreline "
-                            + "correction ENABLED."
+                    "[EarthBound] ORIGINAL 512 WATER TEST ACTIVE"
             );
 
             System.out.println(
-                    "[EarthBound] Shoreline correction uses "
-                            + "3 measured GPS control points."
+                    "[EarthBound] Ferry shoreline correction: DISABLED"
             );
 
             System.out.println(
-                    "[EarthBound] Roads remain unchanged."
+                    "[EarthBound] GPS shoreline correction: DISABLED"
             );
 
             if (imageFile != null) {
 
-                imageFile.delete();
+                if (!imageFile.delete()) {
+
+                    imageFile.deleteOnExit();
+
+                }
 
             }
 
@@ -240,6 +185,25 @@ public class EarthWaterData {
         System.out.println(
                 "[EarthBound] Downloading TIGERweb Guemes hydrography..."
         );
+
+        /*
+         * Request:
+         *
+         * Geographic bounds:
+         * WEST, SOUTH, EAST, NORTH
+         *
+         * Coordinate system:
+         * WGS84 / EPSG:4326
+         *
+         * Layer:
+         * 1 = Areal Hydrography
+         *
+         * Transparent background:
+         * land / no water polygon
+         *
+         * Visible pixels:
+         * mapped water polygon
+         */
 
         String request =
                 HYDRO_SERVICE
@@ -299,8 +263,10 @@ public class EarthWaterData {
         if (
                 responseCode < 200
                         ||
-                        responseCode >= 300
+                responseCode >= 300
         ) {
+
+            connection.disconnect();
 
             throw new IllegalStateException(
                     "TIGERweb returned HTTP "
@@ -395,11 +361,9 @@ public class EarthWaterData {
         }
 
         if (
-                image.getWidth()
-                        != MASK_WIDTH
+                image.getWidth() != MASK_WIDTH
                         ||
-                        image.getHeight()
-                                != MASK_HEIGHT
+                image.getHeight() != MASK_HEIGHT
         ) {
 
             throw new IllegalStateException(
@@ -436,6 +400,16 @@ public class EarthWaterData {
                                 z
                         );
 
+                /*
+                 * PNG32 alpha channel.
+                 *
+                 * Alpha 0:
+                 * transparent / no mapped water polygon
+                 *
+                 * Visible alpha:
+                 * mapped hydrography polygon
+                 */
+
                 int alpha =
                         (argb >>> 24)
                                 & 0xFF;
@@ -458,7 +432,7 @@ public class EarthWaterData {
 
     /*
      * ========================================================
-     * CHECK WHETHER DATA IS READY
+     * DATA STATUS
      * ========================================================
      */
 
@@ -488,17 +462,19 @@ public class EarthWaterData {
         }
 
         /*
-         * Outside the currently loaded Guemes tile.
+         * Outside the currently loaded Guemes geographic tile.
+         *
+         * This test version only knows the Guemes tile.
          */
 
         if (
                 longitude < WEST
                         ||
-                        longitude > EAST
+                longitude > EAST
                         ||
-                        latitude < SOUTH
+                latitude < SOUTH
                         ||
-                        latitude > NORTH
+                latitude > NORTH
         ) {
 
             return false;
@@ -507,35 +483,10 @@ public class EarthWaterData {
 
         /*
          * ====================================================
-         * SOUTH GUEMES FERRY SHORELINE CORRECTION
-         * ====================================================
+         * LONGITUDE -> IMAGE X
          *
-         * If the point falls inside the measured ferry
-         * correction corridor and is north of the interpolated
-         * real shoreline, it is land.
-         *
-         * This is intentionally evaluated BEFORE the TIGER
-         * water mask.
-         *
-         * The southern boundary is not rectangular. It follows
-         * the three measured shoreline GPS control points.
-         * ====================================================
-         */
-
-        if (
-                isSouthGuemesCorrectedLand(
-                        latitude,
-                        longitude
-                )
-        ) {
-
-            return false;
-
-        }
-
-        /*
-         * ====================================================
-         * RAW TIGER WATER LOOKUP
+         * WEST = left side of image
+         * EAST = right side of image
          * ====================================================
          */
 
@@ -550,6 +501,15 @@ public class EarthWaterData {
                                 *
                                 (MASK_WIDTH - 1)
                 );
+
+        /*
+         * ====================================================
+         * LATITUDE -> IMAGE Z
+         *
+         * NORTH = top of image
+         * SOUTH = bottom of image
+         * ====================================================
+         */
 
         double normalizedZ =
                 (NORTH - latitude)
@@ -577,145 +537,19 @@ public class EarthWaterData {
                         MASK_HEIGHT - 1
                 );
 
+        /*
+         * IMPORTANT:
+         *
+         * There is deliberately NO ferry correction here.
+         *
+         * We are returning the original TIGERweb mask directly.
+         */
+
         return waterMask[
                 maskX
         ][
                 maskZ
         ];
-
-    }
-
-    /*
-     * ========================================================
-     * SOUTH GUEMES CORRECTED LAND TEST
-     * ========================================================
-     */
-
-    private static boolean isSouthGuemesCorrectedLand(
-            double latitude,
-            double longitude
-    ) {
-
-        /*
-         * Stay strictly inside the measured west/east corridor.
-         *
-         * We are deliberately NOT extrapolating beyond the
-         * shoreline locations that were actually measured.
-         */
-
-        if (
-                longitude < SOUTH_SHORE_WEST_LON
-                        ||
-                        longitude > SOUTH_SHORE_EAST_LON
-        ) {
-
-            return false;
-
-        }
-
-        /*
-         * Keep correction local to the southern ferry area.
-         */
-
-        if (
-                latitude > SOUTH_SHORE_CORRECTION_NORTH
-        ) {
-
-            return false;
-
-        }
-
-        double shorelineLatitude =
-                getMeasuredSouthShoreLatitude(
-                        longitude
-                );
-
-        /*
-         * North of the measured shoreline = land.
-         * South of the measured shoreline = water.
-         */
-
-        return latitude >= shorelineLatitude;
-
-    }
-
-    /*
-     * ========================================================
-     * INTERPOLATE MEASURED SOUTH SHORELINE
-     * ========================================================
-     *
-     * WEST -> CENTER uses the first two measurements.
-     * CENTER -> EAST uses the second and third measurements.
-     *
-     * This creates a shaped shoreline rather than a rectangle.
-     * ========================================================
-     */
-
-    private static double getMeasuredSouthShoreLatitude(
-            double longitude
-    ) {
-
-        if (
-                longitude <= SOUTH_SHORE_CENTER_LON
-        ) {
-
-            return interpolate(
-                    SOUTH_SHORE_WEST_LON,
-                    SOUTH_SHORE_WEST_LAT,
-                    SOUTH_SHORE_CENTER_LON,
-                    SOUTH_SHORE_CENTER_LAT,
-                    longitude
-            );
-
-        }
-
-        return interpolate(
-                SOUTH_SHORE_CENTER_LON,
-                SOUTH_SHORE_CENTER_LAT,
-                SOUTH_SHORE_EAST_LON,
-                SOUTH_SHORE_EAST_LAT,
-                longitude
-        );
-
-    }
-
-    /*
-     * ========================================================
-     * LINEAR INTERPOLATION
-     * ========================================================
-     */
-
-    private static double interpolate(
-            double x1,
-            double y1,
-            double x2,
-            double y2,
-            double x
-    ) {
-
-        if (
-                Math.abs(
-                        x2 - x1
-                )
-                        < 0.0000000001
-        ) {
-
-            return y1;
-
-        }
-
-        double progress =
-                (x - x1)
-                        /
-                        (x2 - x1);
-
-        return y1
-                +
-                (
-                        (y2 - y1)
-                                *
-                                progress
-                );
 
     }
 
