@@ -13,14 +13,13 @@ import org.bukkit.generator.ChunkGenerator.ChunkData;
  *
  * REAL GUEMES TERRAIN TEST
  *
- * Generates terrain using the real Guemes Island
- * elevation data already loaded by EarthBound.
+ * Uses EarthBound's real Guemes elevation data.
  *
- * Water, roads, buildings, vegetation, etc.
- * are intentionally NOT added yet.
+ * Water, roads, buildings, vegetation, and other
+ * systems are intentionally disabled for this test.
  *
- * Chunk logging remains enabled temporarily so
- * we can verify Paper continues generating chunks.
+ * Chunk logging remains enabled so we can confirm
+ * that new chunks continue generating correctly.
  *
  * ============================================================
  */
@@ -51,8 +50,8 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Log every new chunk Paper asks EarthBound
-         * to generate.
+         * Confirm that Paper is asking EarthBound
+         * to generate this chunk.
          */
 
         System.out.println(
@@ -68,7 +67,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Generate all 256 columns in this chunk.
+         * Generate every block column in the chunk.
          */
 
         for (int localX = 0; localX < 16; localX++) {
@@ -77,8 +76,8 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Convert the block's position inside the
-                 * chunk into its global Minecraft X/Z.
+                 * Convert local chunk coordinates into
+                 * global Minecraft coordinates.
                  */
 
                 int worldX =
@@ -91,18 +90,26 @@ public class EarthGenerator extends ChunkGenerator {
                 /*
                  * Convert Minecraft coordinates into
                  * real-world latitude / longitude.
+                 *
+                 * EarthCoordinates expects BOTH X and Z.
                  */
 
                 double latitude =
-                        EarthCoordinates.getLatitude(worldZ);
+                        EarthCoordinates.getLatitude(
+                                worldX,
+                                worldZ
+                        );
 
                 double longitude =
-                        EarthCoordinates.getLongitude(worldX);
+                        EarthCoordinates.getLongitude(
+                                worldX,
+                                worldZ
+                        );
 
 
                 /*
-                 * Ask the EarthBound terrain system for
-                 * the real terrain height at this location.
+                 * Get the terrain height from the
+                 * Guemes elevation system.
                  */
 
                 int terrainHeight =
@@ -113,7 +120,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Build the natural terrain column.
+                 * Generate the natural terrain column.
                  */
 
                 EarthTerrainGenerator
