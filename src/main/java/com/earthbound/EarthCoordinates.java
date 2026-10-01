@@ -12,8 +12,8 @@ package com.earthbound;
  * Minecraft -Z = North
  * Minecraft +Z = South
  *
- * Minecraft -X = East
- * Minecraft +X = West
+ * Minecraft +X = East
+ * Minecraft -X = West
  *
  * Therefore:
  *
@@ -26,11 +26,11 @@ package com.earthbound;
  *     Latitude decreases
  *
  * Moving east:
- *     Minecraft X decreases
+ *     Minecraft X increases
  *     Longitude increases
  *
  * Moving west:
- *     Minecraft X increases
+ *     Minecraft X decreases
  *     Longitude decreases
  */
 public final class EarthCoordinates {
@@ -92,15 +92,15 @@ public final class EarthCoordinates {
     /**
      * Convert Minecraft X/Z into real-world longitude.
      *
-     * East is negative Minecraft X.
+     * East is positive Minecraft X.
      *
-     * Therefore, when X decreases,
+     * Therefore, when X increases,
      * longitude increases.
      */
     public static double getLongitude(int x, int z) {
 
         double metersEast =
-                (START_X - x) * METERS_PER_BLOCK;
+                (x - START_X) * METERS_PER_BLOCK;
 
         return START_LON +
                 (metersEast / METERS_PER_DEGREE_LONGITUDE);
@@ -126,7 +126,7 @@ public final class EarthCoordinates {
     /**
      * Convert real-world longitude into Minecraft X.
      *
-     * Higher longitude = farther east = more negative X.
+     * Higher longitude = farther east = more positive X.
      */
     public static int longitudeToMinecraftX(double longitude) {
 
@@ -135,7 +135,7 @@ public final class EarthCoordinates {
                 METERS_PER_DEGREE_LONGITUDE;
 
         return (int) Math.round(
-                START_X -
+                START_X +
                 (metersEast / METERS_PER_BLOCK)
         );
     }
@@ -174,7 +174,7 @@ public final class EarthCoordinates {
     public static double minecraftToLongitude(int x) {
 
         double metersEast =
-                (START_X - x) * METERS_PER_BLOCK;
+                (x - START_X) * METERS_PER_BLOCK;
 
         return START_LON +
                 (metersEast / METERS_PER_DEGREE_LONGITUDE);
