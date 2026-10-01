@@ -1,7 +1,5 @@
 package com.earthbound.water;
 
-import com.earthbound.EarthCoordinates;
-
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -21,11 +19,12 @@ import javax.imageio.ImageIO;
  * U.S. Census Bureau TIGERweb
  * Hydro / Areal Hydrography
  *
- * The TIGERweb mask remains the authoritative water source.
+ * The TIGERweb mask is currently used WITHOUT any local
+ * shoreline correction.
  *
- * A small local correction is applied around the south Guemes
- * ferry area where the hydrography shoreline currently reaches
- * too far inland compared with the road/ferry layout.
+ * This temporary diagnostic version lets us measure the
+ * original TIGERweb shoreline around the South Guemes ferry
+ * area before creating a permanent shaped correction.
  *
  * ============================================================
  */
@@ -55,45 +54,14 @@ public class EarthWaterData {
 
     /*
      * ========================================================
-     * SOUTH GUEMES FERRY TEST CORRECTION
-     *
-     * Known Minecraft reference:
-     *
-     * S Shore Dr / Guemes Island Rd:
-     * approximately X=-665, Z=-539
-     *
-     * Current first water:
-     * approximately X=-665, Z=-515
-     *
-     * For the first controlled test we extend dry land
-     * another 25 blocks south.
-     *
-     * That moves the protected test edge from roughly
-     * Z=-515 to Z=-490.
-     *
-     * This is intentionally LOCAL and TEMPORARY while we
-     * compare the generated shoreline against the real map.
-     *
-     * It does NOT shift the whole island or modify roads.
-     * ========================================================
-     */
-
-    private static final int FERRY_CORRECTION_WEST_X = -730;
-    private static final int FERRY_CORRECTION_EAST_X = -600;
-
-    private static final int FERRY_CORRECTION_NORTH_Z = -550;
-    private static final int FERRY_CORRECTION_SOUTH_Z = -490;
-
-    /*
-     * ========================================================
      * TIGERWEB HYDROGRAPHY SERVICE
      * ========================================================
      */
 
     private static final String HYDRO_SERVICE =
             "https://tigerweb.geo.census.gov/"
-            + "arcgis/rest/services/"
-            + "TIGERweb/Hydro/MapServer/export";
+                    + "arcgis/rest/services/"
+                    + "TIGERweb/Hydro/MapServer/export";
 
     /*
      * ========================================================
@@ -163,18 +131,12 @@ public class EarthWaterData {
 
             System.out.println(
                     "[EarthBound] South Guemes ferry shoreline "
-                            + "test correction enabled."
+                            + "correction DISABLED for measurement."
             );
 
             System.out.println(
-                    "[EarthBound] Ferry correction X="
-                            + FERRY_CORRECTION_WEST_X
-                            + " to "
-                            + FERRY_CORRECTION_EAST_X
-                            + ", Z="
-                            + FERRY_CORRECTION_NORTH_Z
-                            + " to "
-                            + FERRY_CORRECTION_SOUTH_Z
+                    "[EarthBound] Using untouched TIGERweb "
+                            + "hydrography mask."
             );
 
             if (imageFile != null) {
@@ -480,43 +442,15 @@ public class EarthWaterData {
 
         /*
          * ====================================================
-         * LOCAL SOUTH GUEMES FERRY CORRECTION
+         * IMPORTANT:
          *
-         * Convert the requested real-world position back into
-         * the same corrected Minecraft coordinate system used
-         * by terrain, roads and future structures.
+         * There is intentionally NO local shoreline override
+         * here right now.
          *
-         * Inside this small test zone, TIGER water is overridden
-         * to land.
-         *
-         * Everything outside the zone continues using the
-         * untouched TIGERweb mask.
+         * Every point in the Guemes tile is read directly from
+         * the TIGERweb hydrography mask.
          * ====================================================
          */
-
-        int minecraftX =
-                EarthCoordinates.longitudeToMinecraftX(
-                        longitude
-                );
-
-        int minecraftZ =
-                EarthCoordinates.latitudeToMinecraftZ(
-                        latitude
-                );
-
-        if (
-                minecraftX >= FERRY_CORRECTION_WEST_X
-                        &&
-                minecraftX <= FERRY_CORRECTION_EAST_X
-                        &&
-                minecraftZ >= FERRY_CORRECTION_NORTH_Z
-                        &&
-                minecraftZ <= FERRY_CORRECTION_SOUTH_Z
-        ) {
-
-            return false;
-
-        }
 
         /*
          * Longitude:
