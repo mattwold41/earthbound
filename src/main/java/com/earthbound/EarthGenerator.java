@@ -19,7 +19,8 @@ import com.earthbound.water.EarthWaterGenerator;
  *
  * - Real USGS elevation terrain
  * - Smoothed terrain slopes
- * - Real Guemes hydrography / water
+ * - Real Guemes hydrography / coastline
+ * - Natural water columns
  *
  * Roads, buildings, vegetation, and other systems
  * remain disabled until later restoration steps.
@@ -70,7 +71,11 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Generate every block column in this chunk.
+         * ========================================================
+         * GENERATE CHUNK
+         * ========================================================
+         *
+         * Process every X/Z column in the chunk.
          */
 
         for (int localX = 0; localX < 16; localX++) {
@@ -92,7 +97,7 @@ public class EarthGenerator extends ChunkGenerator {
 
                 /*
                  * Convert Minecraft coordinates into
-                 * real-world latitude / longitude.
+                 * real-world latitude and longitude.
                  */
 
                 double latitude =
@@ -113,10 +118,8 @@ public class EarthGenerator extends ChunkGenerator {
                  * WATER
                  * =================================================
                  *
-                 * Check the real Guemes hydrography mask first.
-                 *
-                 * If this coordinate is mapped as water,
-                 * generate a water column instead of land.
+                 * TIGERweb hydrography determines whether
+                 * this real-world coordinate is water.
                  */
 
                 if (
@@ -127,12 +130,28 @@ public class EarthGenerator extends ChunkGenerator {
                 ) {
 
 
+                    /*
+                     * Generate the water column.
+                     *
+                     * Latitude and longitude are passed so
+                     * EarthWaterGenerator can use the real
+                     * USGS terrain elevation for the
+                     * underwater floor.
+                     */
+
                     EarthWaterGenerator.generateWaterColumn(
                             chunkData,
                             localX,
-                            localZ
+                            localZ,
+                            latitude,
+                            longitude
                     );
 
+
+                    /*
+                     * Water has already been generated for
+                     * this column, so do not generate land.
+                     */
 
                     continue;
                 }
@@ -143,7 +162,8 @@ public class EarthGenerator extends ChunkGenerator {
                  * LAND
                  * =================================================
                  *
-                 * Get the smoothed real-world elevation.
+                 * Get the smoothed real-world USGS
+                 * terrain elevation.
                  */
 
                 int terrainHeight =
@@ -154,7 +174,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Generate the natural terrain column.
+                 * Generate the natural land column.
                  */
 
                 EarthTerrainGenerator
@@ -167,6 +187,10 @@ public class EarthGenerator extends ChunkGenerator {
             }
         }
 
+
+        /*
+         * Confirm successful completion of the chunk.
+         */
 
         System.out.println(
                 "[EarthBound] FINISHED CHUNK: "
