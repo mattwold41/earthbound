@@ -6,20 +6,23 @@ import org.bukkit.World;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
+import com.earthbound.water.EarthWaterGenerator;
+
 
 /*
  * ============================================================
  * EARTHBOUND WORLD GENERATOR
  *
- * REAL GUEMES TERRAIN TEST
+ * GUEMES TERRAIN + WATER
  *
- * Uses EarthBound's real Guemes elevation data.
+ * Generates:
  *
- * Water, roads, buildings, vegetation, and other
- * systems are intentionally disabled for this test.
+ * - Real USGS elevation terrain
+ * - Smoothed terrain slopes
+ * - Real Guemes hydrography / water
  *
- * Chunk logging remains enabled so we can confirm
- * that new chunks continue generating correctly.
+ * Roads, buildings, vegetation, and other systems
+ * remain disabled until later restoration steps.
  *
  * ============================================================
  */
@@ -34,7 +37,7 @@ public class EarthGenerator extends ChunkGenerator {
         );
 
         System.out.println(
-                "[EarthBound] Real Guemes terrain generator loaded"
+                "[EarthBound] Guemes terrain + water generator loaded"
         );
     }
 
@@ -67,7 +70,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Generate every block column in the chunk.
+         * Generate every block column in this chunk.
          */
 
         for (int localX = 0; localX < 16; localX++) {
@@ -76,7 +79,7 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Convert local chunk coordinates into
+                 * Convert chunk-local coordinates into
                  * global Minecraft coordinates.
                  */
 
@@ -90,8 +93,6 @@ public class EarthGenerator extends ChunkGenerator {
                 /*
                  * Convert Minecraft coordinates into
                  * real-world latitude / longitude.
-                 *
-                 * EarthCoordinates expects BOTH X and Z.
                  */
 
                 double latitude =
@@ -108,8 +109,41 @@ public class EarthGenerator extends ChunkGenerator {
 
 
                 /*
-                 * Get the terrain height from the
-                 * Guemes elevation system.
+                 * =================================================
+                 * WATER
+                 * =================================================
+                 *
+                 * Check the real Guemes hydrography mask first.
+                 *
+                 * If this coordinate is mapped as water,
+                 * generate a water column instead of land.
+                 */
+
+                if (
+                        EarthWaterGenerator.isWater(
+                                latitude,
+                                longitude
+                        )
+                ) {
+
+
+                    EarthWaterGenerator.generateWaterColumn(
+                            chunkData,
+                            localX,
+                            localZ
+                    );
+
+
+                    continue;
+                }
+
+
+                /*
+                 * =================================================
+                 * LAND
+                 * =================================================
+                 *
+                 * Get the smoothed real-world elevation.
                  */
 
                 int terrainHeight =
