@@ -11,20 +11,21 @@ import org.bukkit.generator.ChunkGenerator.ChunkData;
  * ============================================================
  * EARTHBOUND WORLD GENERATOR
  *
- * CHUNK DEBUG VERSION
+ * REAL GUEMES TERRAIN TEST
  *
- * This version logs every chunk that Paper asks
- * EarthBound to generate.
+ * Generates terrain using the real Guemes Island
+ * elevation data already loaded by EarthBound.
  *
- * Terrain is temporarily flat at Y=70.
+ * Water, roads, buildings, vegetation, etc.
+ * are intentionally NOT added yet.
+ *
+ * Chunk logging remains enabled temporarily so
+ * we can verify Paper continues generating chunks.
  *
  * ============================================================
  */
 
 public class EarthGenerator extends ChunkGenerator {
-
-
-    private static final int TEST_TERRAIN_HEIGHT = 70;
 
 
     public EarthGenerator() {
@@ -34,7 +35,7 @@ public class EarthGenerator extends ChunkGenerator {
         );
 
         System.out.println(
-                "[EarthBound] Chunk debug generator loaded"
+                "[EarthBound] Real Guemes terrain generator loaded"
         );
     }
 
@@ -50,10 +51,8 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * IMPORTANT DEBUG MESSAGE
-         *
-         * If Paper asks EarthBound to create a new chunk,
-         * this message MUST appear in the console.
+         * Log every new chunk Paper asks EarthBound
+         * to generate.
          */
 
         System.out.println(
@@ -69,20 +68,60 @@ public class EarthGenerator extends ChunkGenerator {
 
 
         /*
-         * Generate simple flat terrain.
+         * Generate all 256 columns in this chunk.
          */
 
-        for (int x = 0; x < 16; x++) {
+        for (int localX = 0; localX < 16; localX++) {
 
-            for (int z = 0; z < 16; z++) {
+            for (int localZ = 0; localZ < 16; localZ++) {
 
+
+                /*
+                 * Convert the block's position inside the
+                 * chunk into its global Minecraft X/Z.
+                 */
+
+                int worldX =
+                        (chunkX * 16) + localX;
+
+                int worldZ =
+                        (chunkZ * 16) + localZ;
+
+
+                /*
+                 * Convert Minecraft coordinates into
+                 * real-world latitude / longitude.
+                 */
+
+                double latitude =
+                        EarthCoordinates.getLatitude(worldZ);
+
+                double longitude =
+                        EarthCoordinates.getLongitude(worldX);
+
+
+                /*
+                 * Ask the EarthBound terrain system for
+                 * the real terrain height at this location.
+                 */
+
+                int terrainHeight =
+                        EarthTerrainGenerator.getTerrainHeight(
+                                latitude,
+                                longitude
+                        );
+
+
+                /*
+                 * Build the natural terrain column.
+                 */
 
                 EarthTerrainGenerator
                         .generateNaturalLandColumn(
                                 chunkData,
-                                x,
-                                z,
-                                TEST_TERRAIN_HEIGHT
+                                localX,
+                                localZ,
+                                terrainHeight
                         );
             }
         }
