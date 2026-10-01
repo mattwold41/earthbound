@@ -53,20 +53,24 @@ public class EarthWaterData {
             48.60;
 
 
-
     /*
      * ========================================================
      * WATER MASK SIZE
+     *
+     * Increased from 512x512 to 2048x2048.
+     *
+     * This gives EarthBound much finer coastline detail
+     * without changing the geographic bounds or coordinate
+     * system.
      * ========================================================
      */
 
 
     private static final int MASK_WIDTH =
-            512;
+            2048;
 
     private static final int MASK_HEIGHT =
-            512;
-
+            2048;
 
 
     /*
@@ -84,7 +88,6 @@ public class EarthWaterData {
             + "TIGERweb/Hydro/MapServer/export";
 
 
-
     /*
      * ========================================================
      * WATER MASK
@@ -94,10 +97,8 @@ public class EarthWaterData {
 
     private static boolean[][] waterMask;
 
-
     private static boolean loaded =
             false;
-
 
 
     /*
@@ -113,7 +114,6 @@ public class EarthWaterData {
         loadGuemesWaterMask();
 
     }
-
 
 
     /*
@@ -203,7 +203,6 @@ public class EarthWaterData {
     }
 
 
-
     /*
      * ========================================================
      * DOWNLOAD TIGERWEB WATER IMAGE
@@ -221,14 +220,14 @@ public class EarthWaterData {
 
 
         /*
-         * We request only layer 1:
+         * Request only layer 1:
          *
          * Areal Hydrography
          *
-         * Transparent background means:
+         * Transparent background:
          *
          * transparent = land / no hydro polygon
-         * visible blue = mapped water polygon
+         * visible       = mapped water polygon
          */
 
 
@@ -291,7 +290,6 @@ public class EarthWaterData {
         connection.connect();
 
 
-
         int responseCode =
                 connection.getResponseCode();
 
@@ -311,7 +309,6 @@ public class EarthWaterData {
         }
 
 
-
         File tempFile =
                 File.createTempFile(
                         "earthbound-guemes-water-",
@@ -321,7 +318,6 @@ public class EarthWaterData {
 
         long totalBytes =
                 0;
-
 
 
         try (
@@ -363,13 +359,13 @@ public class EarthWaterData {
 
             }
 
+
         } finally {
 
 
             connection.disconnect();
 
         }
-
 
 
         System.out.println(
@@ -382,7 +378,6 @@ public class EarthWaterData {
         return tempFile;
 
     }
-
 
 
     /*
@@ -419,7 +414,6 @@ public class EarthWaterData {
         }
 
 
-
         if (
                 image.getWidth()
                         != MASK_WIDTH
@@ -439,14 +433,12 @@ public class EarthWaterData {
         }
 
 
-
         waterMask =
                 new boolean[
                         MASK_WIDTH
                 ][
                         MASK_HEIGHT
                 ];
-
 
 
         for (
@@ -493,7 +485,6 @@ public class EarthWaterData {
         }
 
 
-
         System.out.println(
                 "[EarthBound] Water mask decoded: "
                         + image.getWidth()
@@ -502,7 +493,6 @@ public class EarthWaterData {
         );
 
     }
-
 
 
     /*
@@ -520,7 +510,6 @@ public class EarthWaterData {
                 waterMask != null;
 
     }
-
 
 
     /*
@@ -544,7 +533,6 @@ public class EarthWaterData {
         }
 
 
-
         /*
          * Outside the currently loaded Guemes tile.
          */
@@ -566,12 +554,11 @@ public class EarthWaterData {
         }
 
 
-
         /*
          * Longitude:
          *
-         * WEST -> 0
-         * EAST -> 511
+         * WEST -> left edge
+         * EAST -> right edge
          */
 
 
@@ -587,7 +574,6 @@ public class EarthWaterData {
                                 *
                                 (MASK_WIDTH - 1)
                 );
-
 
 
         /*
@@ -612,7 +598,6 @@ public class EarthWaterData {
                 );
 
 
-
         maskX =
                 clamp(
                         maskX,
@@ -629,7 +614,6 @@ public class EarthWaterData {
                 );
 
 
-
         return waterMask[
                 maskX
         ][
@@ -637,7 +621,6 @@ public class EarthWaterData {
         ];
 
     }
-
 
 
     /*
@@ -693,7 +676,6 @@ public class EarthWaterData {
         return count;
 
     }
-
 
 
     /*
