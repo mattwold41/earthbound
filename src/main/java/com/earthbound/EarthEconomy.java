@@ -3,7 +3,6 @@ package com.earthbound;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -13,46 +12,57 @@ import org.bukkit.entity.Player;
 public class EarthEconomy {
 
     private static EarthBound plugin;
-    private static File file;
+
+    private static File economyFile;
     private static File transactionsFile;
+
     private static YamlConfiguration data;
     private static YamlConfiguration transactions;
 
     private static final Map<UUID, Double> balances =
             new HashMap<>();
 
-    private static double treasuryBalance = 0.0;
+    private static double anacortesTreasury = 0.0;
+    private static double washingtonTreasury = 0.0;
+    private static double usaTreasury = 0.0;
     private static double storeBalance = 10000.0;
-    private static long transactionId = 0;
+
+    private static long transactionId = 0L;
+
+    public enum Treasury {
+        ANACORTES,
+        WASHINGTON,
+        USA
+    }
 
     public static void setup(EarthBound earthBound) {
 
         plugin = earthBound;
 
         balances.clear();
-        treasuryBalance = 0.0;
+
+        anacortesTreasury = 0.0;
+        washingtonTreasury = 0.0;
+        usaTreasury = 0.0;
         storeBalance = 10000.0;
-        transactionId = 0;
+        transactionId = 0L;
 
         File folder = plugin.getDataFolder();
 
-        if (!folder.exists() && !folder.mkdirs()) {
-            plugin.getLogger().warning(
-                    "Could not create EarthBound data folder."
-            );
+        if (!folder.exists()) {
+            folder.mkdirs();
         }
 
-        file = new File(folder, "economy.yml");
+        economyFile = new File(folder, "economy.yml");
         transactionsFile =
                 new File(folder, "transactions.yml");
 
-        data = YamlConfiguration.loadConfiguration(file);
+        data = YamlConfiguration.loadConfiguration(economyFile);
         transactions = YamlConfiguration.loadConfiguration(
                 transactionsFile
         );
 
-        // Legacy accounts are stored directly under UUID keys.
-        // Preserve them when upgrading.
+        // Preserve player balances from earlier versions.
         for (String key : data.getKeys(false)) {
 
             try {
@@ -61,19 +71,29 @@ public class EarthEconomy {
 
                 if (validBalance(amount)) {
                     balances.put(uuid, amount);
-                } else {
-                    plugin.getLogger().warning(
-                            "Invalid balance for " + key
-                    );
                 }
 
             } catch (IllegalArgumentException ignored) {
-                // Non-UUID configuration keys are not player accounts.
+                // Ignore non-player keys.
             }
         }
 
-        treasuryBalance = readBalance(
+        // Preserve any money held by the original
+        // single government treasury.
+        double legacyTreasury = readBalance(
                 "accounts.treasury", 0.0
+        );
+
+        anacortesTreasury = readBalance(
+                "accounts.anacortes", legacyTreasury
+        );
+
+        washingtonTreasury = readBalance(
+                "accounts.washington", 0.0
+        );
+
+        usaTreasury = readBalance(
+                "accounts.usa", 0.0
         );
 
         storeBalance = readBalance(
@@ -88,8 +108,8 @@ public class EarthEconomy {
         save();
 
         plugin.getLogger().info(
-                "Economy loaded: " + balances.size()
-                + " player accounts."
+                "EarthBound economy loaded: "
+                + balances.size() + " player accounts."
         );
     }
 
@@ -97,6 +117,7 @@ public class EarthEconomy {
             String path,
             double fallback
     ) {
+
         if (!data.contains(path)) {
             return fallback;
         }
@@ -120,7 +141,7 @@ public class EarthEconomy {
 
     public static void save() {
 
-        if (data == null || file == null) {
+        if (data == null || economyFile == null) {
             return;
         }
 
@@ -133,11 +154,32 @@ public class EarthEconomy {
             );
         }
 
-        data.set("accounts.treasury", treasuryBalance);
-        data.set("accounts.general-store", storeBalance);
+        data.set(
+                "accounts.anacortes",
+                anacortesTreasury
+        );
+
+        data.set(
+                "accounts.washington",
+                washingtonTreasury
+        );
+
+        data.set(
+                "accounts.usa",
+                usaTreasury
+        );
+
+        data.set(
+                "accounts.general-store",
+                storeBalance
+        );
+
+        // Remove the obsolete single-treasury entry
+        // after migrating its funds.
+        data.set("accounts.treasury", null);
 
         try {
-            data.save(file);
+            data.save(economyFile);
         } catch (IOException e) {
             plugin.getLogger().severe(
                     "Could not save economy.yml: "
@@ -202,11 +244,11 @@ public class EarthEconomy {
         double startingMoney = plugin.getConfig()
                 .getDouble(
                         "economy.starting-money",
-                        1000.0
+                        100000.0
                 );
 
         if (!validBalance(startingMoney)) {
-            startingMoney = 1000.0;
+            startingMoney = 100000.0;
         }
 
         startingMoney = roundMoney(startingMoney);
@@ -228,17 +270,38 @@ public class EarthEconomy {
         return balances.get(player.getUniqueId());
     }
 
-    public static double getTreasuryBalance() {
-        return treasuryBalance;
-    }
-
     public static double getStoreBalance() {
         return storeBalance;
     }
 
-    // Retained for compatibility with existing plugin code.
-    // Only use this for legitimate money creation, such as
-    // approved job rewards.
+    public static double getTreasuryBalance(
+            Treasury treasury
+    ) {
+
+        switch (treasury) {
+            case ANACORTES:
+                return anacortesTreasury;
+
+            case WASHINGTON:
+                return washingtonTreasury;
+
+            case USA:
+                return usaTreasury;
+
+            default:
+                return 0.0;
+        }
+    }
+
+    // Compatibility with older code that expects
+    // one government treasury.
+    public static double getTreasuryBalance() {
+
+        return anacortesTreasury
+                + washingtonTreasury
+                + usaTreasury;
+    }
+
     public static void addMoney(
             Player player,
             double amount
@@ -257,7 +320,9 @@ public class EarthEconomy {
         createAccount(player);
 
         UUID uuid = player.getUniqueId();
-        double updated = balances.get(uuid) + amount;
+
+        double updated =
+                balances.get(uuid) + amount;
 
         if (!validBalance(updated)) {
             return;
@@ -273,8 +338,6 @@ public class EarthEconomy {
         );
     }
 
-    // Retained for compatibility with existing plugin code.
-    // This is a money sink, not a treasury payment.
     public static boolean removeMoney(
             Player player,
             double amount
@@ -293,13 +356,17 @@ public class EarthEconomy {
         createAccount(player);
 
         UUID uuid = player.getUniqueId();
+
         double current = balances.get(uuid);
 
         if (current < amount) {
             return false;
         }
 
-        balances.put(uuid, roundMoney(current - amount));
+        balances.put(
+                uuid,
+                roundMoney(current - amount)
+        );
 
         record(
                 uuid.toString(),
@@ -330,6 +397,7 @@ public class EarthEconomy {
         createAccount(player);
 
         UUID uuid = player.getUniqueId();
+
         double current = balances.get(uuid);
         double updatedStore = storeBalance + amount;
 
@@ -338,7 +406,11 @@ public class EarthEconomy {
             return false;
         }
 
-        balances.put(uuid, roundMoney(current - amount));
+        balances.put(
+                uuid,
+                roundMoney(current - amount)
+        );
+
         storeBalance = roundMoney(updatedStore);
 
         record(
@@ -370,15 +442,22 @@ public class EarthEconomy {
         createAccount(player);
 
         UUID uuid = player.getUniqueId();
-        double updated = balances.get(uuid) + amount;
+
+        double updated =
+                balances.get(uuid) + amount;
 
         if (storeBalance < amount
                 || !validBalance(updated)) {
             return false;
         }
 
-        storeBalance = roundMoney(storeBalance - amount);
-        balances.put(uuid, roundMoney(updated));
+        storeBalance =
+                roundMoney(storeBalance - amount);
+
+        balances.put(
+                uuid,
+                roundMoney(updated)
+        );
 
         record(
                 "GENERAL_STORE",
@@ -390,10 +469,18 @@ public class EarthEconomy {
         return true;
     }
 
-    public static boolean payTreasury(
+    /**
+     * Government-owned property purchase.
+     *
+     * Revenue distribution:
+     * 60% Anacortes
+     * 20% Washington
+     * 20% USA
+     */
+    public static boolean purchaseGovernmentProperty(
             Player player,
             double amount,
-            String reason
+            String propertyName
     ) {
 
         if (!validAmount(amount)) {
@@ -409,20 +496,141 @@ public class EarthEconomy {
         createAccount(player);
 
         UUID uuid = player.getUniqueId();
-        double current = balances.get(uuid);
-        double updatedTreasury = treasuryBalance + amount;
 
-        if (current < amount
-                || !validBalance(updatedTreasury)) {
+        double current = balances.get(uuid);
+
+        if (current < amount) {
             return false;
         }
 
-        balances.put(uuid, roundMoney(current - amount));
-        treasuryBalance = roundMoney(updatedTreasury);
+        // Calculate using cents to ensure that
+        // the three shares always total the payment.
+        long cents = Math.round(amount * 100.0);
+
+        long cityCents = cents * 60 / 100;
+        long stateCents = cents * 20 / 100;
+        long federalCents =
+                cents - cityCents - stateCents;
+
+        double cityShare = cityCents / 100.0;
+        double stateShare = stateCents / 100.0;
+        double federalShare = federalCents / 100.0;
+
+        if (!validBalance(
+                anacortesTreasury + cityShare
+        ) || !validBalance(
+                washingtonTreasury + stateShare
+        ) || !validBalance(
+                usaTreasury + federalShare
+        )) {
+            return false;
+        }
+
+        balances.put(
+                uuid,
+                roundMoney(current - amount)
+        );
+
+        anacortesTreasury = roundMoney(
+                anacortesTreasury + cityShare
+        );
+
+        washingtonTreasury = roundMoney(
+                washingtonTreasury + stateShare
+        );
+
+        usaTreasury = roundMoney(
+                usaTreasury + federalShare
+        );
 
         record(
                 uuid.toString(),
-                "GOVERNMENT_TREASURY",
+                "ANACORTES_TREASURY",
+                cityShare,
+                "Property purchase: " + propertyName
+        );
+
+        record(
+                uuid.toString(),
+                "WASHINGTON_TREASURY",
+                stateShare,
+                "Property purchase: " + propertyName
+        );
+
+        record(
+                uuid.toString(),
+                "USA_TREASURY",
+                federalShare,
+                "Property purchase: " + propertyName
+        );
+
+        return true;
+    }
+
+    /**
+     * Pay a player from an existing government
+     * treasury for approved work or materials.
+     */
+    public static boolean treasuryPaysPlayer(
+            Treasury treasury,
+            Player player,
+            double amount,
+            String reason
+    ) {
+
+        if (treasury == null || !validAmount(amount)) {
+            return false;
+        }
+
+        amount = roundMoney(amount);
+
+        if (amount <= 0.0) {
+            return false;
+        }
+
+        createAccount(player);
+
+        double available =
+                getTreasuryBalance(treasury);
+
+        UUID uuid = player.getUniqueId();
+
+        double updated =
+                balances.get(uuid) + amount;
+
+        if (available < amount
+                || !validBalance(updated)) {
+            return false;
+        }
+
+        switch (treasury) {
+            case ANACORTES:
+                anacortesTreasury = roundMoney(
+                        anacortesTreasury - amount
+                );
+                break;
+
+            case WASHINGTON:
+                washingtonTreasury = roundMoney(
+                        washingtonTreasury - amount
+                );
+                break;
+
+            case USA:
+                usaTreasury = roundMoney(
+                        usaTreasury - amount
+                );
+                break;
+        }
+
+        balances.put(
+                uuid,
+                roundMoney(updated)
+        );
+
+        record(
+                treasury.name() + "_TREASURY",
+                uuid.toString(),
                 amount,
                 reason
         );
@@ -458,18 +666,19 @@ public class EarthEconomy {
         UUID from = sender.getUniqueId();
         UUID to = recipient.getUniqueId();
 
-        double fromBalance = balances.get(from);
+        double senderBalance = balances.get(from);
+
         double updatedRecipient =
                 balances.get(to) + amount;
 
-        if (fromBalance < amount
+        if (senderBalance < amount
                 || !validBalance(updatedRecipient)) {
             return false;
         }
 
         balances.put(
                 from,
-                roundMoney(fromBalance - amount)
+                roundMoney(senderBalance - amount)
         );
 
         balances.put(
