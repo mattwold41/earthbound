@@ -1,234 +1,271 @@
 package com.earthbound;
 
-
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 
-
 import com.earthbound.terrain.EarthTerrainDownloader;
 import com.earthbound.water.EarthWaterData;
 import com.earthbound.roads.EarthRoadData;
 
-
-
 public class EarthBound extends JavaPlugin {
 
-
+    /*
+     * ============================================================
+     * GUEMES ISLAND SPAWN
+     * ============================================================
+     */
 
     private static final double GUEMES_SPAWN_X = -654.0;
     private static final double GUEMES_SPAWN_Y = 86.0;
     private static final double GUEMES_SPAWN_Z = -355.0;
 
 
-
+    /*
+     * ============================================================
+     * ENABLE EARTHBOUND
+     * ============================================================
+     */
 
     @Override
     public void onEnable() {
 
-
-        getLogger().info(
-                "EarthBound starting..."
-        );
-
-
+        getLogger().info("EarthBound starting...");
 
         saveDefaultConfig();
 
 
-
         /*
+         * ========================================================
          * WORLD RULES
+         * ========================================================
          */
 
-
-        Bukkit.getPluginManager()
-                .registerEvents(
-                        new EarthBoundWorldRules(this),
-                        this
-                );
-
+        Bukkit.getPluginManager().registerEvents(
+                new EarthBoundWorldRules(this),
+                this
+        );
 
 
         /*
+         * ========================================================
          * ECONOMY
+         * ========================================================
          */
-
 
         EarthEconomy.setup(this);
 
-
         if (getCommand("balance") != null) {
 
+            getCommand("balance").setExecutor(
+                    new EarthEconomyCommand()
+            );
 
-            getCommand("balance")
-                    .setExecutor(
-                            new EarthEconomyCommand()
-                    );
+        } else {
 
+            getLogger().warning(
+                    "Balance command missing from plugin.yml"
+            );
         }
 
 
-
         /*
-         * STORE
+         * ========================================================
+         * GOVERNMENT BANKING
+         * ========================================================
          */
 
+        if (getCommand("earthbank") != null) {
+
+            getCommand("earthbank").setExecutor(
+                    new EarthBankCommand()
+            );
+
+            getLogger().info(
+                    "Government banking commands registered!"
+            );
+
+        } else {
+
+            getLogger().warning(
+                    "Earthbank command missing from plugin.yml"
+            );
+        }
+
+
+        /*
+         * ========================================================
+         * GENERAL STORE
+         * ========================================================
+         */
 
         EarthStore.setup();
 
-
         if (getCommand("store") != null) {
 
+            getCommand("store").setExecutor(
+                    new EarthStoreCommand()
+            );
 
-            getCommand("store")
-                    .setExecutor(
-                            new EarthStoreCommand()
-                    );
+        } else {
 
+            getLogger().warning(
+                    "Store command missing from plugin.yml"
+            );
         }
 
 
-
         /*
-         * LOAD TERRAIN
+         * ========================================================
+         * LOAD GUEMES TERRAIN
+         * ========================================================
          */
-
 
         EarthTerrainDownloader.loadGuemesIsland();
 
-
         if (EarthTerrainDownloader.isLoaded()) {
 
-
             getLogger().info(
-                    "Terrain loaded!"
+                    "Guemes terrain loaded!"
             );
 
+        } else {
 
+            getLogger().warning(
+                    "Guemes terrain did not finish loading."
+            );
         }
 
 
-
         /*
-         * LOAD WATER
+         * ========================================================
+         * LOAD GUEMES WATER
+         * ========================================================
          */
-
 
         boolean waterLoaded =
                 EarthWaterData.loadGuemesWaterMask();
 
-
         getLogger().info(
-                "Water loaded: "
-                        + waterLoaded
+                "Water loaded: " + waterLoaded
         );
 
 
-
         /*
-         * LOAD ROADS
+         * ========================================================
+         * LOAD GUEMES ROADS
+         * ========================================================
          */
-
 
         boolean roadsLoaded =
                 EarthRoadData.loadGuemesRoadMask();
 
-
         getLogger().info(
-                "Roads loaded: "
-                        + roadsLoaded
+                "Roads loaded: " + roadsLoaded
         );
 
 
-
         /*
-         * DISABLE NORMAL MOBS
+         * ========================================================
+         * DISABLE NORMAL MOB SPAWNING
+         * ========================================================
          */
 
+        Bukkit.getScheduler().runTask(
+                this,
+                () -> {
 
-        Bukkit.getScheduler()
-                .runTask(
-                        this,
-                        () -> {
+                    for (World world : Bukkit.getWorlds()) {
 
+                        world.setGameRule(
+                                org.bukkit.GameRule.DO_MOB_SPAWNING,
+                                false
+                        );
 
-                            for (World world :
-                                    Bukkit.getWorlds()) {
+                    }
 
-
-                                world.setGameRule(
-                                        org.bukkit.GameRule.DO_MOB_SPAWNING,
-                                        false
-                                );
-
-
-                            }
-
-
-                        }
-                );
-
-
+                }
+        );
 
 
         /*
-         * SET SPAWN
+         * ========================================================
+         * SET GUEMES SPAWN
+         * ========================================================
          */
 
+        Bukkit.getScheduler().runTask(
+                this,
+                () -> {
 
-        Bukkit.getScheduler()
-                .runTask(
-                        this,
-                        () -> {
+                    World world =
+                            Bukkit.getWorld("earthbound");
 
+                    if (world == null) {
 
-                            World world =
-                                    Bukkit.getWorld(
-                                            "earthbound"
-                                    );
+                        getLogger().warning(
+                                "EarthBound world not found. "
+                                + "Guemes spawn was not set."
+                        );
 
+                        return;
+                    }
 
-                            if (world == null) {
+                    world.setSpawnLocation(
+                            new Location(
+                                    world,
+                                    GUEMES_SPAWN_X,
+                                    GUEMES_SPAWN_Y,
+                                    GUEMES_SPAWN_Z
+                            )
+                    );
 
-                                return;
+                    getLogger().info(
+                            "Guemes spawn set!"
+                    );
 
-                            }
-
-
-
-                            world.setSpawnLocation(
-                                    new Location(
-                                            world,
-                                            GUEMES_SPAWN_X,
-                                            GUEMES_SPAWN_Y,
-                                            GUEMES_SPAWN_Z
-                                    )
-                            );
-
-
-                            getLogger().info(
-                                    "Guemes spawn set!"
-                            );
+                }
+        );
 
 
-                        }
-                );
-
-
+        /*
+         * ========================================================
+         * STARTUP COMPLETE
+         * ========================================================
+         */
 
         getLogger().info(
                 "EarthBound enabled!"
         );
 
+    }
+
+
+    /*
+     * ============================================================
+     * SAVE ECONOMY ON SHUTDOWN
+     * ============================================================
+     */
+
+    @Override
+    public void onDisable() {
+
+        EarthEconomy.save();
+
+        getLogger().info(
+                "EarthBound economy saved!"
+        );
 
     }
 
 
-
-
+    /*
+     * ============================================================
+     * EARTH WORLD GENERATOR
+     * ============================================================
+     */
 
     @Override
     public ChunkGenerator getDefaultWorldGenerator(
@@ -236,11 +273,8 @@ public class EarthBound extends JavaPlugin {
             String id
     ) {
 
-
         return new EarthGenerator();
 
     }
-
-
 
 }
