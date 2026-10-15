@@ -18,8 +18,12 @@ commands:
     description: View your EarthBound money balance
     usage: /balance
 
+  pay:
+    description: Transfer money to another player
+    usage: /pay <player> <amount>
+
   store:
-    description: EarthBound Store
+    description: EarthBound General Store
     usage: /store
 
   earthbank:
