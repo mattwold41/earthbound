@@ -38,9 +38,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * WORLD RULES
-         * ========================================================
          */
 
         Bukkit.getPluginManager().registerEvents(
@@ -50,9 +48,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * ECONOMY
-         * ========================================================
          */
 
         EarthEconomy.setup(this);
@@ -72,9 +68,29 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
+         * PLAYER-TO-PLAYER PAYMENTS
+         */
+
+        if (getCommand("pay") != null) {
+
+            getCommand("pay").setExecutor(
+                    new EarthPayCommand()
+            );
+
+            getLogger().info(
+                    "Player payment command registered!"
+            );
+
+        } else {
+
+            getLogger().warning(
+                    "Pay command missing from plugin.yml"
+            );
+        }
+
+
+        /*
          * GOVERNMENT BANKING
-         * ========================================================
          */
 
         if (getCommand("earthbank") != null) {
@@ -96,9 +112,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * GENERAL STORE
-         * ========================================================
          */
 
         EarthStore.setup();
@@ -118,9 +132,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * LOAD GUEMES TERRAIN
-         * ========================================================
          */
 
         EarthTerrainDownloader.loadGuemesIsland();
@@ -140,9 +152,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * LOAD GUEMES WATER
-         * ========================================================
          */
 
         boolean waterLoaded =
@@ -154,9 +164,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * LOAD GUEMES ROADS
-         * ========================================================
          */
 
         boolean roadsLoaded =
@@ -168,9 +176,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * DISABLE NORMAL MOB SPAWNING
-         * ========================================================
          */
 
         Bukkit.getScheduler().runTask(
@@ -191,9 +197,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * SET GUEMES SPAWN
-         * ========================================================
          */
 
         Bukkit.getScheduler().runTask(
@@ -231,9 +235,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * STARTUP COMPLETE
-         * ========================================================
          */
 
         getLogger().info(
