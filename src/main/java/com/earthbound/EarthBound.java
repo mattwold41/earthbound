@@ -132,6 +132,29 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
+         * ========================================================
+         * PROPERTY OWNERSHIP SYSTEM
+         * ========================================================
+         *
+         * Loads registered properties and saved ownership.
+         *
+         * Property purchases will eventually distribute
+         * government sale revenue:
+         *
+         * 60% - Anacortes
+         * 20% - Washington
+         * 20% - USA
+         *
+         */
+
+        EarthPropertyManager.setup(this);
+
+        getLogger().info(
+                "EarthBound property system initialized!"
+        );
+
+
+        /*
          * LOAD GUEMES TERRAIN
          */
 
@@ -247,17 +270,48 @@ public class EarthBound extends JavaPlugin {
 
     /*
      * ============================================================
-     * SAVE ECONOMY ON SHUTDOWN
+     * SAVE EARTHBOUND DATA ON SHUTDOWN
      * ============================================================
      */
 
     @Override
     public void onDisable() {
 
+        /*
+         * SAVE PROPERTY OWNERSHIP
+         */
+
+        if (EarthPropertyManager.save()) {
+
+            getLogger().info(
+                    "EarthBound properties saved!"
+            );
+
+        } else {
+
+            getLogger().warning(
+                    "EarthBound property data could not be saved."
+            );
+        }
+
+
+        /*
+         * SAVE ECONOMY
+         */
+
         EarthEconomy.save();
 
         getLogger().info(
                 "EarthBound economy saved!"
+        );
+
+
+        /*
+         * SHUTDOWN COMPLETE
+         */
+
+        getLogger().info(
+                "EarthBound shutdown complete."
         );
 
     }
