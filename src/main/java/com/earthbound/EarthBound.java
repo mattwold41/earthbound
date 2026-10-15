@@ -138,8 +138,7 @@ public class EarthBound extends JavaPlugin {
          *
          * Loads registered properties and saved ownership.
          *
-         * Property purchases will eventually distribute
-         * government sale revenue:
+         * Government property sale revenue:
          *
          * 60% - Anacortes
          * 20% - Washington
@@ -151,6 +150,38 @@ public class EarthBound extends JavaPlugin {
 
         getLogger().info(
                 "EarthBound property system initialized!"
+        );
+
+
+        /*
+         * ========================================================
+         * BLUE FOR SALE BANNER SYSTEM
+         * ========================================================
+         *
+         * Clear previous banner registrations.
+         *
+         * Register property interaction listener.
+         *
+         * Handles:
+         *
+         * - Official blue For Sale banner clicks
+         * - Opening the property purchase menu
+         * - Buy Home button
+         * - Cancel button
+         * - Purchase processing
+         * - Removing the banner after purchase
+         *
+         */
+
+        EarthPropertyBannerRegistry.clear();
+
+        Bukkit.getPluginManager().registerEvents(
+                new EarthPropertyListener(),
+                this
+        );
+
+        getLogger().info(
+                "EarthBound property banner listener registered!"
         );
 
 
