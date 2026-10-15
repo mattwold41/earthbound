@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.bukkit.Location;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -32,7 +33,6 @@ public class EarthPropertyManager {
     public static void setup(JavaPlugin earthBoundPlugin) {
 
         plugin = earthBoundPlugin;
-
         properties.clear();
 
         if (!plugin.getDataFolder().exists()) {
@@ -51,23 +51,134 @@ public class EarthPropertyManager {
         loadOwners();
 
         plugin.getLogger().info(
-                "EarthBound properties loaded: "
+                "EarthBound properties registered: "
                 + properties.size()
         );
     }
 
     /*
-     * REGISTER SIX ALPHA PROPERTIES
-     *
-     * Coordinates are deliberately not assigned yet.
-     * We must verify the actual road and house locations
-     * before enabling purchases.
+     * LOAD ALPHA PROPERTIES FROM CONFIG.YML
      */
 
     private static void registerAlphaProperties() {
 
-        // Property boundaries will be registered
-        // after we verify their exact locations.
+        ConfigurationSection section =
+                plugin.getConfig().getConfigurationSection(
+                        "properties.alpha-homes"
+                );
+
+        if (section == null) {
+
+            plugin.getLogger().warning(
+                    "No Alpha homes configured. "
+                    + "Property purchases are disabled."
+            );
+
+            return;
+        }
+
+        for (String id : section.getKeys(false)) {
+
+            ConfigurationSection home =
+                    section.getConfigurationSection(id);
+
+            if (home == null
+                    || !home.getBoolean("enabled", false)) {
+                continue;
+            }
+
+            try {
+
+                String name =
+                        home.getString("name", id);
+
+                String world =
+                        home.getString("world", "earthbound");
+
+                if (!home.contains("min-x")
+                        || !home.contains("min-z")
+                        || !home.contains("price")) {
+
+                    plugin.getLogger().warning(
+                            "Missing coordinates or price for "
+                            + id
+                    );
+
+                    continue;
+                }
+
+                int minX = home.getInt("min-x");
+                int minZ = home.getInt("min-z");
+
+                int width = home.getInt("width", 24);
+                int length = home.getInt("length", 32);
+
+                if (width <= 0 || length <= 0
+                        || width > 256 || length > 256) {
+
+                    plugin.getLogger().warning(
+                            "Invalid property dimensions: "
+                            + id
+                    );
+
+                    continue;
+                }
+
+                double price =
+                        home.getDouble("price");
+
+                if (!Double.isFinite(price)
+                        || price <= 0.0) {
+
+                    plugin.getLogger().warning(
+                            "Invalid property price: "
+                            + id
+                    );
+
+                    continue;
+                }
+
+                int maxX =
+                        Math.addExact(minX, width - 1);
+
+                int maxZ =
+                        Math.addExact(minZ, length - 1);
+
+                EarthProperty property =
+                        new EarthProperty(
+                                id,
+                                name,
+                                world,
+                                minX,
+                                maxX,
+                                minZ,
+                                maxZ,
+                                price
+                        );
+
+                if (registerProperty(property)) {
+
+                    plugin.getLogger().info(
+                            "Registered property "
+                            + id
+                            + " ("
+                            + width
+                            + "x"
+                            + length
+                            + ")"
+                    );
+                }
+
+            } catch (RuntimeException exception) {
+
+                plugin.getLogger().warning(
+                        "Could not register property "
+                        + id
+                        + ": "
+                        + exception.getMessage()
+                );
+            }
+        }
     }
 
     /*
@@ -78,11 +189,8 @@ public class EarthPropertyManager {
             EarthProperty property
     ) {
 
-        if (property == null) {
-            return false;
-        }
-
-        if (properties.containsKey(property.getId())) {
+        if (property == null
+                || properties.containsKey(property.getId())) {
             return false;
         }
 
@@ -104,10 +212,6 @@ public class EarthPropertyManager {
         return true;
     }
 
-    /*
-     * CHECK PROPERTY OVERLAP
-     */
-
     private static boolean overlaps(
             EarthProperty first,
             EarthProperty second
@@ -126,7 +230,7 @@ public class EarthPropertyManager {
     }
 
     /*
-     * FIND PROPERTY BY ID
+     * PROPERTY LOOKUPS
      */
 
     public static EarthProperty getProperty(String id) {
@@ -138,20 +242,12 @@ public class EarthPropertyManager {
         return properties.get(id);
     }
 
-    /*
-     * GET ALL PROPERTIES
-     */
-
     public static Collection<EarthProperty> getProperties() {
 
         return Collections.unmodifiableCollection(
                 properties.values()
         );
     }
-
-    /*
-     * FIND PROPERTY AT LOCATION
-     */
 
     public static EarthProperty getPropertyAt(
             Location location
@@ -169,17 +265,12 @@ public class EarthPropertyManager {
                     location.getBlockX(),
                     location.getBlockZ()
             )) {
-
                 return property;
             }
         }
 
         return null;
     }
-
-    /*
-     * GET PLAYER'S OWNED PROPERTIES
-     */
 
     public static List<EarthProperty> getOwnedProperties(
             UUID playerId
@@ -201,10 +292,6 @@ public class EarthPropertyManager {
         return owned;
     }
 
-    /*
-     * CHECK PLAYER OWNERSHIP
-     */
-
     public static boolean ownsProperty(
             Player player,
             EarthProperty property
@@ -219,12 +306,6 @@ public class EarthPropertyManager {
 
     /*
      * PURCHASE GOVERNMENT PROPERTY
-     *
-     * Government revenue is divided:
-     *
-     * 60% Anacortes
-     * 20% Washington
-     * 20% USA
      */
 
     public static boolean purchaseProperty(
@@ -257,11 +338,6 @@ public class EarthPropertyManager {
             return false;
         }
 
-        /*
-         * ALPHA RULE:
-         * ONE HOME PER PLAYER
-         */
-
         if (!getOwnedProperties(
                 player.getUniqueId()
         ).isEmpty()) {
@@ -275,15 +351,6 @@ public class EarthPropertyManager {
 
         double price = property.getPrice();
 
-        if (price <= 0.0) {
-
-            player.sendMessage(
-                    "This property is not available for purchase."
-            );
-
-            return false;
-        }
-
         if (EarthEconomy.getBalance(player) < price) {
 
             player.sendMessage(
@@ -292,10 +359,6 @@ public class EarthPropertyManager {
 
             return false;
         }
-
-        /*
-         * PROCESS GOVERNMENT PURCHASE
-         */
 
         boolean paid =
                 EarthEconomy.purchaseGovernmentProperty(
@@ -313,21 +376,33 @@ public class EarthPropertyManager {
             return false;
         }
 
-        /*
-         * ASSIGN OWNERSHIP
-         */
+        property.setOwner(player.getUniqueId());
 
-        property.setOwner(
-                player.getUniqueId()
-        );
+        if (!save()) {
 
-        save();
+            plugin.getLogger().severe(
+                    "Property ownership save failed after "
+                    + "payment for " + propertyId
+                    + ". Administrator review required."
+            );
+
+            player.sendMessage(
+                    "Your purchase needs administrator "
+                    + "verification. Do not purchase again."
+            );
+
+            return false;
+        }
 
         player.sendMessage(
                 "You purchased "
                 + property.getName()
                 + " for $"
-                + String.format("%.2f", price)
+                + String.format(
+                        java.util.Locale.US,
+                        "%.2f",
+                        price
+                )
                 + "!"
         );
 
@@ -335,20 +410,19 @@ public class EarthPropertyManager {
     }
 
     /*
-     * LOAD PROPERTY OWNERS
+     * LOAD SAVED OWNERS
      */
 
     private static void loadOwners() {
 
         for (EarthProperty property : properties.values()) {
 
-            String path =
-                    "properties."
-                    + property.getId()
-                    + ".owner";
-
             String savedOwner =
-                    propertyData.getString(path);
+                    propertyData.getString(
+                            "properties."
+                            + property.getId()
+                            + ".owner"
+                    );
 
             if (savedOwner == null
                     || savedOwner.isBlank()) {
@@ -434,13 +508,12 @@ public class EarthPropertyManager {
         try {
 
             propertyData.save(propertyFile);
-
             return true;
 
         } catch (IOException exception) {
 
             plugin.getLogger().severe(
-                    "Failed to save property data: "
+                    "Failed to save properties: "
                     + exception.getMessage()
             );
 
