@@ -1,10 +1,91 @@
-world:
-  hostile-mobs: false
-  nether: false
-  end: false
+# ==================================================
+# EARTHBOUND CONFIGURATION
+# Friends Alpha
+# ==================================================
 
-player:
-  hunger-rate: 0.5
+# ==================================================
+# ECONOMY
+# ==================================================
 
 economy:
   starting-money: 100000
+
+# ==================================================
+# PROPERTY SYSTEM
+# ==================================================
+
+properties:
+
+  alpha-homes:
+
+    # ----------------------------------------------
+    # HOME 1 - STARTER HOUSE
+    # ----------------------------------------------
+
+    guemes_home_01:
+      enabled: false
+      name: "Starter House"
+      world: earthbound
+      width: 24
+      length: 32
+      price: 500
+
+    # ----------------------------------------------
+    # HOME 2 - TWO-STORY FAMILY HOME
+    # ----------------------------------------------
+
+    guemes_home_02:
+      enabled: false
+      name: "Two-Story Family Home"
+      world: earthbound
+      width: 24
+      length: 32
+      price: 750
+
+    # ----------------------------------------------
+    # HOME 3 - COTTAGE
+    # ----------------------------------------------
+
+    guemes_home_03:
+      enabled: false
+      name: "Cottage"
+      world: earthbound
+      width: 24
+      length: 32
+      price: 550
+
+    # ----------------------------------------------
+    # HOME 4 - TWO-STORY FARMHOUSE
+    # ----------------------------------------------
+
+    guemes_home_04:
+      enabled: false
+      name: "Two-Story Farmhouse"
+      world: earthbound
+      width: 24
+      length: 32
+      price: 800
+
+    # ----------------------------------------------
+    # HOME 5 - CABIN
+    # ----------------------------------------------
+
+    guemes_home_05:
+      enabled: false
+      name: "Cabin"
+      world: earthbound
+      width: 24
+      length: 32
+      price: 600
+
+    # ----------------------------------------------
+    # HOME 6 - TWO-STORY TRADITIONAL
+    # ----------------------------------------------
+
+    guemes_home_06:
+      enabled: false
+      name: "Two-Story Traditional"
+      world: earthbound
+      width: 24
+      length: 32
+      price: 850
