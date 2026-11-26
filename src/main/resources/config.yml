@@ -11,6 +11,19 @@ economy:
   starting-money: 100000
 
 # ==================================================
+# RESIDENTIAL DEVELOPMENT
+# ==================================================
+
+residential:
+
+  # Keep disabled until all property sites
+  # have been validated and approved.
+
+  enabled: false
+
+  world: earthbound
+
+# ==================================================
 # PROPERTY SYSTEM
 # ==================================================
 
@@ -30,6 +43,26 @@ properties:
       length: 32
       price: 500
 
+      design: STARTER
+
+      min-x: null
+      min-z: null
+
+      front-x: null
+      front-z: null
+      ground-y: null
+      facing: null
+
+      banner-x: null
+      banner-y: null
+      banner-z: null
+
+      sign-x: null
+      sign-y: null
+      sign-z: null
+
+      marker-facing: null
+
     # ----------------------------------------------
     # HOME 2 - TWO-STORY FAMILY HOME
     # ----------------------------------------------
@@ -41,6 +74,26 @@ properties:
       width: 24
       length: 32
       price: 750
+
+      design: FAMILY
+
+      min-x: null
+      min-z: null
+
+      front-x: null
+      front-z: null
+      ground-y: null
+      facing: null
+
+      banner-x: null
+      banner-y: null
+      banner-z: null
+
+      sign-x: null
+      sign-y: null
+      sign-z: null
+
+      marker-facing: null
 
     # ----------------------------------------------
     # HOME 3 - COTTAGE
@@ -54,6 +107,26 @@ properties:
       length: 32
       price: 550
 
+      design: COTTAGE
+
+      min-x: null
+      min-z: null
+
+      front-x: null
+      front-z: null
+      ground-y: null
+      facing: null
+
+      banner-x: null
+      banner-y: null
+      banner-z: null
+
+      sign-x: null
+      sign-y: null
+      sign-z: null
+
+      marker-facing: null
+
     # ----------------------------------------------
     # HOME 4 - TWO-STORY FARMHOUSE
     # ----------------------------------------------
@@ -65,6 +138,26 @@ properties:
       width: 24
       length: 32
       price: 800
+
+      design: FARMHOUSE
+
+      min-x: null
+      min-z: null
+
+      front-x: null
+      front-z: null
+      ground-y: null
+      facing: null
+
+      banner-x: null
+      banner-y: null
+      banner-z: null
+
+      sign-x: null
+      sign-y: null
+      sign-z: null
+
+      marker-facing: null
 
     # ----------------------------------------------
     # HOME 5 - CABIN
@@ -78,6 +171,26 @@ properties:
       length: 32
       price: 600
 
+      design: CABIN
+
+      min-x: null
+      min-z: null
+
+      front-x: null
+      front-z: null
+      ground-y: null
+      facing: null
+
+      banner-x: null
+      banner-y: null
+      banner-z: null
+
+      sign-x: null
+      sign-y: null
+      sign-z: null
+
+      marker-facing: null
+
     # ----------------------------------------------
     # HOME 6 - TWO-STORY TRADITIONAL
     # ----------------------------------------------
@@ -89,3 +202,23 @@ properties:
       width: 24
       length: 32
       price: 850
+
+      design: TRADITIONAL
+
+      min-x: null
+      min-z: null
+
+      front-x: null
+      front-z: null
+      ground-y: null
+      facing: null
+
+      banner-x: null
+      banner-y: null
+      banner-z: null
+
+      sign-x: null
+      sign-y: null
+      sign-z: null
+
+      marker-facing: null
