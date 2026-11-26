@@ -1,5 +1,7 @@
 package com.earthbound;
 
+import java.util.logging.Level;
+
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -15,6 +17,9 @@ import com.earthbound.roads.EarthRoadData;
 import com.earthbound.roads.EarthRoadElevationProfiles;
 import com.earthbound.roads.EarthRoadSpatialIndex;
 
+import com.earthbound.EarthResidentialInstallation
+        .InstallationStatus;
+
 public class EarthBound extends JavaPlugin {
 
     /*
@@ -26,14 +31,18 @@ public class EarthBound extends JavaPlugin {
     private static final double GUEMES_SPAWN_Z = -355.0;
 
     /*
-     * RESIDENTIAL SITE SEARCH DIAGNOSTICS
+     * FRIENDS ALPHA RESIDENTIAL DEVELOPMENT
      */
+
+    private static final int REQUIRED_ALPHA_HOMES = 6;
 
     private static final String SITE_SEARCH_CONFIG =
             "diagnostics.residential-site-search";
 
     /*
+     * ========================================================
      * ENABLE EARTHBOUND
+     * ========================================================
      */
 
     @Override
@@ -44,6 +53,16 @@ public class EarthBound extends JavaPlugin {
         saveDefaultConfig();
 
         EarthGuemesGenerator.clearResidentialSites();
+
+        /*
+         * INITIALIZE RESIDENTIAL INSTALLATION TRACKING
+         *
+         * Load persistent installation records before
+         * residential development is evaluated.
+         */
+
+        boolean installationStorageReady =
+                initializeResidentialInstallation();
 
         /*
          * WORLD RULES
@@ -191,9 +210,14 @@ public class EarthBound extends JavaPlugin {
 
         /*
          * FRIENDS ALPHA RESIDENTIAL CONFIGURATION
+         *
+         * Require both geographic data and valid
+         * persistent installation storage.
          */
 
-        if (geographicDataReady) {
+        if (geographicDataReady
+                && installationStorageReady
+                && EarthResidentialInstallation.isReady()) {
 
             boolean residentialConfigLoaded =
                     EarthGuemesGenerator
@@ -216,9 +240,21 @@ public class EarthBound extends JavaPlugin {
 
         } else {
 
+            EarthGuemesGenerator.clearResidentialSites();
+
             getLogger().warning(
                     "Residential configuration skipped: "
-                    + "geographic data is not ready."
+                    + "required safety systems are unavailable."
+            );
+
+            getLogger().warning(
+                    "Geographic data ready: "
+                    + geographicDataReady
+            );
+
+            getLogger().warning(
+                    "Installation storage ready: "
+                    + EarthResidentialInstallation.isReady()
             );
         }
 
@@ -301,9 +337,6 @@ public class EarthBound extends JavaPlugin {
          *
          * Run on the server main thread after startup
          * world initialization.
-         *
-         * Safety inspection must occur before any
-         * residential sale marker initialization.
          */
 
         Bukkit.getScheduler().runTask(
@@ -314,8 +347,21 @@ public class EarthBound extends JavaPlugin {
         );
 
         /*
-         * STARTUP COMPLETE
+         * STARTUP SUMMARY
          */
+
+        getLogger().info(
+                "Residential installation storage ready: "
+                + EarthResidentialInstallation.isReady()
+        );
+
+        getLogger().info(
+                "Residential construction authorization: LOCKED"
+        );
+
+        getLogger().info(
+                "Residential automatic sale markers: DISABLED"
+        );
 
         getLogger().info(
                 "EarthBound enabled!"
@@ -324,26 +370,245 @@ public class EarthBound extends JavaPlugin {
 
     /*
      * ========================================================
+     * RESIDENTIAL INSTALLATION STORAGE
+     * ========================================================
+     */
+
+    private boolean initializeResidentialInstallation() {
+
+        getLogger().info(
+                "========================================"
+        );
+
+        getLogger().info(
+                "EARTHBOUND RESIDENTIAL INSTALLATION STORAGE"
+        );
+
+        try {
+
+            boolean initialized =
+                    EarthResidentialInstallation.setup(this);
+
+            if (!initialized
+                    || !EarthResidentialInstallation.isReady()) {
+
+                EarthResidentialInstallation.shutdown();
+
+                getLogger().severe(
+                        "Residential installation storage "
+                        + "could not be initialized."
+                );
+
+                getLogger().warning(
+                        "Residential construction remains locked."
+                );
+
+                getLogger().warning(
+                        "Residential sale markers remain disabled."
+                );
+
+                return false;
+            }
+
+            getLogger().info(
+                    "Residential installation storage initialized."
+            );
+
+            reportResidentialInstallationStatus();
+
+            getLogger().info(
+                    "Installation records will not "
+                    + "automatically authorize construction."
+            );
+
+            return true;
+
+        } catch (RuntimeException exception) {
+
+            EarthResidentialInstallation.shutdown();
+
+            getLogger().log(
+                    Level.SEVERE,
+                    "Residential installation initialization failed.",
+                    exception
+            );
+
+            getLogger().warning(
+                    "Residential construction remains locked."
+            );
+
+            return false;
+
+        } finally {
+
+            getLogger().info(
+                    "========================================"
+            );
+        }
+    }
+
+    /*
+     * ========================================================
+     * REPORT RESIDENTIAL INSTALLATION STATUS
+     * ========================================================
+     */
+
+    private void reportResidentialInstallationStatus() {
+
+        if (!EarthResidentialInstallation.isReady()) {
+
+            getLogger().warning(
+                    "Residential installation status unavailable."
+            );
+
+            return;
+        }
+
+        int notStarted = 0;
+        int approved = 0;
+        int inProgress = 0;
+        int completed = 0;
+        int failed = 0;
+
+        /*
+         * Query all six expected property IDs.
+         *
+         * NOT_STARTED represents a property without
+         * a persistent installation record.
+         */
+
+        for (int homeNumber = 1;
+                homeNumber <= REQUIRED_ALPHA_HOMES;
+                homeNumber++) {
+
+            String propertyId =
+                    "guemes_home_0" + homeNumber;
+
+            InstallationStatus status =
+                    EarthResidentialInstallation
+                            .getStatus(propertyId);
+
+            switch (status) {
+
+                case NOT_STARTED:
+                    notStarted++;
+                    break;
+
+                case APPROVED:
+                    approved++;
+                    break;
+
+                case IN_PROGRESS:
+                    inProgress++;
+                    break;
+
+                case COMPLETED:
+                    completed++;
+                    break;
+
+                case FAILED:
+                    failed++;
+                    break;
+            }
+
+            getLogger().info(
+                    propertyId + ": " + status.name()
+            );
+        }
+
+        getLogger().info(
+                "----------------------------------------"
+        );
+
+        getLogger().info(
+                "Residential properties: "
+                + REQUIRED_ALPHA_HOMES
+        );
+
+        getLogger().info(
+                "Not started: " + notStarted
+        );
+
+        getLogger().info(
+                "Approved: " + approved
+        );
+
+        getLogger().info(
+                "In progress: " + inProgress
+        );
+
+        getLogger().info(
+                "Completed: " + completed
+        );
+
+        getLogger().info(
+                "Failed: " + failed
+        );
+
+        if (failed > 0 || inProgress > 0) {
+
+            getLogger().warning(
+                    "Residential installations require "
+                    + "manual administrator review."
+            );
+
+            getLogger().warning(
+                    "Automatic construction recovery is disabled."
+            );
+        }
+
+        if (completed > 0) {
+
+            getLogger().info(
+                    "Completed installation records detected."
+            );
+
+            getLogger().info(
+                    "Recorded completion is not a new "
+                    + "physical structure verification."
+            );
+
+            getLogger().info(
+                    "Completed homes must never be "
+                    + "automatically reconstructed."
+            );
+        }
+    }
+
+    /*
+     * ========================================================
      * RESIDENTIAL WORLD INITIALIZATION
      * ========================================================
      *
-     * Read-only residential world inspection.
+     * Read-only world inspection.
      *
-     * Does not load or generate property chunks.
-     * Does not authorize residential construction.
-     * Does not install property sale markers.
+     * Does not generate residential chunks.
+     * Does not install homes.
+     * Does not authorize construction.
+     * Does not install sale markers.
      */
 
     private void initializeResidentialWorld(
             boolean geographicDataReady
     ) {
 
+        EarthPropertyBannerRegistry.clear();
+
         /*
-         * Clear any previously registered official
-         * sale banner locations.
+         * Require persistent installation storage.
          */
 
-        EarthPropertyBannerRegistry.clear();
+        if (!EarthResidentialInstallation.isReady()) {
+
+            getLogger().severe(
+                    "Residential world initialization cancelled: "
+                    + "installation storage is unavailable."
+            );
+
+            EarthGuemesGenerator.clearResidentialSites();
+
+            return;
+        }
 
         World world =
                 Bukkit.getWorld("earthbound");
@@ -398,7 +663,7 @@ public class EarthBound extends JavaPlugin {
                 EarthGuemesGenerator
                         .getResidentialSiteCount();
 
-        if (registeredSites != 6) {
+        if (registeredSites != REQUIRED_ALPHA_HOMES) {
 
             getLogger().warning(
                     "Residential world inspection cancelled: "
@@ -408,7 +673,8 @@ public class EarthBound extends JavaPlugin {
             getLogger().warning(
                     "Registered residential properties: "
                     + registeredSites
-                    + " / 6"
+                    + " / "
+                    + REQUIRED_ALPHA_HOMES
             );
 
             return;
@@ -446,6 +712,32 @@ public class EarthBound extends JavaPlugin {
         );
 
         /*
+         * Check persistent installation identities
+         * before evaluating undeveloped land.
+         */
+
+        if (!validateResidentialInstallationRecords(world)) {
+
+            getLogger().warning(
+                    "Residential world initialization rejected."
+            );
+
+            getLogger().warning(
+                    "Manual installation review required."
+            );
+
+            getLogger().warning(
+                    "Construction and sale markers remain locked."
+            );
+
+            getLogger().info(
+                    "========================================"
+            );
+
+            return;
+        }
+
+        /*
          * Inspect existing chunks, property boundaries,
          * geographic suitability and build heights.
          */
@@ -467,7 +759,7 @@ public class EarthBound extends JavaPlugin {
         } catch (RuntimeException exception) {
 
             getLogger().log(
-                    java.util.logging.Level.WARNING,
+                    Level.WARNING,
                     "Residential world inspection failed.",
                     exception
             );
@@ -489,10 +781,6 @@ public class EarthBound extends JavaPlugin {
                 "Residential world safety passed: "
                 + inspectionPassed
         );
-
-        /*
-         * Fail closed if any inspection fails.
-         */
 
         if (!inspectionPassed) {
 
@@ -519,13 +807,10 @@ public class EarthBound extends JavaPlugin {
         /*
          * IMPORTANT:
          *
-         * A successful safety inspection is not
-         * construction authorization.
+         * A successful inspection is only a snapshot
+         * of current world conditions.
          *
-         * It is only a snapshot of current conditions.
-         *
-         * Persistent installation tracking and final
-         * authorization are still required.
+         * It is not construction authorization.
          */
 
         getLogger().info(
@@ -535,6 +820,10 @@ public class EarthBound extends JavaPlugin {
         getLogger().info(
                 "All six properties passed the current "
                 + "read-only inspection."
+        );
+
+        getLogger().info(
+                "Persistent installation storage validated."
         );
 
         getLogger().info(
@@ -551,15 +840,176 @@ public class EarthBound extends JavaPlugin {
         );
 
         /*
-         * Existing real estate initialization methods
-         * remain available for future controlled use:
+         * FUTURE CONTROLLED REAL ESTATE INITIALIZATION
          *
          * EarthPropertyBannerRegistry.setup(this);
          * EarthPropertySaleMarkers.setup(this);
          *
-         * Do not invoke either method until installation
-         * tracking confirms that homes are completed.
+         * Do not invoke either method until actual
+         * completed installations are verified.
          */
+    }
+
+    /*
+     * ========================================================
+     * VALIDATE PERSISTENT INSTALLATION IDENTITIES
+     * ========================================================
+     *
+     * Existing records must match the current world
+     * UUID, property coordinates and house design.
+     *
+     * Previously started or completed properties
+     * must not be treated as undeveloped land.
+     */
+
+    private boolean validateResidentialInstallationRecords(
+            World world
+    ) {
+
+        if (world == null
+                || !Bukkit.isPrimaryThread()
+                || !EarthResidentialInstallation.isReady()) {
+
+            return false;
+        }
+
+        try {
+
+            var sites =
+                    EarthGuemesGenerator
+                            .getResidentialSites();
+
+            if (sites.size() != REQUIRED_ALPHA_HOMES) {
+
+                return false;
+            }
+
+            boolean valid = true;
+
+            boolean existingConstructionDetected = false;
+
+            for (var site : sites) {
+
+                String propertyId =
+                        site.getPropertyId();
+
+                InstallationStatus status =
+                        EarthResidentialInstallation
+                                .getStatus(propertyId);
+
+                getLogger().info(
+                        "Installation inspection: "
+                        + propertyId
+                        + " = "
+                        + status.name()
+                );
+
+                /*
+                 * A new site has no saved record.
+                 */
+
+                if (status == InstallationStatus.NOT_STARTED) {
+
+                    continue;
+                }
+
+                /*
+                 * Any existing record must match
+                 * the current installation identity.
+                 */
+
+                if (!EarthResidentialInstallation
+                        .matchesApprovedSite(world, site)) {
+
+                    getLogger().severe(
+                            "Persistent installation identity mismatch: "
+                            + propertyId
+                    );
+
+                    valid = false;
+
+                    continue;
+                }
+
+                /*
+                 * Approved records still require
+                 * undeveloped-land safety inspection.
+                 */
+
+                if (status == InstallationStatus.APPROVED) {
+
+                    getLogger().info(
+                            "Saved approval identity verified: "
+                            + propertyId
+                    );
+
+                    continue;
+                }
+
+                /*
+                 * Never automatically inspect an existing
+                 * installation as a new construction site.
+                 */
+
+                existingConstructionDetected = true;
+
+                if (status == InstallationStatus.COMPLETED) {
+
+                    getLogger().info(
+                            "Existing completed installation: "
+                            + propertyId
+                    );
+
+                    getLogger().info(
+                            "Automatic reconstruction prohibited."
+                    );
+
+                } else {
+
+                    getLogger().warning(
+                            "Unresolved residential installation: "
+                            + propertyId
+                    );
+
+                    getLogger().warning(
+                            "Manual administrator review required."
+                    );
+                }
+            }
+
+            if (!valid) {
+
+                return false;
+            }
+
+            if (existingConstructionDetected) {
+
+                getLogger().warning(
+                        "New-development inspection suspended."
+                );
+
+                getLogger().warning(
+                        "Existing installation records require "
+                        + "the future completed-structure "
+                        + "verification system."
+                );
+
+                return false;
+            }
+
+            return true;
+
+        } catch (RuntimeException exception) {
+
+            getLogger().log(
+                    Level.SEVERE,
+                    "Residential installation identity "
+                    + "validation failed.",
+                    exception
+            );
+
+            return false;
+        }
     }
 
     /*
@@ -609,6 +1059,62 @@ public class EarthBound extends JavaPlugin {
         }
 
         /*
+         * Require reliable persistent installation data.
+         */
+
+        if (!EarthResidentialInstallation.isReady()) {
+
+            getLogger().warning(
+                    "Residential site search cancelled: "
+                    + "installation storage is unavailable."
+            );
+
+            return;
+        }
+
+        /*
+         * Do not propose replacement development
+         * while any saved installation records exist.
+         */
+
+        try {
+
+            for (int homeNumber = 1;
+                    homeNumber <= REQUIRED_ALPHA_HOMES;
+                    homeNumber++) {
+
+                String propertyId =
+                        "guemes_home_0" + homeNumber;
+
+                InstallationStatus status =
+                        EarthResidentialInstallation
+                                .getStatus(propertyId);
+
+                if (status != InstallationStatus.NOT_STARTED) {
+
+                    getLogger().warning(
+                            "Residential site search cancelled: "
+                            + "existing installation record for "
+                            + propertyId
+                    );
+
+                    return;
+                }
+            }
+
+        } catch (RuntimeException exception) {
+
+            getLogger().log(
+                    Level.WARNING,
+                    "Residential site search cancelled: "
+                    + "installation status could not be verified.",
+                    exception
+            );
+
+            return;
+        }
+
+        /*
          * Diagnostic search must not run while
          * residential construction is enabled.
          */
@@ -626,7 +1132,7 @@ public class EarthBound extends JavaPlugin {
 
         /*
          * Do not search for new locations while
-         * approved residential sites are registered.
+         * residential sites are registered.
          */
 
         if (EarthGuemesGenerator
@@ -692,10 +1198,11 @@ public class EarthBound extends JavaPlugin {
             getLogger().info(
                     "Residential candidates located: "
                     + candidates.size()
-                    + " / 6"
+                    + " / "
+                    + REQUIRED_ALPHA_HOMES
             );
 
-            if (candidates.size() == 6) {
+            if (candidates.size() == REQUIRED_ALPHA_HOMES) {
 
                 getLogger().info(
                         "Six candidate residential sites found."
@@ -721,7 +1228,7 @@ public class EarthBound extends JavaPlugin {
         } catch (RuntimeException exception) {
 
             getLogger().log(
-                    java.util.logging.Level.WARNING,
+                    Level.WARNING,
                     "Residential diagnostic search failed.",
                     exception
             );
@@ -754,7 +1261,9 @@ public class EarthBound extends JavaPlugin {
     }
 
     /*
+     * ========================================================
      * GEOGRAPHIC DATA INITIALIZATION
+     * ========================================================
      */
 
     private boolean initializeGeographicData() {
@@ -879,7 +1388,9 @@ public class EarthBound extends JavaPlugin {
     }
 
     /*
+     * ========================================================
      * SAVE EARTHBOUND DATA ON SHUTDOWN
+     * ========================================================
      */
 
     @Override
@@ -916,6 +1427,23 @@ public class EarthBound extends JavaPlugin {
                 "EarthBound residential registry cleared!"
         );
 
+        /*
+         * RESIDENTIAL INSTALLATION SHUTDOWN
+         *
+         * Every successful installation state change
+         * is already saved immediately.
+         *
+         * Shutdown only releases the in-memory ledger.
+         * Persistent installation records are retained.
+         */
+
+        EarthResidentialInstallation.shutdown();
+
+        getLogger().info(
+                "EarthBound residential installation "
+                + "tracking closed."
+        );
+
         EarthRoadSpatialIndex.clear();
 
         EarthRoadElevationProfiles.clear();
@@ -930,7 +1458,9 @@ public class EarthBound extends JavaPlugin {
     }
 
     /*
+     * ========================================================
      * EARTH WORLD GENERATOR
+     * ========================================================
      */
 
     @Override
