@@ -4,11 +4,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.Locale;
 
+import org.bukkit.block.BlockFace;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 import com.earthbound.water.EarthWaterData;
 import com.earthbound.roads.EarthRoadData;
+import com.earthbound.roads.EarthRoadSpatialIndex;
 import com.earthbound.terrain.EarthTerrainLoader;
 import com.earthbound.terrain.EarthElevation;
 
@@ -16,87 +20,427 @@ import com.earthbound.EarthAlphaResidentialGenerator.ResidentialSite;
 
 public final class EarthGuemesGenerator {
 
-    /*
-     * =========================================================
-     * EARTHBOUND GUEMES GENERATOR
-     * =========================================================
-     *
-     * Controls Guemes Island development.
-     *
-     * Connects:
-     *
-     * - Water
-     * - Roads
-     * - Terrain
-     * - Elevation
-     * - Friends Alpha residential development
-     *
-     * Future development:
-     *
-     * - Residential districts
-     * - Farms
-     * - Businesses
-     * - Public infrastructure
-     * =========================================================
-     */
-
     private static final int MINIMUM_BUILD_HEIGHT =
             EarthWaterData.SEA_LEVEL + 3;
-
-    /*
-     * Keep residential generation disabled until
-     * all six property locations are approved.
-     */
-
-    private static final boolean ENABLE_ISLAND_HOMES =
-            false;
 
     private static final int MAX_ALPHA_HOMES = 6;
 
     /*
-     * Immutable site snapshots allow safe reading
-     * during chunk generation.
+     * Construction safety lock.
+     *
+     * Keep locked until residential locations and
+     * existing world chunks have been reviewed.
      */
+
+    private static final boolean CONSTRUCTION_APPROVED =
+            false;
 
     private static volatile List<ResidentialSite>
             residentialSites = List.of();
+
+    private static volatile boolean residentialEnabled =
+            false;
 
     private EarthGuemesGenerator() {
     }
 
     /*
-     * =========================================================
+     * LOAD RESIDENTIAL CONFIGURATION
+     */
+
+    public static synchronized boolean loadResidentialSites(
+            EarthBound plugin
+    ) {
+
+        clearResidentialSites();
+
+        if (!plugin.getConfig().getBoolean(
+                "residential.enabled", false
+        )) {
+
+            plugin.getLogger().info(
+                    "Residential development disabled "
+                    + "in configuration."
+            );
+
+            return true;
+        }
+
+        if (!EarthTerrainLoader.isLoaded()
+                || !EarthRoadData.isLoaded()
+                || !EarthRoadSpatialIndex.isLoaded()) {
+
+            plugin.getLogger().warning(
+                    "Residential configuration rejected: "
+                    + "geographic data is unavailable."
+            );
+
+            return false;
+        }
+
+        String residentialWorld =
+                plugin.getConfig().getString(
+                        "residential.world", ""
+                );
+
+        if (!"earthbound".equals(residentialWorld)) {
+
+            plugin.getLogger().warning(
+                    "Invalid residential world."
+            );
+
+            return false;
+        }
+
+        ConfigurationSection homes =
+                plugin.getConfig()
+                        .getConfigurationSection(
+                                "properties.alpha-homes"
+                        );
+
+        if (homes == null) {
+
+            plugin.getLogger().warning(
+                    "Alpha home configuration missing."
+            );
+
+            return false;
+        }
+
+        List<ResidentialSite> configuredSites =
+                new ArrayList<>();
+
+        for (String propertyId : homes.getKeys(false)) {
+
+            ConfigurationSection home =
+                    homes.getConfigurationSection(
+                            propertyId
+                    );
+
+            if (home == null) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Invalid property configuration."
+                );
+            }
+
+            if (!home.getBoolean("enabled", false)) {
+                continue;
+            }
+
+            if (!residentialWorld.equals(
+                    home.getString("world")
+            )) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Incorrect property world."
+                );
+            }
+
+            if (home.getInt("width") != 24
+                    || home.getInt("length") != 32) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Invalid plot dimensions."
+                );
+            }
+
+            if (!home.isInt("front-x")
+                    || !home.isInt("front-z")
+                    || !home.isInt("ground-y")
+                    || !home.isInt("min-x")
+                    || !home.isInt("min-z")) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Missing property coordinates."
+                );
+            }
+
+            int frontX = home.getInt("front-x");
+            int frontZ = home.getInt("front-z");
+            int groundY = home.getInt("ground-y");
+
+            if (groundY < MINIMUM_BUILD_HEIGHT
+                    || groundY > 280) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Invalid construction elevation."
+                );
+            }
+
+            String configuredDesign =
+                    home.getString("design", "");
+
+            String facingName =
+                    home.getString("facing", "");
+
+            BlockFace facing;
+
+            try {
+
+                facing = BlockFace.valueOf(
+                        facingName.trim()
+                                .toUpperCase(Locale.ROOT)
+                );
+
+            } catch (IllegalArgumentException exception) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Invalid facing direction."
+                );
+            }
+
+            if (facing != BlockFace.NORTH
+                    && facing != BlockFace.SOUTH
+                    && facing != BlockFace.EAST
+                    && facing != BlockFace.WEST) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Facing must be cardinal."
+                );
+            }
+
+            ResidentialSite site;
+
+            try {
+
+                site = new ResidentialSite(
+                        propertyId,
+                        frontX,
+                        frontZ,
+                        groundY,
+                        facing
+                );
+
+            } catch (IllegalArgumentException exception) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Unknown residential property."
+                );
+            }
+
+            if (!site.getDesign().name().equals(
+                    configuredDesign
+            )) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "House design does not match property."
+                );
+            }
+
+            /*
+             * Calculate rotated plot boundaries.
+             */
+
+            int firstX = site.getWorldX(0, 0);
+            int firstZ = site.getWorldZ(0, 0);
+
+            int lastX = site.getWorldX(23, 31);
+            int lastZ = site.getWorldZ(23, 31);
+
+            int minX = Math.min(firstX, lastX);
+            int maxX = Math.max(firstX, lastX);
+
+            int minZ = Math.min(firstZ, lastZ);
+            int maxZ = Math.max(firstZ, lastZ);
+
+            if (home.getInt("min-x") != minX
+                    || home.getInt("min-z") != minZ) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Property boundaries do not "
+                        + "match residential coordinates."
+                );
+            }
+
+            /*
+             * The ownership system currently expects
+             * world-aligned width and length.
+             *
+             * Reject rotated rectangular plots until
+             * ownership dimensions support rotation.
+             */
+
+            if (maxX - minX + 1 != home.getInt("width")
+                    || maxZ - minZ + 1
+                            != home.getInt("length")) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Rotated property dimensions "
+                        + "do not match ownership boundaries."
+                );
+            }
+
+            double price = home.getDouble("price", -1);
+
+            if (!Double.isFinite(price)
+                    || price <= 0
+                    || price > 1000000000.0) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Invalid property price."
+                );
+            }
+
+            if (!matchesMarker(
+                    home,
+                    "banner",
+                    site.getBannerX(),
+                    site.getBannerY(),
+                    site.getBannerZ()
+            )) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Invalid property banner coordinates."
+                );
+            }
+
+            if (!matchesMarker(
+                    home,
+                    "sign",
+                    site.getSignX(),
+                    site.getSignY(),
+                    site.getSignZ()
+            )) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Invalid property sign coordinates."
+                );
+            }
+
+            String markerFacing =
+                    home.getString("marker-facing", "");
+
+            if (!facing.name().equalsIgnoreCase(
+                    markerFacing
+            )) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Sale marker must face the "
+                        + "property frontage."
+                );
+            }
+
+            configuredSites.add(site);
+        }
+
+        /*
+         * Friends Alpha requires six approved homes.
+         */
+
+        if (configuredSites.size() != MAX_ALPHA_HOMES) {
+
+            plugin.getLogger().warning(
+                    "Residential development requires "
+                    + "six configured Alpha homes."
+            );
+
+            return false;
+        }
+
+        if (!registerResidentialSites(configuredSites)) {
+
+            plugin.getLogger().warning(
+                    "Residential site validation failed."
+            );
+
+            return false;
+        }
+
+        residentialEnabled = CONSTRUCTION_APPROVED;
+
+        plugin.getLogger().info(
+                "Validated residential properties: "
+                + getResidentialSiteCount()
+        );
+
+        plugin.getLogger().info(
+                "Residential construction enabled: "
+                + residentialEnabled
+        );
+
+        return true;
+    }
+
+    private static boolean matchesMarker(
+            ConfigurationSection home,
+            String marker,
+            int x,
+            int y,
+            int z
+    ) {
+
+        return home.isInt(marker + "-x")
+                && home.isInt(marker + "-y")
+                && home.isInt(marker + "-z")
+                && home.getInt(marker + "-x") == x
+                && home.getInt(marker + "-y") == y
+                && home.getInt(marker + "-z") == z;
+    }
+
+    private static boolean reject(
+            EarthBound plugin,
+            String propertyId,
+            String reason
+    ) {
+
+        plugin.getLogger().warning(
+                "Residential property rejected: "
+                + propertyId + " - " + reason
+        );
+
+        clearResidentialSites();
+
+        return false;
+    }
+
+    /*
      * RESIDENTIAL SITE REGISTRATION
-     * =========================================================
-     *
-     * Register approved sites as a complete collection.
-     *
-     * Reject:
-     *
-     * - Null sites
-     * - Duplicate property IDs
-     * - Overlapping properties
-     * - Unsuitable terrain
-     * - More than six Alpha homes
-     *
-     * Existing site registrations remain unchanged
-     * if validation fails.
-     * =========================================================
      */
 
     public static synchronized boolean registerResidentialSites(
             List<ResidentialSite> sites
     ) {
 
-        if (sites == null) {
+        if (sites == null
+                || sites.size() > MAX_ALPHA_HOMES) {
+
             return false;
         }
 
-        if (sites.size() > MAX_ALPHA_HOMES) {
-            return false;
-        }
+        if (!EarthTerrainLoader.isLoaded()
+                || !EarthRoadData.isLoaded()) {
 
-        if (!EarthRoadData.isLoaded()) {
             return false;
         }
 
@@ -125,11 +469,6 @@ public final class EarthGuemesGenerator {
                 return false;
             }
 
-            /*
-             * Prevent residential properties from
-             * overlapping one another.
-             */
-
             for (ResidentialSite approved
                     : approvedSites) {
 
@@ -142,22 +481,11 @@ public final class EarthGuemesGenerator {
             approvedSites.add(site);
         }
 
-        /*
-         * Publish the validated collection only
-         * after every site passes validation.
-         */
-
         residentialSites =
                 List.copyOf(approvedSites);
 
         return true;
     }
-
-    /*
-     * =========================================================
-     * RESIDENTIAL REGISTRY INFORMATION
-     * =========================================================
-     */
 
     public static int getResidentialSiteCount() {
 
@@ -178,11 +506,9 @@ public final class EarthGuemesGenerator {
             return null;
         }
 
-        for (ResidentialSite site
-                : residentialSites) {
+        for (ResidentialSite site : residentialSites) {
 
-            if (site.getPropertyId()
-                    .equals(propertyId)) {
+            if (site.getPropertyId().equals(propertyId)) {
 
                 return site;
             }
@@ -193,18 +519,18 @@ public final class EarthGuemesGenerator {
 
     public static boolean isResidentialGenerationEnabled() {
 
-        return ENABLE_ISLAND_HOMES;
+        return residentialEnabled;
     }
 
     public static synchronized void clearResidentialSites() {
+
+        residentialEnabled = false;
 
         residentialSites = List.of();
     }
 
     /*
-     * =========================================================
      * GUEMES ISLAND GENERATION
-     * =========================================================
      */
 
     public static void generate(
@@ -213,41 +539,19 @@ public final class EarthGuemesGenerator {
             int chunkZ
     ) {
 
-        if (chunkData == null) {
-            return;
-        }
+        if (chunkData == null
+                || !residentialEnabled
+                || !EarthRoadSpatialIndex.isLoaded()) {
 
-        if (!ENABLE_ISLAND_HOMES) {
-            return;
-        }
-
-        if (!EarthRoadData.isLoaded()) {
             return;
         }
 
         List<ResidentialSite> sites =
                 residentialSites;
 
-        /*
-         * No approved properties means no construction.
-         */
-
-        if (sites.isEmpty()) {
-            return;
-        }
-
-        /*
-         * Generate only residential sites that
-         * intersect the current chunk.
-         */
-
         for (ResidentialSite site : sites) {
 
-            if (!site.intersectsChunk(
-                    chunkX,
-                    chunkZ
-            )) {
-
+            if (!site.intersectsChunk(chunkX, chunkZ)) {
                 continue;
             }
 
@@ -261,22 +565,17 @@ public final class EarthGuemesGenerator {
     }
 
     /*
-     * =========================================================
      * DEVELOPMENT ELEVATION CHECK
-     * =========================================================
-     *
-     * Preserves the original Guemes development
-     * elevation check.
-     *
-     * Full residential validation is handled by
-     * EarthAlphaResidentialGenerator.
-     * =========================================================
      */
 
     public static boolean isSuitableForDevelopment(
             double latitude,
             double longitude
     ) {
+
+        if (!EarthTerrainLoader.isLoaded()) {
+            return false;
+        }
 
         double elevationMeters =
                 EarthTerrainLoader.getGuemesElevation(
