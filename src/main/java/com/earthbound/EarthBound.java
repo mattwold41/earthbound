@@ -59,10 +59,6 @@ public class EarthBound extends JavaPlugin {
                     new EarthEconomyCommand()
             );
 
-            getLogger().info(
-                    "Balance command registered!"
-            );
-
         } else {
 
             getLogger().warning(
@@ -127,10 +123,6 @@ public class EarthBound extends JavaPlugin {
                     new EarthStoreCommand()
             );
 
-            getLogger().info(
-                    "General Store command registered!"
-            );
-
         } else {
 
             getLogger().warning(
@@ -161,7 +153,7 @@ public class EarthBound extends JavaPlugin {
 
         /*
          * ========================================================
-         * BLUE FOR SALE BANNER SYSTEM
+         * BLUE FOR SALE BANNER LISTENER
          * ========================================================
          */
 
@@ -284,6 +276,68 @@ public class EarthBound extends JavaPlugin {
 
                     getLogger().info(
                             "Guemes spawn set!"
+                    );
+
+                }
+        );
+
+
+        /*
+         * ========================================================
+         * AUTOMATIC PROPERTY SALE SYSTEM
+         * ========================================================
+         *
+         * 1. Verify that the EarthBound world exists.
+         * 2. Register official property banner locations.
+         * 3. Place physical blue banners and price signs.
+         * 4. Skip disabled or purchased properties.
+         *
+         */
+
+        Bukkit.getScheduler().runTask(
+                this,
+                () -> {
+
+                    World world =
+                            Bukkit.getWorld("earthbound");
+
+                    if (world == null) {
+
+                        getLogger().warning(
+                                "EarthBound world not found. "
+                                + "Property sale system "
+                                + "was not initialized."
+                        );
+
+                        return;
+                    }
+
+
+                    /*
+                     * REGISTER OFFICIAL BANNER LOCATIONS
+                     */
+
+                    EarthPropertyBannerRegistry.setup(this);
+
+                    int bannerCount =
+                            EarthPropertyBannerRegistry
+                                    .getBannerCount();
+
+                    getLogger().info(
+                            "Official property banners registered: "
+                            + bannerCount
+                    );
+
+
+                    /*
+                     * PLACE PHYSICAL BANNERS AND SIGNS
+                     */
+
+                    EarthPropertySaleMarkers.setup(this);
+
+                    getLogger().info(
+                            "EarthBound property sale marker "
+                            + "initialization finished!"
                     );
 
                 }
