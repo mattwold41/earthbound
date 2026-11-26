@@ -7,6 +7,7 @@ import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
 import org.bukkit.World;
+import org.bukkit.Location;
 
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
@@ -39,6 +40,7 @@ import com.earthbound.terrain.EarthTerrainLoader;
  * - Reject construction on owned properties.
  * - Verify existing chunk safety.
  * - Prevent duplicate installation approvals.
+ * - Enforce temporary Alpha construction chunk separation.
  *
  * This class does not generate chunks,
  * place blocks or enable property sales.
@@ -54,17 +56,11 @@ public final class EarthResidentialAuthorization {
 
     /*
      * Independent authorization configuration.
-     *
      * Missing configuration defaults to false.
      */
 
     private static final String AUTHORIZATION_CONFIG =
             "residential.allow-installation-approval";
-
-    /*
-     * Explicit confirmation required from the
-     * future server console administration command.
-     */
 
     private static final String APPROVAL_CONFIRMATION =
             "APPROVE-GUEMES-ALPHA";
@@ -86,59 +82,33 @@ public final class EarthResidentialAuthorization {
         AUTHORIZED,
 
         INVALID_PLUGIN,
-
         MAIN_THREAD_REQUIRED,
-
         ADMINISTRATOR_REQUIRED,
-
         CONFIRMATION_REQUIRED,
-
         AUTHORIZATION_DISABLED,
-
         RESIDENTIAL_DISABLED,
-
         INVALID_WORLD,
-
         GEOGRAPHIC_DATA_UNAVAILABLE,
-
         INSTALLATION_STORAGE_UNAVAILABLE,
-
         ECONOMY_UNAVAILABLE,
-
         PROPERTY_SYSTEM_UNAVAILABLE,
-
         INVALID_PROPERTY_COUNT,
-
         INVALID_PROPERTY,
-
         DUPLICATE_PROPERTY,
-
         PROPERTY_NOT_REGISTERED,
-
         PROPERTY_ALREADY_OWNED,
-
         PROPERTY_BOUNDARY_MISMATCH,
-
         EXISTING_INSTALLATION_RECORD,
-
         INSTALLATION_IDENTITY_MISMATCH,
-
         INVALID_INSTALLATION_STATUS,
 
+        UNSAFE_CHUNK_SEPARATION,
+
         UNSAFE_DEVELOPMENT,
-
         UNSAFE_SITE,
-
         PERSISTENCE_FAILED,
-
         AUTHORIZATION_FAILED
     }
-
-    /*
-     * ========================================================
-     * AUTHORIZATION RESULT
-     * ========================================================
-     */
 
     public static final class AuthorizationResult {
 
@@ -152,7 +122,6 @@ public final class EarthResidentialAuthorization {
         ) {
 
             this.status = status;
-
             this.message = message;
         }
 
@@ -168,8 +137,7 @@ public final class EarthResidentialAuthorization {
 
         public boolean isAuthorized() {
 
-            return status
-                    == AuthorizationStatus.AUTHORIZED;
+            return status == AuthorizationStatus.AUTHORIZED;
         }
     }
 
@@ -228,6 +196,27 @@ public final class EarthResidentialAuthorization {
             }
 
             /*
+             * FRIENDS ALPHA CHUNK SAFETY
+             *
+             * Validate the entire development before
+             * allowing persistent installation approval.
+             *
+             * Manually configured locations must meet
+             * the same separation requirements as
+             * automatically discovered locations.
+             */
+
+            AuthorizationResult chunkValidation =
+                    validateDevelopmentChunkClearance(
+                            sites
+                    );
+
+            if (!chunkValidation.isAuthorized()) {
+
+                return chunkValidation;
+            }
+
+            /*
              * All six properties must be new
              * installations without previous records.
              */
@@ -278,7 +267,7 @@ public final class EarthResidentialAuthorization {
              * Persist approval for all six homes.
              *
              * The installation ledger independently
-             * repeats the geographic safety inspection.
+             * repeats its existing safety inspection.
              */
 
             boolean approved =
@@ -325,6 +314,18 @@ public final class EarthResidentialAuthorization {
             plugin.getLogger().info(
                     "Approved residential properties: "
                     + sites.size()
+            );
+
+            plugin.getLogger().info(
+                    "Alpha construction chunk separation: VERIFIED"
+            );
+
+            plugin.getLogger().info(
+                    "Shared residential construction chunks: NONE"
+            );
+
+            plugin.getLogger().info(
+                    "Adjacent residential construction chunks: NONE"
             );
 
             plugin.getLogger().info(
@@ -428,9 +429,23 @@ public final class EarthResidentialAuthorization {
                 );
             }
 
-            ResidentialSite site =
-                    EarthGuemesGenerator
-                            .getResidentialSite(propertyId);
+            /*
+             * Resolve the requested site from the same
+             * development snapshot used for validation.
+             */
+
+            ResidentialSite site = null;
+
+            for (ResidentialSite registeredSite : sites) {
+
+                if (propertyId.equals(
+                        registeredSite.getPropertyId()
+                )) {
+
+                    site = registeredSite;
+                    break;
+                }
+            }
 
             if (site == null) {
 
@@ -461,8 +476,7 @@ public final class EarthResidentialAuthorization {
              * plan and any unresolved installations.
              */
 
-            Set<String> checkedIds =
-                    new HashSet<>();
+            Set<String> checkedIds = new HashSet<>();
 
             for (ResidentialSite registeredSite : sites) {
 
@@ -529,6 +543,50 @@ public final class EarthResidentialAuthorization {
                             + registeredId
                     );
                 }
+
+                /*
+                 * Revalidate ownership and boundaries
+                 * for all installations that are still
+                 * awaiting construction.
+                 *
+                 * Completed installations are not
+                 * treated as new construction sites.
+                 */
+
+                if (registeredStatus
+                        == InstallationStatus.APPROVED) {
+
+                    AuthorizationResult registeredValidation =
+                            validateProperty(
+                                    world,
+                                    registeredSite
+                            );
+
+                    if (!registeredValidation.isAuthorized()) {
+
+                        return registeredValidation;
+                    }
+                }
+            }
+
+            /*
+             * FRIENDS ALPHA CHUNK SAFETY
+             *
+             * Repeat the separation check for all six
+             * properties, including completed properties.
+             *
+             * This check is geometric and does not
+             * require completed chunks to be ungenerated.
+             */
+
+            AuthorizationResult chunkValidation =
+                    validateDevelopmentChunkClearance(
+                            sites
+                    );
+
+            if (!chunkValidation.isAuthorized()) {
+
+                return chunkValidation;
             }
 
             /*
@@ -570,21 +628,44 @@ public final class EarthResidentialAuthorization {
             /*
              * Repeat current geographic and existing
              * chunk safety checks.
+             *
+             * Every unfinished approved property must
+             * still pass the ungenerated-site inspection.
+             *
+             * Completed properties are excluded from
+             * this particular inspection.
              */
 
-            EarthResidentialSafety.SafetyResult safety =
-                    EarthResidentialSafety.inspectSite(
-                            world,
-                            site,
-                            geographicDataReady
+            for (ResidentialSite registeredSite : sites) {
+
+                InstallationStatus registeredStatus =
+                        EarthResidentialInstallation
+                                .getStatus(
+                                        registeredSite.getPropertyId()
+                                );
+
+                if (registeredStatus
+                        != InstallationStatus.APPROVED) {
+
+                    continue;
+                }
+
+                EarthResidentialSafety.SafetyResult safety =
+                        EarthResidentialSafety.inspectSite(
+                                world,
+                                registeredSite,
+                                geographicDataReady
+                        );
+
+                if (!safety.isSafe()) {
+
+                    return result(
+                            AuthorizationStatus.UNSAFE_SITE,
+                            registeredSite.getPropertyId()
+                            + ": "
+                            + safety.getMessage()
                     );
-
-            if (!safety.isSafe()) {
-
-                return result(
-                        AuthorizationStatus.UNSAFE_SITE,
-                        safety.getMessage()
-                );
+                }
             }
 
             /*
@@ -619,6 +700,10 @@ public final class EarthResidentialAuthorization {
             );
 
             plugin.getLogger().info(
+                    "Alpha construction chunk separation: VERIFIED"
+            );
+
+            plugin.getLogger().info(
                     "Installation status: IN_PROGRESS"
             );
 
@@ -647,6 +732,59 @@ public final class EarthResidentialAuthorization {
                     "Unexpected installation authorization failure."
             );
         }
+    }
+
+    /*
+     * ========================================================
+     * VALIDATE FRIENDS ALPHA CHUNK CLEARANCE
+     * ========================================================
+     *
+     * Central authorization check for our temporary
+     * Friends Alpha property and chunk separation.
+     *
+     * Uses the same separation requirements as
+     * EarthAlphaSiteFinder.
+     *
+     * This method does not inspect, load or
+     * generate actual Minecraft chunks.
+     *
+     * The rule is temporary and must not become
+     * a permanent EarthBound ownership restriction.
+     * ========================================================
+     */
+
+    private static AuthorizationResult
+            validateDevelopmentChunkClearance(
+                    List<ResidentialSite> sites
+            ) {
+
+        if (sites == null
+                || sites.size() != REQUIRED_HOMES) {
+
+            return result(
+                    AuthorizationStatus.INVALID_PROPERTY_COUNT,
+                    "Exactly six residential properties "
+                    + "are required for chunk clearance verification."
+            );
+        }
+
+        if (!EarthAlphaSiteFinder
+                .hasDevelopmentChunkClearance(sites)) {
+
+            return result(
+                    AuthorizationStatus.UNSAFE_CHUNK_SEPARATION,
+                    "Residential development violates the "
+                    + "temporary Friends Alpha property, access "
+                    + "corridor or construction chunk separation "
+                    + "requirements. Authorization denied."
+            );
+        }
+
+        return result(
+                AuthorizationStatus.AUTHORIZED,
+                "Friends Alpha construction chunk "
+                + "separation verified."
+        );
     }
 
     /*
@@ -701,10 +839,6 @@ public final class EarthResidentialAuthorization {
             );
         }
 
-        /*
-         * Require an exact confirmation phrase.
-         */
-
         if (!requiredConfirmation.equals(confirmation)) {
 
             return result(
@@ -729,11 +863,6 @@ public final class EarthResidentialAuthorization {
                     + "is disabled."
             );
         }
-
-        /*
-         * Residential configuration must also
-         * be explicitly enabled.
-         */
 
         if (!plugin.getConfig().getBoolean(
                 "residential.enabled",
@@ -768,10 +897,6 @@ public final class EarthResidentialAuthorization {
             );
         }
 
-        /*
-         * Require geographic data readiness.
-         */
-
         if (!geographicDataReady
                 || !EarthTerrainLoader.isLoaded()
                 || !EarthRoadData.isLoaded()
@@ -783,10 +908,6 @@ public final class EarthResidentialAuthorization {
             );
         }
 
-        /*
-         * Require persistent installation storage.
-         */
-
         if (!EarthResidentialInstallation.isReady()) {
 
             return result(
@@ -797,10 +918,6 @@ public final class EarthResidentialAuthorization {
             );
         }
 
-        /*
-         * Require the authoritative economic ledger.
-         */
-
         if (!EarthEconomy.isReady()) {
 
             return result(
@@ -808,10 +925,6 @@ public final class EarthResidentialAuthorization {
                     "EarthBound economy is unavailable."
             );
         }
-
-        /*
-         * Require initialized property ownership.
-         */
 
         if (!EarthPropertyManager.isReady()) {
 
@@ -849,8 +962,7 @@ public final class EarthResidentialAuthorization {
             );
         }
 
-        Set<String> propertyIds =
-                new HashSet<>();
+        Set<String> propertyIds = new HashSet<>();
 
         for (ResidentialSite site : sites) {
 
@@ -936,12 +1048,35 @@ public final class EarthResidentialAuthorization {
         }
 
         /*
+         * Require the established Alpha plot dimensions
+         * before scanning registered property boundaries.
+         */
+
+        long width =
+                (long) site.getMaxX()
+                - site.getMinX()
+                + 1L;
+
+        long length =
+                (long) site.getMaxZ()
+                - site.getMinZ()
+                + 1L;
+
+        if (width != EarthAlphaResidentialGenerator.PLOT_WIDTH
+                || length
+                    != EarthAlphaResidentialGenerator.PLOT_LENGTH) {
+
+            return result(
+                    AuthorizationStatus.PROPERTY_BOUNDARY_MISMATCH,
+                    "Invalid Alpha residential property dimensions: "
+                    + propertyId
+            );
+        }
+
+        /*
          * Verify every horizontal block in the
          * proposed residential plot against the
          * registered property protection system.
-         *
-         * This also detects missing registrations
-         * and conflicting registered property IDs.
          */
 
         for (int x = site.getMinX();
@@ -952,8 +1087,8 @@ public final class EarthResidentialAuthorization {
                     z <= site.getMaxZ();
                     z++) {
 
-                org.bukkit.Location location =
-                        new org.bukkit.Location(
+                Location location =
+                        new Location(
                                 world,
                                 x,
                                 site.getGroundY(),
