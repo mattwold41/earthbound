@@ -223,7 +223,7 @@ public class EarthBound extends JavaPlugin {
         }
 
         getLogger().info(
-                "Approved residential sites: "
+                "Geographically validated residential sites: "
                 + EarthGuemesGenerator
                         .getResidentialSiteCount()
         );
@@ -297,57 +297,20 @@ public class EarthBound extends JavaPlugin {
         );
 
         /*
-         * AUTOMATIC PROPERTY SALE SYSTEM
+         * RESIDENTIAL WORLD SAFETY AND REAL ESTATE
+         *
+         * Run on the server main thread after startup
+         * world initialization.
+         *
+         * Safety inspection must occur before any
+         * residential sale marker initialization.
          */
 
         Bukkit.getScheduler().runTask(
                 this,
-                () -> {
-
-                    World world =
-                            Bukkit.getWorld("earthbound");
-
-                    if (world == null) {
-
-                        getLogger().warning(
-                                "EarthBound world not found. "
-                                + "Real estate initialization skipped."
-                        );
-
-                        return;
-                    }
-
-                    /*
-                     * Do not offer Alpha homes for sale
-                     * while construction remains locked.
-                     */
-
-                    if (!EarthGuemesGenerator
-                            .isResidentialGenerationEnabled()) {
-
-                        getLogger().info(
-                                "Residential sale markers skipped: "
-                                + "construction is disabled."
-                        );
-
-                        return;
-                    }
-
-                    EarthPropertyBannerRegistry.setup(this);
-
-                    getLogger().info(
-                            "Official property banners registered: "
-                            + EarthPropertyBannerRegistry
-                                    .getBannerCount()
-                    );
-
-                    EarthPropertySaleMarkers.setup(this);
-
-                    getLogger().info(
-                            "EarthBound real estate system "
-                            + "initialization finished!"
-                    );
-                }
+                () -> initializeResidentialWorld(
+                        geographicDataReady
+                )
         );
 
         /*
@@ -357,6 +320,246 @@ public class EarthBound extends JavaPlugin {
         getLogger().info(
                 "EarthBound enabled!"
         );
+    }
+
+    /*
+     * ========================================================
+     * RESIDENTIAL WORLD INITIALIZATION
+     * ========================================================
+     *
+     * Read-only residential world inspection.
+     *
+     * Does not load or generate property chunks.
+     * Does not authorize residential construction.
+     * Does not install property sale markers.
+     */
+
+    private void initializeResidentialWorld(
+            boolean geographicDataReady
+    ) {
+
+        /*
+         * Clear any previously registered official
+         * sale banner locations.
+         */
+
+        EarthPropertyBannerRegistry.clear();
+
+        World world =
+                Bukkit.getWorld("earthbound");
+
+        if (world == null) {
+
+            getLogger().warning(
+                    "EarthBound world not found. "
+                    + "Residential world inspection skipped."
+            );
+
+            return;
+        }
+
+        /*
+         * Require successful geographic initialization.
+         */
+
+        if (!geographicDataReady) {
+
+            getLogger().warning(
+                    "Residential world inspection skipped: "
+                    + "geographic data is unavailable."
+            );
+
+            return;
+        }
+
+        /*
+         * Respect the residential configuration lock.
+         */
+
+        if (!getConfig().getBoolean(
+                "residential.enabled",
+                false
+        )) {
+
+            getLogger().info(
+                    "Residential world inspection skipped: "
+                    + "residential development is disabled."
+            );
+
+            return;
+        }
+
+        /*
+         * Require exactly six geographically
+         * validated Alpha residential properties.
+         */
+
+        int registeredSites =
+                EarthGuemesGenerator
+                        .getResidentialSiteCount();
+
+        if (registeredSites != 6) {
+
+            getLogger().warning(
+                    "Residential world inspection cancelled: "
+                    + "six validated properties are required."
+            );
+
+            getLogger().warning(
+                    "Registered residential properties: "
+                    + registeredSites
+                    + " / 6"
+            );
+
+            return;
+        }
+
+        getLogger().info(
+                "========================================"
+        );
+
+        getLogger().info(
+                "EARTHBOUND RESIDENTIAL WORLD SAFETY"
+        );
+
+        getLogger().info(
+                "World: " + world.getName()
+        );
+
+        getLogger().info(
+                "World UUID: " + world.getUID()
+        );
+
+        getLogger().info(
+                "Minimum world height: "
+                + world.getMinHeight()
+        );
+
+        getLogger().info(
+                "Maximum world height (exclusive): "
+                + world.getMaxHeight()
+        );
+
+        getLogger().info(
+                "Registered residential properties: "
+                + registeredSites
+        );
+
+        /*
+         * Inspect existing chunks, property boundaries,
+         * geographic suitability and build heights.
+         */
+
+        boolean inspectionPassed;
+
+        long startTime = System.nanoTime();
+
+        try {
+
+            inspectionPassed =
+                    EarthGuemesGenerator
+                            .inspectRegisteredSites(
+                                    this,
+                                    world,
+                                    geographicDataReady
+                            );
+
+        } catch (RuntimeException exception) {
+
+            getLogger().log(
+                    java.util.logging.Level.WARNING,
+                    "Residential world inspection failed.",
+                    exception
+            );
+
+            inspectionPassed = false;
+        }
+
+        long elapsedMilliseconds =
+                (System.nanoTime() - startTime)
+                        / 1000000L;
+
+        getLogger().info(
+                "Residential inspection duration: "
+                + elapsedMilliseconds
+                + " ms"
+        );
+
+        getLogger().info(
+                "Residential world safety passed: "
+                + inspectionPassed
+        );
+
+        /*
+         * Fail closed if any inspection fails.
+         */
+
+        if (!inspectionPassed) {
+
+            getLogger().warning(
+                    "Residential development rejected "
+                    + "by world safety inspection."
+            );
+
+            getLogger().warning(
+                    "No residential construction authorized."
+            );
+
+            getLogger().warning(
+                    "Residential sale markers remain disabled."
+            );
+
+            getLogger().info(
+                    "========================================"
+            );
+
+            return;
+        }
+
+        /*
+         * IMPORTANT:
+         *
+         * A successful safety inspection is not
+         * construction authorization.
+         *
+         * It is only a snapshot of current conditions.
+         *
+         * Persistent installation tracking and final
+         * authorization are still required.
+         */
+
+        getLogger().info(
+                "Residential world safety inspection passed."
+        );
+
+        getLogger().info(
+                "All six properties passed the current "
+                + "read-only inspection."
+        );
+
+        getLogger().info(
+                "Construction authorization remains locked."
+        );
+
+        getLogger().info(
+                "Residential sale markers remain disabled "
+                + "until completed installations are verified."
+        );
+
+        getLogger().info(
+                "========================================"
+        );
+
+        /*
+         * Existing real estate initialization methods
+         * remain available for future controlled use:
+         *
+         * EarthPropertyBannerRegistry.setup(this);
+         * EarthPropertySaleMarkers.setup(this);
+         *
+         * Do not invoke either method until installation
+         * tracking confirms that homes are completed.
+         */
     }
 
     /*
