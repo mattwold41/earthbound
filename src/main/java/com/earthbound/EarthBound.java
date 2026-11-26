@@ -96,7 +96,7 @@ public class EarthBound extends JavaPlugin {
             );
 
             getLogger().info(
-                    "Government banking commands registered!"
+                    "Government banking command registered!"
             );
 
         } else {
@@ -132,7 +132,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * PROPERTY OWNERSHIP
+         * PROPERTY OWNERSHIP SYSTEM
          *
          * Government property sale distribution:
          *
@@ -161,6 +161,22 @@ public class EarthBound extends JavaPlugin {
 
         getLogger().info(
                 "EarthBound property purchase listener registered!"
+        );
+
+
+        /*
+         * ========================================================
+         * PROPERTY SECURITY SYSTEM
+         * ========================================================
+         */
+
+        Bukkit.getPluginManager().registerEvents(
+                new EarthPropertyProtection(),
+                this
+        );
+
+        getLogger().info(
+                "EarthBound property protection enabled!"
         );
 
 
@@ -265,7 +281,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * AUTOMATIC REAL ESTATE SYSTEM
+         * AUTOMATIC PROPERTY SALE SYSTEM
          */
 
         Bukkit.getScheduler().runTask(
@@ -300,9 +316,7 @@ public class EarthBound extends JavaPlugin {
 
 
                     /*
-                     * PLACE UNSOLD PROPERTY MARKERS
-                     *
-                     * CLEAN UP SOLD PROPERTY MARKERS
+                     * PLACE OR REMOVE SALE MARKERS
                      */
 
                     EarthPropertySaleMarkers.setup(this);
@@ -326,7 +340,7 @@ public class EarthBound extends JavaPlugin {
 
 
     /*
-     * SAVE EARTHBOUND DATA
+     * SAVE EARTHBOUND DATA ON SHUTDOWN
      */
 
     @Override
