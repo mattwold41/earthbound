@@ -60,6 +60,7 @@ public class EarthGenerator extends ChunkGenerator {
             for (int localZ = 0; localZ < 16; localZ++) {
 
                 int worldX = chunkX * 16 + localX;
+
                 int worldZ = chunkZ * 16 + localZ;
 
                 double latitude =
@@ -308,13 +309,28 @@ public class EarthGenerator extends ChunkGenerator {
 
         /*
          * =========================================================
-         * FRIENDS ALPHA RESIDENTIAL DEVELOPMENT
+         * CONTROLLED FRIENDS ALPHA RESIDENTIAL DEVELOPMENT
          * =========================================================
+         *
+         * Residential generation requires:
+         *
+         * - Correct EarthBound world.
+         * - Matching world UUID.
+         * - Active individual construction permit.
+         * - Authorized construction chunk.
+         * - Both physical construction safety locks enabled.
+         *
+         * EarthGuemesGenerator validates these requirements.
+         *
+         * This call does not authorize construction.
+         *
+         * Physical residential construction remains locked.
          */
 
         if ("earthbound".equals(world.getName())) {
 
             EarthGuemesGenerator.generate(
+                    world.getUID(),
                     chunkData,
                     chunkX,
                     chunkZ
