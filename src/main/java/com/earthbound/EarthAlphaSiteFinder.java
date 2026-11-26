@@ -30,6 +30,9 @@ import com.earthbound.water.EarthWaterGenerator;
  * Searches real-world geographic data for suitable
  * residential development locations.
  *
+ * Includes temporary Friends Alpha construction
+ * chunk separation requirements.
+ *
  * This class does not:
  *
  * - Modify Minecraft blocks
@@ -52,6 +55,20 @@ public final class EarthAlphaSiteFinder {
     private static final int MAX_ACCESS_DISTANCE = 16;
 
     private static final int MINIMUM_PROPERTY_GAP = 8;
+
+    /*
+     * TEMPORARY FRIENDS ALPHA CONSTRUCTION SAFETY
+     *
+     * Require one complete unused chunk between
+     * residential construction footprints.
+     *
+     * This is NOT a permanent property ownership rule.
+     *
+     * Future EarthBound developments may support
+     * adjacent properties and shared chunks.
+     */
+
+    private static final int MINIMUM_CHUNK_BUFFER = 1;
 
     private static final int MINIMUM_BUILD_HEIGHT =
             EarthWaterData.SEA_LEVEL + 3;
@@ -84,7 +101,7 @@ public final class EarthAlphaSiteFinder {
     /*
      * North and south facing properties only.
      *
-     * The current ownership configuration expects
+     * Current ownership configuration expects
      * world-aligned 24 x 32 block boundaries.
      */
 
@@ -126,14 +143,25 @@ public final class EarthAlphaSiteFinder {
         int centerZ =
                 EarthBuildingGenerator.getGuemesStoreZ();
 
-        Set<Long> examined =
-                new HashSet<>();
+        Set<Long> examined = new HashSet<>();
 
         int validations = 0;
 
         System.out.println(
                 "[EarthBound] Searching for Alpha "
                 + "residential properties..."
+        );
+
+        System.out.println(
+                "[EarthBound] Minimum property gap: "
+                + MINIMUM_PROPERTY_GAP
+                + " blocks."
+        );
+
+        System.out.println(
+                "[EarthBound] Temporary Alpha chunk buffer: "
+                + MINIMUM_CHUNK_BUFFER
+                + " chunk."
         );
 
         /*
@@ -169,6 +197,7 @@ public final class EarthAlphaSiteFinder {
                             coordinateKey(frontX, frontZ);
 
                     if (!examined.add(key)) {
+
                         continue;
                     }
 
@@ -216,11 +245,24 @@ public final class EarthAlphaSiteFinder {
                                 );
 
                         /*
-                         * Avoid overlapping previously
-                         * selected residential properties.
+                         * Protect property boundaries
+                         * and potential access corridors.
                          */
 
                         if (!hasPropertyClearance(
+                                candidate,
+                                selected
+                        )) {
+
+                            continue;
+                        }
+
+                        /*
+                         * TEMPORARY FRIENDS ALPHA
+                         * CONSTRUCTION CHUNK SEPARATION
+                         */
+
+                        if (!hasConstructionChunkClearance(
                                 candidate,
                                 selected
                         )) {
@@ -274,8 +316,8 @@ public final class EarthAlphaSiteFinder {
                         }
 
                         /*
-                         * A candidate has passed
-                         * the initial geographic checks.
+                         * Candidate passed geographic
+                         * and chunk separation checks.
                          */
 
                         selected.add(candidate);
@@ -425,6 +467,178 @@ public final class EarthAlphaSiteFinder {
 
         return true;
     }
+
+    /*
+     * ========================================================
+     * FRIENDS ALPHA CONSTRUCTION CHUNK SEPARATION
+     * ========================================================
+     *
+     * Use the same chunk calculation system as
+     * EarthResidentialInstaller.
+     *
+     * Reject:
+     *
+     * - Shared construction chunks
+     * - Directly adjacent construction chunks
+     * - Diagonally adjacent construction chunks
+     *
+     * Require at least one complete unused chunk
+     * between construction footprints along
+     * at least one horizontal axis.
+     *
+     * This is temporary for Friends Alpha.
+     * ========================================================
+     */
+
+    private static boolean hasConstructionChunkClearance(
+            ResidentialSite candidate,
+            List<ResidentialSite> selected
+    ) {
+
+        if (candidate == null || selected == null) {
+
+            return false;
+        }
+
+        List<EarthResidentialInstaller.ConstructionChunk>
+                candidateChunks =
+                EarthResidentialInstaller
+                        .calculateRequiredChunks(candidate);
+
+        if (candidateChunks.isEmpty()) {
+
+            return false;
+        }
+
+        for (ResidentialSite existing : selected) {
+
+            if (existing == null) {
+
+                return false;
+            }
+
+            List<EarthResidentialInstaller.ConstructionChunk>
+                    existingChunks =
+                    EarthResidentialInstaller
+                            .calculateRequiredChunks(existing);
+
+            if (existingChunks.isEmpty()) {
+
+                return false;
+            }
+
+            for (var candidateChunk : candidateChunks) {
+
+                for (var existingChunk : existingChunks) {
+
+                    long distanceX =
+                            Math.abs(
+                                    (long)
+                                    candidateChunk.getChunkX()
+                                    - existingChunk.getChunkX()
+                            );
+
+                    long distanceZ =
+                            Math.abs(
+                                    (long)
+                                    candidateChunk.getChunkZ()
+                                    - existingChunk.getChunkZ()
+                            );
+
+                    /*
+                     * Shared chunks have zero distance.
+                     *
+                     * Adjacent chunks have a distance
+                     * of one along either or both axes.
+                     */
+
+                    if (distanceX <= MINIMUM_CHUNK_BUFFER
+
+                            && distanceZ
+                                <= MINIMUM_CHUNK_BUFFER) {
+
+                        return false;
+                    }
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /*
+     * ========================================================
+     * VERIFY COMPLETE DEVELOPMENT CHUNK SEPARATION
+     * ========================================================
+     *
+     * Public read-only helper for future authorization
+     * and construction integration.
+     *
+     * Does not load or generate Minecraft chunks.
+     * ========================================================
+     */
+
+    public static boolean hasDevelopmentChunkClearance(
+            List<ResidentialSite> sites
+    ) {
+
+        if (sites == null
+                || sites.size() != PROPERTY_IDS.length) {
+
+            return false;
+        }
+
+        List<ResidentialSite> checked =
+                new ArrayList<>();
+
+        Set<String> propertyIds =
+                new HashSet<>();
+
+        for (ResidentialSite site : sites) {
+
+            if (site == null
+                    || site.getPropertyId() == null
+                    || !site.getPropertyId().matches(
+                            "guemes_home_0[1-6]"
+                    )) {
+
+                return false;
+            }
+
+            if (!propertyIds.add(
+                    site.getPropertyId()
+            )) {
+
+                return false;
+            }
+
+            if (!hasPropertyClearance(
+                    site,
+                    checked
+            )) {
+
+                return false;
+            }
+
+            if (!hasConstructionChunkClearance(
+                    site,
+                    checked
+            )) {
+
+                return false;
+            }
+
+            checked.add(site);
+        }
+
+        return true;
+    }
+
+    /*
+     * ========================================================
+     * ACCESS CORRIDOR PROTECTION
+     * ========================================================
+     */
 
     private static boolean accessCorridorIntersects(
             ResidentialSite source,
@@ -617,8 +831,7 @@ public final class EarthAlphaSiteFinder {
                     return false;
                 }
 
-                previousHeight =
-                        currentHeight;
+                previousHeight = currentHeight;
 
                 if (reachedRoad) {
 
@@ -865,11 +1078,64 @@ public final class EarthAlphaSiteFinder {
                     "[EarthBound] WARNING: Not all six "
                     + "residential properties were located."
             );
+
+            System.out.println(
+                    "[EarthBound] Construction must remain locked."
+            );
+
+        } else {
+
+            if (!hasDevelopmentChunkClearance(selected)) {
+
+                System.out.println(
+                        "[EarthBound] WARNING: Complete development "
+                        + "chunk clearance verification failed."
+                );
+
+                return List.of();
+            }
+
+            System.out.println(
+                    "[EarthBound] Development chunk "
+                    + "separation verified."
+            );
+
+            System.out.println(
+                    "[EarthBound] Shared construction chunks: NONE"
+            );
+
+            System.out.println(
+                    "[EarthBound] Adjacent construction chunks: NONE"
+            );
+
+            System.out.println(
+                    "[EarthBound] Temporary Alpha chunk buffer: "
+                    + MINIMUM_CHUNK_BUFFER
+            );
         }
+
+        int totalChunks = 0;
+
+        for (ResidentialSite site : selected) {
+
+            totalChunks +=
+                    EarthResidentialInstaller
+                            .calculateRequiredChunks(site)
+                            .size();
+        }
+
+        System.out.println(
+                "[EarthBound] Total candidate construction chunks: "
+                + totalChunks
+        );
 
         System.out.println(
                 "[EarthBound] All locations require "
                 + "review before construction."
+        );
+
+        System.out.println(
+                "[EarthBound] No construction was activated."
         );
 
         return List.copyOf(selected);
@@ -916,6 +1182,30 @@ public final class EarthAlphaSiteFinder {
                         site.getWorldZ(0, 0)
                 )
         );
+
+        /*
+         * Report the candidate construction footprint.
+         */
+
+        List<EarthResidentialInstaller.ConstructionChunk>
+                chunks =
+                EarthResidentialInstaller
+                        .calculateRequiredChunks(site);
+
+        System.out.println(
+                "Required construction chunks: "
+                + chunks.size()
+        );
+
+        for (var chunk : chunks) {
+
+            System.out.println(
+                    "Construction chunk: "
+                    + chunk.getChunkX()
+                    + ", "
+                    + chunk.getChunkZ()
+            );
+        }
 
         System.out.println(
                 "Configuration coordinates:"
