@@ -136,8 +136,6 @@ public class EarthBound extends JavaPlugin {
          * PROPERTY OWNERSHIP SYSTEM
          * ========================================================
          *
-         * Loads registered properties and saved ownership.
-         *
          * Government property sale revenue:
          *
          * 60% - Anacortes
@@ -157,20 +155,6 @@ public class EarthBound extends JavaPlugin {
          * ========================================================
          * BLUE FOR SALE BANNER SYSTEM
          * ========================================================
-         *
-         * Clear previous banner registrations.
-         *
-         * Register property interaction listener.
-         *
-         * Handles:
-         *
-         * - Official blue For Sale banner clicks
-         * - Opening the property purchase menu
-         * - Buy Home button
-         * - Cancel button
-         * - Purchase processing
-         * - Removing the banner after purchase
-         *
          */
 
         EarthPropertyBannerRegistry.clear();
@@ -251,7 +235,9 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
+         * ========================================================
          * SET GUEMES SPAWN
+         * ========================================================
          */
 
         Bukkit.getScheduler().runTask(
@@ -282,6 +268,51 @@ public class EarthBound extends JavaPlugin {
 
                     getLogger().info(
                             "Guemes spawn set!"
+                    );
+
+                }
+        );
+
+
+        /*
+         * ========================================================
+         * AUTOMATIC PROPERTY BANNER REGISTRATION
+         * ========================================================
+         *
+         * Wait until the scheduled startup task runs.
+         *
+         * Load official banner coordinates from config.yml.
+         *
+         * Disabled homes are ignored.
+         *
+         */
+
+        Bukkit.getScheduler().runTask(
+                this,
+                () -> {
+
+                    World world =
+                            Bukkit.getWorld("earthbound");
+
+                    if (world == null) {
+
+                        getLogger().warning(
+                                "EarthBound world not found. "
+                                + "Property banners were not registered."
+                        );
+
+                        return;
+                    }
+
+                    EarthPropertyBannerRegistry.setup(this);
+
+                    getLogger().info(
+                            "Official property banners registered: "
+                            + EarthPropertyBannerRegistry.getBannerCount()
+                    );
+
+                    getLogger().info(
+                            "EarthBound banner system initialized!"
                     );
 
                 }
@@ -334,6 +365,17 @@ public class EarthBound extends JavaPlugin {
 
         getLogger().info(
                 "EarthBound economy saved!"
+        );
+
+
+        /*
+         * CLEAR PROPERTY BANNER REGISTRY
+         */
+
+        EarthPropertyBannerRegistry.clear();
+
+        getLogger().info(
+                "EarthBound banner registry cleared!"
         );
 
 
