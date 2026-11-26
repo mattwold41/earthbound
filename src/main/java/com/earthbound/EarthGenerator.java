@@ -9,27 +9,37 @@ import org.bukkit.generator.ChunkGenerator.ChunkData;
 
 import com.earthbound.roads.EarthRoadData;
 import com.earthbound.roads.EarthRoadData.RoadType;
+
+import com.earthbound.roads.EarthRoadSpatialIndex;
+import com.earthbound.roads.EarthRoadSpatialIndex.RoadColumn;
+
 import com.earthbound.water.EarthWaterGenerator;
 
 public class EarthGenerator extends ChunkGenerator {
 
     private static final double METERS_PER_BLOCK = 2.0;
+
     private static final double ROAD_BORDER_BLOCKS = 1.0;
+
+    private static final int MINIMUM_ROAD_HEIGHT = 64;
 
     public EarthGenerator() {
 
         System.out.println(
-                "=== EARTHBOUND GENERATOR ACTIVE ===");
+                "=== EARTHBOUND GENERATOR ACTIVE ==="
+        );
 
         System.out.println(
-                "[EarthBound] Guemes terrain + water + roads"
-                        + " + General Store loaded");
-
-        System.out.println(
-                "[EarthBound] Alpha residential generation enabled: "
-                        + EarthGuemesGenerator
-                                .isResidentialGenerationEnabled());
+                "[EarthBound] Terrain, water, roads "
+                + "and General Store generator initialized."
+        );
     }
+
+    /*
+     * =========================================================
+     * EARTHBOUND CHUNK GENERATION
+     * =========================================================
+     */
 
     @Override
     public ChunkData generateChunkData(
@@ -37,9 +47,13 @@ public class EarthGenerator extends ChunkGenerator {
             Random random,
             int chunkX,
             int chunkZ,
-            BiomeGrid biome) {
+            BiomeGrid biome
+    ) {
 
         ChunkData chunkData = createChunkData(world);
+
+        boolean smoothingAvailable =
+                EarthRoadSpatialIndex.isLoaded();
 
         for (int localX = 0; localX < 16; localX++) {
 
@@ -50,134 +64,232 @@ public class EarthGenerator extends ChunkGenerator {
 
                 double latitude =
                         EarthCoordinates.getLatitude(
-                                worldX, worldZ);
+                                worldX,
+                                worldZ
+                        );
 
                 double longitude =
                         EarthCoordinates.getLongitude(
-                                worldX, worldZ);
+                                worldX,
+                                worldZ
+                        );
 
                 boolean storeSite =
                         EarthBuildingGenerator
                                 .isInsideGuemesStoreSite(
-                                        worldX, worldZ);
+                                        worldX,
+                                        worldZ
+                                );
+
+                boolean storeBlendArea =
+                        EarthBuildingGenerator
+                                .isInsideGuemesStoreBlendArea(
+                                        worldX,
+                                        worldZ
+                                );
 
                 /*
                  * =================================================
-                 * WATER
+                 * WATER GENERATION
                  * =================================================
-                 *
-                 * Preserve the existing coastline.
-                 * Only the approved store site overrides
-                 * water classification.
                  */
 
                 if (!storeSite
                         && EarthWaterGenerator.isWater(
-                                latitude, longitude)) {
+                                latitude,
+                                longitude
+                        )) {
 
                     EarthWaterGenerator.generateWaterColumn(
                             chunkData,
                             localX,
                             localZ,
                             latitude,
-                            longitude);
+                            longitude
+                    );
 
                     continue;
                 }
 
                 /*
                  * =================================================
-                 * TERRAIN
+                 * NATURAL TERRAIN
                  * =================================================
                  */
 
                 int naturalHeight =
                         EarthTerrainGenerator.getTerrainHeight(
-                                latitude, longitude);
+                                latitude,
+                                longitude
+                        );
 
                 int terrainHeight =
                         EarthBuildingGenerator
                                 .getBlendedTerrainHeight(
                                         worldX,
                                         worldZ,
-                                        naturalHeight);
+                                        naturalHeight
+                                );
+
+                /*
+                 * =================================================
+                 * PROTECT GENERAL STORE FOUNDATION
+                 * =================================================
+                 */
+
+                if (storeSite) {
+
+                    terrainHeight = clampTerrainHeight(
+                            chunkData,
+                            terrainHeight
+                    );
+
+                    EarthTerrainGenerator
+                            .generateNaturalLandColumn(
+                                    chunkData,
+                                    localX,
+                                    localZ,
+                                    terrainHeight
+                            );
+
+                    continue;
+                }
+
+                /*
+                 * =================================================
+                 * ORIGINAL ROAD FALLBACK
+                 * =================================================
+                 *
+                 * Preserves road sections without valid
+                 * smoothed elevation profiles.
+                 */
+
+                Material roadMaterial =
+                        getOriginalRoadMaterial(
+                                latitude,
+                                longitude
+                        );
+
+                /*
+                 * =================================================
+                 * IMPROVED ROAD GENERATION
+                 * =================================================
+                 */
+
+                if (smoothingAvailable
+                        && !storeBlendArea
+                        && naturalHeight
+                                >= MINIMUM_ROAD_HEIGHT) {
+
+                    RoadColumn roadColumn =
+                            EarthRoadSpatialIndex
+                                    .getRoadColumn(
+                                            worldX,
+                                            worldZ
+                                    );
+
+                    if (roadColumn != null) {
+
+                        int roadHeight =
+                                roadColumn.getRoadHeight();
+
+                        boolean validRoadHeight =
+                                roadHeight
+                                        >= MINIMUM_ROAD_HEIGHT
+                                && roadHeight
+                                        < chunkData.getMaxHeight();
+
+                        if (validRoadHeight) {
+
+                            /*
+                             * Main driving surface.
+                             */
+
+                            if (roadColumn.isDrivingSurface()) {
+
+                                terrainHeight = roadHeight;
+
+                                roadMaterial =
+                                        Material
+                                                .POLISHED_BLACKSTONE_BRICKS;
+
+                            /*
+                             * Stone brick road border.
+                             *
+                             * Do not replace an existing
+                             * driving surface with a border.
+                             */
+
+                            } else if (
+                                    roadColumn.isRoadBorder()
+                            ) {
+
+                                if (roadMaterial
+                                        != Material
+                                                .POLISHED_BLACKSTONE_BRICKS) {
+
+                                    terrainHeight = roadHeight;
+
+                                    roadMaterial =
+                                            Material.STONE_BRICKS;
+                                }
+
+                            /*
+                             * Natural terrain transition
+                             * alongside the road.
+                             *
+                             * Never overwrite fallback roads.
+                             */
+
+                            } else if (roadMaterial == null) {
+
+                                terrainHeight =
+                                        roadColumn
+                                                .getBlendedTerrainHeight(
+                                                        naturalHeight
+                                                );
+
+                                terrainHeight = Math.max(
+                                        MINIMUM_ROAD_HEIGHT,
+                                        terrainHeight
+                                );
+                            }
+                        }
+                    }
+                }
+
+                /*
+                 * =================================================
+                 * GENERATE FINAL TERRAIN COLUMN
+                 * =================================================
+                 */
+
+                terrainHeight = clampTerrainHeight(
+                        chunkData,
+                        terrainHeight
+                );
 
                 EarthTerrainGenerator.generateNaturalLandColumn(
                         chunkData,
                         localX,
                         localZ,
-                        terrainHeight);
+                        terrainHeight
+                );
 
                 /*
                  * =================================================
-                 * STORE FOUNDATION
+                 * PLACE ROAD SURFACE
                  * =================================================
-                 *
-                 * Keep the site at Y=65.
-                 * Roads must not overwrite the building
-                 * or its western porch.
                  */
 
-                if (storeSite) {
-
-                    continue;
-                }
-
-                /*
-                 * =================================================
-                 * ROADS
-                 * =================================================
-                 *
-                 * Preserve the existing road system.
-                 */
-
-                RoadType roadType =
-                        EarthRoadData.getNearestRoadType(
-                                latitude, longitude);
-
-                if (roadType == RoadType.NONE) {
-
-                    continue;
-                }
-
-                double distanceMeters =
-                        EarthRoadData
-                                .getDistanceToRoadTypeMeters(
-                                        roadType,
-                                        latitude,
-                                        longitude);
-
-                double drivingRadiusMeters =
-                        (roadType.getWidth()
-                                * METERS_PER_BLOCK) / 2.0;
-
-                double borderRadiusMeters =
-                        drivingRadiusMeters
-                                + ROAD_BORDER_BLOCKS
-                                * METERS_PER_BLOCK;
-
-                if (distanceMeters > borderRadiusMeters) {
-
-                    continue;
-                }
-
-                int roadY = terrainHeight;
-
-                if (distanceMeters <= drivingRadiusMeters) {
+                if (roadMaterial != null) {
 
                     chunkData.setBlock(
                             localX,
-                            roadY,
+                            terrainHeight,
                             localZ,
-                            Material.POLISHED_BLACKSTONE_BRICKS);
-
-                } else {
-
-                    chunkData.setBlock(
-                            localX,
-                            roadY,
-                            localZ,
-                            Material.STONE_BRICKS);
+                            roadMaterial
+                    );
                 }
             }
         }
@@ -186,37 +298,18 @@ public class EarthGenerator extends ChunkGenerator {
          * =========================================================
          * GUEMES GENERAL STORE
          * =========================================================
-         *
-         * Runs after terrain, water and roads.
-         *
-         * Block placement is restricted to this chunk.
          */
 
         EarthBuildingGenerator.generateGuemesStore(
                 chunkData,
                 chunkX,
-                chunkZ);
+                chunkZ
+        );
 
         /*
          * =========================================================
          * FRIENDS ALPHA RESIDENTIAL DEVELOPMENT
          * =========================================================
-         *
-         * Only generate residential development inside
-         * the designated EarthBound world.
-         *
-         * EarthGuemesGenerator controls:
-         *
-         * - Residential generation enablement
-         * - Approved property registration
-         * - Terrain suitability validation
-         * - Duplicate property prevention
-         * - Overlapping property prevention
-         *
-         * Residential generation remains disabled
-         * until approved property locations are ready.
-         *
-         * Existing generated chunks are not modified.
          */
 
         if ("earthbound".equals(world.getName())) {
@@ -224,9 +317,92 @@ public class EarthGenerator extends ChunkGenerator {
             EarthGuemesGenerator.generate(
                     chunkData,
                     chunkX,
-                    chunkZ);
+                    chunkZ
+            );
         }
 
         return chunkData;
+    }
+
+    /*
+     * =========================================================
+     * ORIGINAL ROAD MATERIAL
+     * =========================================================
+     */
+
+    private static Material getOriginalRoadMaterial(
+            double latitude,
+            double longitude
+    ) {
+
+        RoadType roadType =
+                EarthRoadData.getNearestRoadType(
+                        latitude,
+                        longitude
+                );
+
+        if (roadType == RoadType.NONE) {
+
+            return null;
+        }
+
+        double distanceMeters =
+                EarthRoadData
+                        .getDistanceToRoadTypeMeters(
+                                roadType,
+                                latitude,
+                                longitude
+                        );
+
+        if (!Double.isFinite(distanceMeters)) {
+
+            return null;
+        }
+
+        double drivingRadiusMeters =
+                roadType.getWidth()
+                        * METERS_PER_BLOCK
+                        / 2.0;
+
+        double borderRadiusMeters =
+                drivingRadiusMeters
+                        + ROAD_BORDER_BLOCKS
+                        * METERS_PER_BLOCK;
+
+        if (distanceMeters <= drivingRadiusMeters) {
+
+            return Material.POLISHED_BLACKSTONE_BRICKS;
+        }
+
+        if (distanceMeters <= borderRadiusMeters) {
+
+            return Material.STONE_BRICKS;
+        }
+
+        return null;
+    }
+
+    /*
+     * =========================================================
+     * WORLD HEIGHT SAFETY
+     * =========================================================
+     *
+     * Uses the world's available upper generation boundary.
+     *
+     * Does not change Minecraft's build height.
+     */
+
+    private static int clampTerrainHeight(
+            ChunkData chunkData,
+            int height
+    ) {
+
+        return Math.max(
+                1,
+                Math.min(
+                        height,
+                        chunkData.getMaxHeight() - 1
+                )
+        );
     }
 }
