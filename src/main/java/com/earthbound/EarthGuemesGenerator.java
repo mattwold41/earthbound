@@ -1,3 +1,4 @@
+
 package com.earthbound;
 
 import java.util.ArrayList;
@@ -5,7 +6,10 @@ import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Locale;
+import java.util.UUID;
+import java.util.logging.Level;
 
+import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.block.BlockFace;
 import org.bukkit.configuration.ConfigurationSection;
@@ -23,6 +27,33 @@ import com.earthbound.EarthAlphaResidentialGenerator
 import com.earthbound.EarthResidentialSafety
         .SafetyResult;
 
+import com.earthbound.EarthResidentialInstallation
+        .InstallationStatus;
+
+import com.earthbound.EarthResidentialInstaller
+        .ConstructionChunk;
+
+import com.earthbound.EarthResidentialInstaller
+        .PropertyPlan;
+
+/*
+ * ============================================================
+ * EARTHBOUND GUEMES RESIDENTIAL GENERATOR
+ * Friends Alpha
+ * ============================================================
+ *
+ * Geographic registration and controlled construction.
+ *
+ * Registration alone never enables construction.
+ *
+ * Future construction requires an individually authorized
+ * property, matching world identity, approved chunk list
+ * and persistent installation start record.
+ *
+ * Physical construction remains locked.
+ * ============================================================
+ */
+
 public final class EarthGuemesGenerator {
 
     private static final int MINIMUM_BUILD_HEIGHT =
@@ -36,17 +67,10 @@ public final class EarthGuemesGenerator {
             29999900;
 
     /*
-     * ========================================================
-     * CONSTRUCTION SAFETY LOCK
-     * ========================================================
+     * Independent generator construction lock.
      *
-     * Construction remains disabled until:
-     *
-     * - Six residential locations are approved.
-     * - Geographic safety inspection succeeds.
-     * - Existing chunks are inspected.
-     * - Installation tracking is implemented.
-     * - Construction receives explicit approval.
+     * Do not enable until installer execution and
+     * completed structure verification are implemented.
      */
 
     private static final boolean CONSTRUCTION_APPROVED =
@@ -55,10 +79,59 @@ public final class EarthGuemesGenerator {
     private static volatile List<ResidentialSite>
             residentialSites = List.of();
 
-    private static volatile boolean residentialEnabled =
-            false;
+    /*
+     * Protect construction permit access and residential
+     * block generation against concurrent callbacks.
+     */
+
+    private static final Object CONSTRUCTION_LOCK =
+            new Object();
+
+    private static ConstructionPermit activePermit;
 
     private EarthGuemesGenerator() {
+    }
+
+    /*
+     * ========================================================
+     * TEMPORARY CONSTRUCTION PERMIT
+     * ========================================================
+     *
+     * Permits are never persisted.
+     *
+     * A server restart must never automatically reactivate
+     * an interrupted residential construction operation.
+     *
+     * All mutable permit fields are protected by
+     * CONSTRUCTION_LOCK.
+     * ========================================================
+     */
+
+    private static final class ConstructionPermit {
+
+        private final UUID worldId;
+
+        private final ResidentialSite site;
+
+        private final Set<Long> requiredChunks;
+
+        private final Set<Long> processedChunks =
+                new HashSet<>();
+
+        private boolean failed;
+
+        private ConstructionPermit(
+                UUID worldId,
+                ResidentialSite site,
+                Set<Long> requiredChunks
+        ) {
+
+            this.worldId = worldId;
+            this.site = site;
+
+            this.requiredChunks =
+                    Set.copyOf(requiredChunks);
+        }
     }
 
     /*
@@ -72,6 +145,11 @@ public final class EarthGuemesGenerator {
     ) {
 
         clearResidentialSites();
+
+        if (plugin == null) {
+
+            return false;
+        }
 
         if (!plugin.getConfig().getBoolean(
                 "residential.enabled", false
@@ -150,6 +228,15 @@ public final class EarthGuemesGenerator {
                 continue;
             }
 
+            if (!isValidPropertyId(propertyId)) {
+
+                return reject(
+                        plugin,
+                        propertyId,
+                        "Invalid Alpha property ID."
+                );
+            }
+
             if (!residentialWorld.equals(
                     home.getString("world")
             )) {
@@ -185,13 +272,10 @@ public final class EarthGuemesGenerator {
             }
 
             int frontX = home.getInt("front-x");
-            int frontZ = home.getInt("front-z");
-            int groundY = home.getInt("ground-y");
 
-            /*
-             * Reject unreasonable coordinates before
-             * constructing rotated property boundaries.
-             */
+            int frontZ = home.getInt("front-z");
+
+            int groundY = home.getInt("ground-y");
 
             if (Math.abs((long) frontX)
                             > MAXIMUM_WORLD_COORDINATE
@@ -241,8 +325,8 @@ public final class EarthGuemesGenerator {
             }
 
             /*
-             * Current Alpha property ownership uses
-             * world-aligned 24 x 32 block boundaries.
+             * Alpha ownership currently uses world-aligned
+             * 24 x 32 block boundaries.
              */
 
             if (facing != BlockFace.NORTH
@@ -293,15 +377,19 @@ public final class EarthGuemesGenerator {
              */
 
             int firstX = site.getWorldX(0, 0);
+
             int firstZ = site.getWorldZ(0, 0);
 
             int lastX = site.getWorldX(23, 31);
+
             int lastZ = site.getWorldZ(23, 31);
 
             int minX = Math.min(firstX, lastX);
+
             int maxX = Math.max(firstX, lastX);
 
             int minZ = Math.min(firstZ, lastZ);
+
             int maxZ = Math.max(firstZ, lastZ);
 
             if (home.getInt("min-x") != minX
@@ -316,6 +404,7 @@ public final class EarthGuemesGenerator {
             }
 
             if (maxX - minX + 1 != home.getInt("width")
+
                     || maxZ - minZ + 1
                             != home.getInt("length")) {
 
@@ -400,17 +489,13 @@ public final class EarthGuemesGenerator {
                 return reject(
                         plugin,
                         propertyId,
-                        "Sale marker must face the "
-                        + "property frontage."
+                        "Sale marker must face "
+                        + "the property frontage."
                 );
             }
 
             configuredSites.add(site);
         }
-
-        /*
-         * Friends Alpha requires exactly six homes.
-         */
 
         if (configuredSites.size() != MAX_ALPHA_HOMES) {
 
@@ -422,10 +507,6 @@ public final class EarthGuemesGenerator {
             return false;
         }
 
-        /*
-         * Register only geographically safe properties.
-         */
-
         if (!registerResidentialSites(configuredSites)) {
 
             plugin.getLogger().warning(
@@ -435,19 +516,13 @@ public final class EarthGuemesGenerator {
             return false;
         }
 
-        /*
-         * Geographic registration is not construction approval.
-         *
-         * Construction must remain disabled until the
-         * world inspection and installation authorization
-         * systems are completed.
-         */
-
-        residentialEnabled = false;
-
         plugin.getLogger().info(
                 "Geographically validated residential properties: "
                 + getResidentialSiteCount()
+        );
+
+        plugin.getLogger().info(
+                "Temporary Alpha chunk separation: VERIFIED"
         );
 
         plugin.getLogger().info(
@@ -461,7 +536,7 @@ public final class EarthGuemesGenerator {
 
         plugin.getLogger().info(
                 "Residential construction enabled: "
-                + residentialEnabled
+                + isResidentialGenerationEnabled()
         );
 
         return true;
@@ -484,6 +559,7 @@ public final class EarthGuemesGenerator {
         return home.isInt(marker + "-x")
                 && home.isInt(marker + "-y")
                 && home.isInt(marker + "-z")
+
                 && home.getInt(marker + "-x") == x
                 && home.getInt(marker + "-y") == y
                 && home.getInt(marker + "-z") == z;
@@ -510,21 +586,20 @@ public final class EarthGuemesGenerator {
      * RESIDENTIAL SITE REGISTRATION
      * ========================================================
      *
-     * Registration does not enable construction.
+     * Registration always withdraws existing permits.
+     *
+     * Registration never authorizes construction.
+     * ========================================================
      */
 
     public static synchronized boolean registerResidentialSites(
             List<ResidentialSite> sites
     ) {
 
-        /*
-         * Any registration attempt disables construction.
-         */
-
         clearResidentialSites();
 
         if (sites == null
-                || sites.size() > MAX_ALPHA_HOMES) {
+                || sites.size() != MAX_ALPHA_HOMES) {
 
             return false;
         }
@@ -549,7 +624,10 @@ public final class EarthGuemesGenerator {
 
         for (ResidentialSite site : sites) {
 
-            if (site == null) {
+            if (site == null
+                    || !isValidPropertyId(
+                            site.getPropertyId()
+                    )) {
 
                 return false;
             }
@@ -567,20 +645,7 @@ public final class EarthGuemesGenerator {
             }
 
             /*
-             * NEW:
-             *
-             * Run the complete geographic safety inspection.
-             *
-             * Protects:
-             *
-             * - General Store terrain
-             * - Smoothed roads
-             * - Road shoulders
-             * - Original roads
-             * - Water
-             * - Property coordinates
-             * - Property dimensions
-             * - Terrain suitability
+             * Preserve complete geographic safety inspection.
              */
 
             SafetyResult safety;
@@ -621,7 +686,7 @@ public final class EarthGuemesGenerator {
             }
 
             /*
-             * Protect neighboring properties.
+             * Preserve existing property separation.
              */
 
             for (ResidentialSite approved
@@ -665,13 +730,34 @@ public final class EarthGuemesGenerator {
         }
 
         /*
-         * Publish the complete validated site list.
-         *
-         * No partially validated property list is published.
+         * Independently enforce temporary Friends Alpha
+         * property, corridor and chunk separation.
          */
 
-        residentialSites =
-                List.copyOf(approvedSites);
+        if (!EarthAlphaSiteFinder
+                .hasDevelopmentChunkClearance(
+                        approvedSites
+                )) {
+
+            System.out.println(
+                    "[EarthBound] Residential registration "
+                    + "rejected: unsafe Alpha chunk separation."
+            );
+
+            return false;
+        }
+
+        /*
+         * Publish only the complete validated registry.
+         */
+
+        synchronized (CONSTRUCTION_LOCK) {
+
+            activePermit = null;
+
+            residentialSites =
+                    List.copyOf(approvedSites);
+        }
 
         return true;
     }
@@ -712,14 +798,6 @@ public final class EarthGuemesGenerator {
      * ========================================================
      * EXISTING WORLD SAFETY INSPECTION
      * ========================================================
-     *
-     * Must be called on the server main thread after
-     * the EarthBound world becomes available.
-     *
-     * This method does not enable construction.
-     *
-     * Construction authorization will be implemented
-     * separately after persistent installation tracking.
      */
 
     public static synchronized boolean inspectRegisteredSites(
@@ -728,7 +806,7 @@ public final class EarthGuemesGenerator {
             boolean geographicDataReady
     ) {
 
-        residentialEnabled = false;
+        revokeConstructionPermit();
 
         if (plugin == null) {
 
@@ -750,6 +828,19 @@ public final class EarthGuemesGenerator {
         );
 
         try {
+
+            if (!EarthAlphaSiteFinder
+                    .hasDevelopmentChunkClearance(
+                            residentialSites
+                    )) {
+
+                plugin.getLogger().warning(
+                        "Residential world inspection rejected: "
+                        + "unsafe Alpha chunk separation."
+                );
+
+                return false;
+            }
 
             SafetyResult result =
                     EarthResidentialSafety.inspectDevelopment(
@@ -794,7 +885,7 @@ public final class EarthGuemesGenerator {
         } catch (RuntimeException exception) {
 
             plugin.getLogger().log(
-                    java.util.logging.Level.WARNING,
+                    Level.WARNING,
                     "Residential world safety inspection failed.",
                     exception
             );
@@ -842,20 +933,434 @@ public final class EarthGuemesGenerator {
 
     public static boolean isResidentialGenerationEnabled() {
 
-        return CONSTRUCTION_APPROVED
-                && residentialEnabled;
+        synchronized (CONSTRUCTION_LOCK) {
+
+            return CONSTRUCTION_APPROVED
+
+                    && EarthResidentialInstaller
+                            .isPhysicalConstructionEnabled()
+
+                    && activePermit != null
+
+                    && !activePermit.failed
+
+                    && activePermit.processedChunks.size()
+                            < activePermit.requiredChunks.size();
+        }
     }
 
     public static synchronized void clearResidentialSites() {
 
-        residentialEnabled = false;
+        synchronized (CONSTRUCTION_LOCK) {
 
-        residentialSites = List.of();
+            activePermit = null;
+
+            residentialSites = List.of();
+        }
     }
 
     /*
      * ========================================================
-     * GUEMES ISLAND RESIDENTIAL GENERATION
+     * ISSUE TEMPORARY CONSTRUCTION PERMIT
+     * ========================================================
+     *
+     * Intended exclusively for the future controlled
+     * installer.
+     *
+     * Must be called on the server main thread after
+     * persistent IN_PROGRESS status has been recorded.
+     *
+     * Does not generate or load chunks.
+     *
+     * Does not replace administrator authorization.
+     *
+     * Both independent physical construction locks
+     * must be enabled before a permit can be issued.
+     * ========================================================
+     */
+
+    static boolean issueConstructionPermit(
+            EarthBound plugin,
+            World world,
+            PropertyPlan propertyPlan,
+            boolean geographicDataReady
+    ) {
+
+        if (!CONSTRUCTION_APPROVED
+
+                || !EarthResidentialInstaller
+                        .isPhysicalConstructionEnabled()) {
+
+            return false;
+        }
+
+        if (plugin == null
+                || !plugin.isEnabled()
+                || !Bukkit.isPrimaryThread()) {
+
+            return false;
+        }
+
+        if (world == null
+                || !"earthbound".equals(world.getName())
+
+                || Bukkit.getWorld(world.getUID()) != world
+
+                || propertyPlan == null) {
+
+            return false;
+        }
+
+        if (!geographicDataReady
+                || !EarthTerrainLoader.isLoaded()
+                || !EarthRoadData.isLoaded()
+                || !EarthRoadSpatialIndex.isLoaded()) {
+
+            return false;
+        }
+
+        if (!EarthResidentialAuthorization
+                .isAuthorizationEnabled(plugin)
+
+                || !EarthResidentialInstallation.isReady()
+
+                || !EarthEconomy.isReady()
+
+                || !EarthPropertyManager.isReady()) {
+
+            return false;
+        }
+
+        try {
+
+            synchronized (CONSTRUCTION_LOCK) {
+
+                /*
+                 * Never replace an existing permit.
+                 */
+
+                if (activePermit != null) {
+
+                    return false;
+                }
+
+                List<ResidentialSite> sites =
+                        residentialSites;
+
+                if (sites.size() != MAX_ALPHA_HOMES
+
+                        || !EarthAlphaSiteFinder
+                                .hasDevelopmentChunkClearance(
+                                        sites
+                                )) {
+
+                    return false;
+                }
+
+                String propertyId =
+                        propertyPlan.getPropertyId();
+
+                if (!isValidPropertyId(propertyId)) {
+
+                    return false;
+                }
+
+                ResidentialSite site =
+                        getResidentialSite(propertyId);
+
+                if (!sameSite(
+                        site,
+                        propertyPlan.getSite()
+                )) {
+
+                    return false;
+                }
+
+                /*
+                 * Require exactly one active installation.
+                 */
+
+                for (ResidentialSite registeredSite : sites) {
+
+                    String registeredId =
+                            registeredSite.getPropertyId();
+
+                    if (!EarthResidentialInstallation
+                            .matchesApprovedSite(
+                                    world,
+                                    registeredSite
+                            )) {
+
+                        return false;
+                    }
+
+                    InstallationStatus status =
+                            EarthResidentialInstallation
+                                    .getStatus(registeredId);
+
+                    if (propertyId.equals(registeredId)) {
+
+                        if (status
+                                != InstallationStatus.IN_PROGRESS) {
+
+                            return false;
+                        }
+
+                    } else if (
+
+                            status != InstallationStatus.APPROVED
+
+                            && status
+                                != InstallationStatus.COMPLETED) {
+
+                        return false;
+                    }
+
+                    /*
+                     * Completed sites may have owners.
+                     * Unfinished sites must remain unowned.
+                     */
+
+                    if (status != InstallationStatus.COMPLETED
+
+                            && EarthEconomy.getPropertyOwner(
+                                    registeredId
+                            ) != null) {
+
+                        return false;
+                    }
+
+                    /*
+                     * Recheck all unfinished sites without
+                     * loading or generating their chunks.
+                     */
+
+                    if (status != InstallationStatus.COMPLETED) {
+
+                        SafetyResult safety =
+                                EarthResidentialSafety.inspectSite(
+                                        world,
+                                        registeredSite,
+                                        geographicDataReady
+                                );
+
+                        if (!safety.isSafe()) {
+
+                            return false;
+                        }
+                    }
+                }
+
+                /*
+                 * Recalculate the permitted chunk set.
+                 */
+
+                List<ConstructionChunk> required =
+                        EarthResidentialInstaller
+                                .calculateRequiredChunks(site);
+
+                if (required.isEmpty()
+
+                        || required.size()
+                            != propertyPlan.getChunkCount()) {
+
+                    return false;
+                }
+
+                Set<Long> expectedKeys =
+                        new HashSet<>();
+
+                Set<Long> plannedKeys =
+                        new HashSet<>();
+
+                for (ConstructionChunk chunk : required) {
+
+                    expectedKeys.add(chunk.getKey());
+
+                    if (world.isChunkLoaded(
+                            chunk.getChunkX(),
+                            chunk.getChunkZ()
+                    )) {
+
+                        return false;
+                    }
+
+                    if (world.isChunkGenerated(
+                            chunk.getChunkX(),
+                            chunk.getChunkZ()
+                    )) {
+
+                        return false;
+                    }
+                }
+
+                for (ConstructionChunk chunk
+                        : propertyPlan.getChunks()) {
+
+                    plannedKeys.add(chunk.getKey());
+                }
+
+                if (expectedKeys.size() != required.size()
+
+                        || plannedKeys.size()
+                            != propertyPlan.getChunkCount()
+
+                        || !expectedKeys.equals(plannedKeys)) {
+
+                    return false;
+                }
+
+                /*
+                 * Publish the individually scoped permit.
+                 */
+
+                activePermit = new ConstructionPermit(
+                        world.getUID(),
+                        site,
+                        expectedKeys
+                );
+
+                return true;
+            }
+
+        } catch (RuntimeException exception) {
+
+            plugin.getLogger().log(
+                    Level.SEVERE,
+                    "Residential construction permit failed.",
+                    exception
+            );
+
+            return false;
+        }
+    }
+
+    /*
+     * ========================================================
+     * CONSTRUCTION PERMIT REVOCATION
+     * ========================================================
+     *
+     * Waits for any residential generation section
+     * currently holding CONSTRUCTION_LOCK.
+     *
+     * Does not change persistent installation records.
+     *
+     * The future installer must record failures and
+     * handle any partially generated construction.
+     * ========================================================
+     */
+
+    static void revokeConstructionPermit() {
+
+        synchronized (CONSTRUCTION_LOCK) {
+
+            activePermit = null;
+        }
+    }
+
+    /*
+     * ========================================================
+     * CONSTRUCTION CALLBACK PROGRESS
+     * ========================================================
+     *
+     * Counts generator callbacks that returned successfully.
+     *
+     * This does not prove that chunks were committed to
+     * disk or that a completed house is structurally valid.
+     * ========================================================
+     */
+
+    static int getProcessedConstructionChunkCount(
+            UUID worldId,
+            String propertyId
+    ) {
+
+        synchronized (CONSTRUCTION_LOCK) {
+
+            if (!matchesActivePermit(
+                    worldId,
+                    propertyId
+            )) {
+
+                return 0;
+            }
+
+            return activePermit.processedChunks.size();
+        }
+    }
+
+    static boolean hasProcessedAllConstructionChunks(
+            UUID worldId,
+            String propertyId
+    ) {
+
+        synchronized (CONSTRUCTION_LOCK) {
+
+            if (!matchesActivePermit(
+                    worldId,
+                    propertyId
+            )) {
+
+                return false;
+            }
+
+            return !activePermit.failed
+
+                    && activePermit.processedChunks.equals(
+                            activePermit.requiredChunks
+                    );
+        }
+    }
+
+    static boolean hasConstructionFailed(
+            UUID worldId,
+            String propertyId
+    ) {
+
+        synchronized (CONSTRUCTION_LOCK) {
+
+            /*
+             * A missing or mismatched permit is not a
+             * valid active construction operation.
+             */
+
+            return !matchesActivePermit(
+                    worldId,
+                    propertyId
+            )
+
+                    || activePermit.failed;
+        }
+    }
+
+    private static boolean matchesActivePermit(
+            UUID worldId,
+            String propertyId
+    ) {
+
+        return activePermit != null
+
+                && worldId != null
+
+                && propertyId != null
+
+                && activePermit.worldId.equals(worldId)
+
+                && activePermit.site.getPropertyId()
+                        .equals(propertyId);
+    }
+
+    /*
+     * ========================================================
+     * LEGACY GENERATION ENTRY POINT
+     * ========================================================
+     *
+     * Preserved for compatibility with EarthGenerator.
+     *
+     * Calls without explicit world identity must never
+     * generate residential structures.
+     *
+     * EarthGenerator will be integrated separately.
      * ========================================================
      */
 
@@ -866,41 +1371,239 @@ public final class EarthGuemesGenerator {
     ) {
 
         /*
-         * Fail closed while construction is unapproved.
+         * Intentionally disabled.
          */
+    }
 
-        if (chunkData == null
-                || !CONSTRUCTION_APPROVED
-                || !residentialEnabled
-                || !EarthTerrainLoader.isLoaded()
-                || !EarthRoadData.isLoaded()
-                || !EarthRoadSpatialIndex.isLoaded()) {
+    /*
+     * ========================================================
+     * CONTROLLED RESIDENTIAL GENERATION
+     * ========================================================
+     *
+     * May be called by a chunk generation worker.
+     *
+     * Does not access configuration, property ownership
+     * storage or Bukkit world-loading methods.
+     *
+     * Uses only the scoped construction permit and
+     * current geographic data readiness.
+     *
+     * All permit validation and residential generation
+     * are serialized under CONSTRUCTION_LOCK.
+     * ========================================================
+     */
+
+    public static void generate(
+            UUID worldId,
+            ChunkData chunkData,
+            int chunkX,
+            int chunkZ
+    ) {
+
+        if (!CONSTRUCTION_APPROVED
+
+                || !EarthResidentialInstaller
+                        .isPhysicalConstructionEnabled()
+
+                || worldId == null
+
+                || chunkData == null) {
 
             return;
         }
 
-        List<ResidentialSite> sites =
-                residentialSites;
+        synchronized (CONSTRUCTION_LOCK) {
 
-        if (sites.size() != MAX_ALPHA_HOMES) {
+            ConstructionPermit permit = activePermit;
 
-            return;
-        }
+            if (permit == null
+                    || permit.failed
 
-        for (ResidentialSite site : sites) {
+                    || !permit.worldId.equals(worldId)) {
 
-            if (!site.intersectsChunk(chunkX, chunkZ)) {
-
-                continue;
+                return;
             }
 
-            EarthAlphaResidentialGenerator.generate(
-                    chunkData,
-                    chunkX,
-                    chunkZ,
-                    site
-            );
+            long chunkKey =
+                    getChunkKey(chunkX, chunkZ);
+
+            /*
+             * Reject any chunk outside the exact
+             * authorized construction footprint.
+             */
+
+            if (!permit.requiredChunks.contains(chunkKey)) {
+
+                return;
+            }
+
+            /*
+             * A duplicate callback is unexpected.
+             *
+             * Suspend the permit rather than assume the
+             * first callback was successfully committed.
+             */
+
+            if (permit.processedChunks.contains(chunkKey)) {
+
+                permit.failed = true;
+
+                return;
+            }
+
+            if (!EarthTerrainLoader.isLoaded()
+
+                    || !EarthRoadData.isLoaded()
+
+                    || !EarthRoadSpatialIndex.isLoaded()
+
+                    || residentialSites.size() != MAX_ALPHA_HOMES
+
+                    || getResidentialSite(
+                            permit.site.getPropertyId()
+                    ) != permit.site
+
+                    || !permit.site.intersectsChunk(
+                            chunkX,
+                            chunkZ
+                    )) {
+
+                permit.failed = true;
+
+                return;
+            }
+
+            /*
+             * Guard the vertical construction envelope.
+             */
+
+            int groundY = permit.site.getGroundY();
+
+            int maximumY =
+                    groundY
+
+                    + permit.site.getDesign()
+                            .getMaximumHeight()
+
+                    + 12;
+
+            if (groundY - 12 < chunkData.getMinHeight()
+
+                    || maximumY >= chunkData.getMaxHeight()) {
+
+                permit.failed = true;
+
+                return;
+            }
+
+            try {
+
+                /*
+                 * Generate only the individually
+                 * permitted residential property.
+                 */
+
+                EarthAlphaResidentialGenerator.generate(
+                        chunkData,
+                        chunkX,
+                        chunkZ,
+                        permit.site
+                );
+
+                permit.processedChunks.add(chunkKey);
+
+            } catch (RuntimeException | Error exception) {
+
+                /*
+                 * Suspend all further residential callbacks.
+                 *
+                 * Propagate the generation failure.
+                 * Do not mark the installation COMPLETED.
+                 */
+
+                permit.failed = true;
+
+                throw exception;
+            }
         }
+    }
+
+    /*
+     * ========================================================
+     * CHUNK IDENTITY
+     * ========================================================
+     */
+
+    private static long getChunkKey(
+            int chunkX,
+            int chunkZ
+    ) {
+
+        return ((long) chunkX << 32)
+
+                | (chunkZ & 0xffffffffL);
+    }
+
+    /*
+     * ========================================================
+     * COMPARE EXACT RESIDENTIAL SITE IDENTITIES
+     * ========================================================
+     */
+
+    private static boolean sameSite(
+            ResidentialSite first,
+            ResidentialSite second
+    ) {
+
+        return first != null
+
+                && second != null
+
+                && first.getPropertyId().equals(
+                        second.getPropertyId()
+                )
+
+                && first.getDesign() == second.getDesign()
+
+                && first.getFacing() == second.getFacing()
+
+                && first.getGroundY()
+                        == second.getGroundY()
+
+                && first.getWorldX(0, 0)
+                        == second.getWorldX(0, 0)
+
+                && first.getWorldZ(0, 0)
+                        == second.getWorldZ(0, 0)
+
+                && first.getMinX()
+                        == second.getMinX()
+
+                && first.getMaxX()
+                        == second.getMaxX()
+
+                && first.getMinZ()
+                        == second.getMinZ()
+
+                && first.getMaxZ()
+                        == second.getMaxZ();
+    }
+
+    /*
+     * ========================================================
+     * PROPERTY ID VALIDATION
+     * ========================================================
+     */
+
+    private static boolean isValidPropertyId(
+            String propertyId
+    ) {
+
+        return propertyId != null
+
+                && propertyId.matches(
+                        "guemes_home_0[1-6]"
+                );
     }
 
     /*
@@ -915,7 +1618,9 @@ public final class EarthGuemesGenerator {
     ) {
 
         if (!EarthTerrainLoader.isLoaded()
+
                 || !Double.isFinite(latitude)
+
                 || !Double.isFinite(longitude)) {
 
             return false;
