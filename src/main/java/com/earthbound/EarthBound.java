@@ -7,8 +7,13 @@ import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import com.earthbound.terrain.EarthTerrainDownloader;
+import com.earthbound.terrain.EarthTerrainLoader;
+
 import com.earthbound.water.EarthWaterData;
+
 import com.earthbound.roads.EarthRoadData;
+import com.earthbound.roads.EarthRoadElevationProfiles;
+import com.earthbound.roads.EarthRoadSpatialIndex;
 
 public class EarthBound extends JavaPlugin {
 
@@ -19,7 +24,6 @@ public class EarthBound extends JavaPlugin {
     private static final double GUEMES_SPAWN_X = -654.0;
     private static final double GUEMES_SPAWN_Y = 86.0;
     private static final double GUEMES_SPAWN_Z = -355.0;
-
 
     /*
      * ENABLE EARTHBOUND
@@ -32,6 +36,7 @@ public class EarthBound extends JavaPlugin {
 
         saveDefaultConfig();
 
+        EarthGuemesGenerator.clearResidentialSites();
 
         /*
          * WORLD RULES
@@ -41,7 +46,6 @@ public class EarthBound extends JavaPlugin {
                 new EarthBoundWorldRules(this),
                 this
         );
-
 
         /*
          * ECONOMY
@@ -61,7 +65,6 @@ public class EarthBound extends JavaPlugin {
                     "Balance command missing from plugin.yml"
             );
         }
-
 
         /*
          * PLAYER PAYMENTS
@@ -84,7 +87,6 @@ public class EarthBound extends JavaPlugin {
             );
         }
 
-
         /*
          * GOVERNMENT BANKING
          */
@@ -105,7 +107,6 @@ public class EarthBound extends JavaPlugin {
                     "Earthbank command missing from plugin.yml"
             );
         }
-
 
         /*
          * GENERAL STORE
@@ -130,7 +131,6 @@ public class EarthBound extends JavaPlugin {
             );
         }
 
-
         /*
          * PROPERTY OWNERSHIP SYSTEM
          *
@@ -147,7 +147,6 @@ public class EarthBound extends JavaPlugin {
                 "EarthBound property system initialized!"
         );
 
-
         /*
          * PROPERTY PURCHASE LISTENER
          */
@@ -163,11 +162,8 @@ public class EarthBound extends JavaPlugin {
                 "EarthBound property purchase listener registered!"
         );
 
-
         /*
-         * ========================================================
          * PROPERTY SECURITY SYSTEM
-         * ========================================================
          */
 
         Bukkit.getPluginManager().registerEvents(
@@ -179,50 +175,57 @@ public class EarthBound extends JavaPlugin {
                 "EarthBound property protection enabled!"
         );
 
-
         /*
-         * LOAD GUEMES TERRAIN
+         * GEOGRAPHIC DATA
          */
 
-        EarthTerrainDownloader.loadGuemesIsland();
+        boolean geographicDataReady =
+                initializeGeographicData();
 
-        if (EarthTerrainDownloader.isLoaded()) {
+        /*
+         * FRIENDS ALPHA RESIDENTIAL CONFIGURATION
+         */
+
+        if (geographicDataReady) {
+
+            boolean residentialConfigLoaded =
+                    EarthGuemesGenerator
+                            .loadResidentialSites(this);
 
             getLogger().info(
-                    "Guemes terrain loaded!"
+                    "Residential configuration loaded: "
+                    + residentialConfigLoaded
             );
+
+            if (!residentialConfigLoaded) {
+
+                EarthGuemesGenerator
+                        .clearResidentialSites();
+
+                getLogger().warning(
+                        "Residential development remains disabled."
+                );
+            }
 
         } else {
 
             getLogger().warning(
-                    "Guemes terrain did not finish loading."
+                    "Residential configuration skipped: "
+                    + "geographic data is not ready."
             );
         }
 
-
-        /*
-         * LOAD GUEMES WATER
-         */
-
-        boolean waterLoaded =
-                EarthWaterData.loadGuemesWaterMask();
-
         getLogger().info(
-                "Water loaded: " + waterLoaded
+                "Approved residential sites: "
+                + EarthGuemesGenerator
+                        .getResidentialSiteCount()
         );
 
-
-        /*
-         * LOAD GUEMES ROADS
-         */
-
-        boolean roadsLoaded =
-                EarthRoadData.loadGuemesRoadMask();
-
         getLogger().info(
-                "Roads loaded: " + roadsLoaded
+                "Residential construction enabled: "
+                + EarthGuemesGenerator
+                        .isResidentialGenerationEnabled()
         );
-
 
         /*
          * DISABLE NORMAL MOB SPAWNING
@@ -241,7 +244,6 @@ public class EarthBound extends JavaPlugin {
                     }
                 }
         );
-
 
         /*
          * SET GUEMES SPAWN
@@ -279,7 +281,6 @@ public class EarthBound extends JavaPlugin {
                 }
         );
 
-
         /*
          * AUTOMATIC PROPERTY SALE SYSTEM
          */
@@ -301,10 +302,21 @@ public class EarthBound extends JavaPlugin {
                         return;
                     }
 
-
                     /*
-                     * REGISTER OFFICIAL BANNERS
+                     * Do not offer Alpha homes for sale
+                     * while construction remains locked.
                      */
+
+                    if (!EarthGuemesGenerator
+                            .isResidentialGenerationEnabled()) {
+
+                        getLogger().info(
+                                "Residential sale markers skipped: "
+                                + "construction is disabled."
+                        );
+
+                        return;
+                    }
 
                     EarthPropertyBannerRegistry.setup(this);
 
@@ -313,11 +325,6 @@ public class EarthBound extends JavaPlugin {
                             + EarthPropertyBannerRegistry
                                     .getBannerCount()
                     );
-
-
-                    /*
-                     * PLACE OR REMOVE SALE MARKERS
-                     */
 
                     EarthPropertySaleMarkers.setup(this);
 
@@ -328,7 +335,6 @@ public class EarthBound extends JavaPlugin {
                 }
         );
 
-
         /*
          * STARTUP COMPLETE
          */
@@ -338,6 +344,130 @@ public class EarthBound extends JavaPlugin {
         );
     }
 
+    /*
+     * GEOGRAPHIC DATA INITIALIZATION
+     */
+
+    private boolean initializeGeographicData() {
+
+        /*
+         * LOAD GUEMES TERRAIN
+         */
+
+        EarthTerrainDownloader.loadGuemesIsland();
+
+        boolean terrainLoaded =
+                EarthTerrainDownloader.isLoaded()
+                && EarthTerrainLoader.isLoaded();
+
+        getLogger().info(
+                "Guemes terrain loaded: " + terrainLoaded
+        );
+
+        /*
+         * LOAD GUEMES WATER
+         */
+
+        boolean waterLoaded =
+                EarthWaterData.loadGuemesWaterMask();
+
+        getLogger().info(
+                "Water loaded: " + waterLoaded
+        );
+
+        /*
+         * LOAD GUEMES ROADS
+         */
+
+        boolean roadsLoaded =
+                EarthRoadData.loadGuemesRoadMask();
+
+        getLogger().info(
+                "Roads loaded: " + roadsLoaded
+        );
+
+        /*
+         * REQUIRE GEOGRAPHIC DATA
+         */
+
+        if (!terrainLoaded
+                || !waterLoaded
+                || !roadsLoaded) {
+
+            getLogger().warning(
+                    "Geographic data loading incomplete."
+            );
+
+            getLogger().warning(
+                    "Road smoothing and residential "
+                    + "development will remain disabled."
+            );
+
+            return false;
+        }
+
+        /*
+         * BUILD SMOOTHED ROAD ELEVATION PROFILES
+         */
+
+        boolean profilesLoaded =
+                EarthRoadElevationProfiles.load();
+
+        getLogger().info(
+                "Road elevation profiles loaded: "
+                + profilesLoaded
+        );
+
+        if (!profilesLoaded) {
+
+            getLogger().warning(
+                    "Road smoothing profiles unavailable. "
+                    + "Using original road generation."
+            );
+
+            return false;
+        }
+
+        getLogger().info(
+                "Road elevation profile count: "
+                + EarthRoadElevationProfiles
+                        .getProfileCount()
+        );
+
+        /*
+         * BUILD ROAD SPATIAL INDEX
+         */
+
+        boolean spatialIndexLoaded =
+                EarthRoadSpatialIndex.load();
+
+        getLogger().info(
+                "Road spatial index loaded: "
+                + spatialIndexLoaded
+        );
+
+        if (!spatialIndexLoaded) {
+
+            getLogger().warning(
+                    "Road spatial index unavailable. "
+                    + "Using original road generation."
+            );
+
+            return false;
+        }
+
+        getLogger().info(
+                "Indexed road cells: "
+                + EarthRoadSpatialIndex
+                        .getIndexedCellCount()
+        );
+
+        getLogger().info(
+                "EarthBound geographic systems ready!"
+        );
+
+        return true;
+    }
 
     /*
      * SAVE EARTHBOUND DATA ON SHUTDOWN
@@ -371,11 +501,24 @@ public class EarthBound extends JavaPlugin {
                 "EarthBound banner registry cleared!"
         );
 
+        EarthGuemesGenerator.clearResidentialSites();
+
+        getLogger().info(
+                "EarthBound residential registry cleared!"
+        );
+
+        EarthRoadSpatialIndex.clear();
+
+        EarthRoadElevationProfiles.clear();
+
+        getLogger().info(
+                "EarthBound road systems cleared!"
+        );
+
         getLogger().info(
                 "EarthBound shutdown complete."
         );
     }
-
 
     /*
      * EARTH WORLD GENERATOR
@@ -389,5 +532,4 @@ public class EarthBound extends JavaPlugin {
 
         return new EarthGenerator();
     }
-
 }
