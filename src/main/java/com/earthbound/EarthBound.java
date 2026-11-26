@@ -59,6 +59,10 @@ public class EarthBound extends JavaPlugin {
                     new EarthEconomyCommand()
             );
 
+            getLogger().info(
+                    "Balance command registered!"
+            );
+
         } else {
 
             getLogger().warning(
@@ -123,6 +127,10 @@ public class EarthBound extends JavaPlugin {
                     new EarthStoreCommand()
             );
 
+            getLogger().info(
+                    "General Store command registered!"
+            );
+
         } else {
 
             getLogger().warning(
@@ -170,7 +178,9 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
+         * ========================================================
          * LOAD GUEMES TERRAIN
+         * ========================================================
          */
 
         EarthTerrainDownloader.loadGuemesIsland();
@@ -190,7 +200,9 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
+         * ========================================================
          * LOAD GUEMES WATER
+         * ========================================================
          */
 
         boolean waterLoaded =
@@ -202,7 +214,9 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
+         * ========================================================
          * LOAD GUEMES ROADS
+         * ========================================================
          */
 
         boolean roadsLoaded =
@@ -214,7 +228,9 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
+         * ========================================================
          * DISABLE NORMAL MOB SPAWNING
+         * ========================================================
          */
 
         Bukkit.getScheduler().runTask(
@@ -276,51 +292,8 @@ public class EarthBound extends JavaPlugin {
 
         /*
          * ========================================================
-         * AUTOMATIC PROPERTY BANNER REGISTRATION
-         * ========================================================
-         *
-         * Wait until the scheduled startup task runs.
-         *
-         * Load official banner coordinates from config.yml.
-         *
-         * Disabled homes are ignored.
-         *
-         */
-
-        Bukkit.getScheduler().runTask(
-                this,
-                () -> {
-
-                    World world =
-                            Bukkit.getWorld("earthbound");
-
-                    if (world == null) {
-
-                        getLogger().warning(
-                                "EarthBound world not found. "
-                                + "Property banners were not registered."
-                        );
-
-                        return;
-                    }
-
-                    EarthPropertyBannerRegistry.setup(this);
-
-                    getLogger().info(
-                            "Official property banners registered: "
-                            + EarthPropertyBannerRegistry.getBannerCount()
-                    );
-
-                    getLogger().info(
-                            "EarthBound banner system initialized!"
-                    );
-
-                }
-        );
-
-
-        /*
          * STARTUP COMPLETE
+         * ========================================================
          */
 
         getLogger().info(
