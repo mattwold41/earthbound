@@ -1,3 +1,4 @@
+
 package com.earthbound;
 
 import java.util.Random;
