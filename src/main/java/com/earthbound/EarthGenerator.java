@@ -17,12 +17,18 @@ public class EarthGenerator extends ChunkGenerator {
     private static final double ROAD_BORDER_BLOCKS = 1.0;
 
     public EarthGenerator() {
+
         System.out.println(
                 "=== EARTHBOUND GENERATOR ACTIVE ===");
 
         System.out.println(
                 "[EarthBound] Guemes terrain + water + roads"
                         + " + General Store loaded");
+
+        System.out.println(
+                "[EarthBound] Alpha residential generation enabled: "
+                        + EarthGuemesGenerator
+                                .isResidentialGenerationEnabled());
     }
 
     @Override
@@ -36,6 +42,7 @@ public class EarthGenerator extends ChunkGenerator {
         ChunkData chunkData = createChunkData(world);
 
         for (int localX = 0; localX < 16; localX++) {
+
             for (int localZ = 0; localZ < 16; localZ++) {
 
                 int worldX = chunkX * 16 + localX;
@@ -55,12 +62,15 @@ public class EarthGenerator extends ChunkGenerator {
                                         worldX, worldZ);
 
                 /*
+                 * =================================================
                  * WATER
+                 * =================================================
                  *
                  * Preserve the existing coastline.
                  * Only the approved store site overrides
                  * water classification.
                  */
+
                 if (!storeSite
                         && EarthWaterGenerator.isWater(
                                 latitude, longitude)) {
@@ -76,8 +86,11 @@ public class EarthGenerator extends ChunkGenerator {
                 }
 
                 /*
+                 * =================================================
                  * TERRAIN
+                 * =================================================
                  */
+
                 int naturalHeight =
                         EarthTerrainGenerator.getTerrainHeight(
                                 latitude, longitude);
@@ -96,26 +109,34 @@ public class EarthGenerator extends ChunkGenerator {
                         terrainHeight);
 
                 /*
+                 * =================================================
                  * STORE FOUNDATION
+                 * =================================================
                  *
                  * Keep the site at Y=65.
                  * Roads must not overwrite the building
                  * or its western porch.
                  */
+
                 if (storeSite) {
+
                     continue;
                 }
 
                 /*
+                 * =================================================
                  * ROADS
+                 * =================================================
                  *
                  * Preserve the existing road system.
                  */
+
                 RoadType roadType =
                         EarthRoadData.getNearestRoadType(
                                 latitude, longitude);
 
                 if (roadType == RoadType.NONE) {
+
                     continue;
                 }
 
@@ -136,6 +157,7 @@ public class EarthGenerator extends ChunkGenerator {
                                 * METERS_PER_BLOCK;
 
                 if (distanceMeters > borderRadiusMeters) {
+
                     continue;
                 }
 
@@ -161,15 +183,49 @@ public class EarthGenerator extends ChunkGenerator {
         }
 
         /*
-         * GENERATE GUEMES GENERAL STORE
+         * =========================================================
+         * GUEMES GENERAL STORE
+         * =========================================================
          *
          * Runs after terrain, water and roads.
+         *
          * Block placement is restricted to this chunk.
          */
+
         EarthBuildingGenerator.generateGuemesStore(
                 chunkData,
                 chunkX,
                 chunkZ);
+
+        /*
+         * =========================================================
+         * FRIENDS ALPHA RESIDENTIAL DEVELOPMENT
+         * =========================================================
+         *
+         * Only generate residential development inside
+         * the designated EarthBound world.
+         *
+         * EarthGuemesGenerator controls:
+         *
+         * - Residential generation enablement
+         * - Approved property registration
+         * - Terrain suitability validation
+         * - Duplicate property prevention
+         * - Overlapping property prevention
+         *
+         * Residential generation remains disabled
+         * until approved property locations are ready.
+         *
+         * Existing generated chunks are not modified.
+         */
+
+        if ("earthbound".equals(world.getName())) {
+
+            EarthGuemesGenerator.generate(
+                    chunkData,
+                    chunkX,
+                    chunkZ);
+        }
 
         return chunkData;
     }
