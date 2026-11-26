@@ -1,48 +1,53 @@
-# ==================================================
+# ============================================================
 # EARTHBOUND CONFIGURATION
 # Friends Alpha
-# ==================================================
+# ============================================================
 
-# ==================================================
+# ============================================================
 # ECONOMY
-# ==================================================
+# ============================================================
 
 economy:
+
   starting-money: 100000
 
-# ==================================================
+
+# ============================================================
 # RESIDENTIAL DEVELOPMENT
-# ==================================================
+# ============================================================
 
 residential:
 
-  # Keep disabled until all property sites
-  # have been validated and approved.
+  # Keep disabled until all property locations are approved.
 
   enabled: false
 
   world: earthbound
 
-# ==================================================
-# PROPERTY SYSTEM
-# ==================================================
+
+# ============================================================
+# FRIENDS ALPHA RESIDENTIAL PROPERTIES
+# ============================================================
 
 properties:
 
   alpha-homes:
 
-    # ----------------------------------------------
-    # HOME 1 - STARTER HOUSE
-    # ----------------------------------------------
+    # --------------------------------------------------------
+    # HOME 01 - STARTER HOUSE
+    # --------------------------------------------------------
 
     guemes_home_01:
+
       enabled: false
+
       name: "Starter House"
       world: earthbound
+
       width: 24
       length: 32
-      price: 500
 
+      price: 500
       design: STARTER
 
       min-x: null
@@ -50,6 +55,7 @@ properties:
 
       front-x: null
       front-z: null
+
       ground-y: null
       facing: null
 
@@ -63,18 +69,22 @@ properties:
 
       marker-facing: null
 
-    # ----------------------------------------------
-    # HOME 2 - TWO-STORY FAMILY HOME
-    # ----------------------------------------------
+
+    # --------------------------------------------------------
+    # HOME 02 - TWO-STORY FAMILY HOME
+    # --------------------------------------------------------
 
     guemes_home_02:
+
       enabled: false
+
       name: "Two-Story Family Home"
       world: earthbound
+
       width: 24
       length: 32
-      price: 750
 
+      price: 750
       design: FAMILY
 
       min-x: null
@@ -82,6 +92,7 @@ properties:
 
       front-x: null
       front-z: null
+
       ground-y: null
       facing: null
 
@@ -95,18 +106,22 @@ properties:
 
       marker-facing: null
 
-    # ----------------------------------------------
-    # HOME 3 - COTTAGE
-    # ----------------------------------------------
+
+    # --------------------------------------------------------
+    # HOME 03 - COTTAGE
+    # --------------------------------------------------------
 
     guemes_home_03:
+
       enabled: false
+
       name: "Cottage"
       world: earthbound
+
       width: 24
       length: 32
-      price: 550
 
+      price: 550
       design: COTTAGE
 
       min-x: null
@@ -114,6 +129,7 @@ properties:
 
       front-x: null
       front-z: null
+
       ground-y: null
       facing: null
 
@@ -127,18 +143,22 @@ properties:
 
       marker-facing: null
 
-    # ----------------------------------------------
-    # HOME 4 - TWO-STORY FARMHOUSE
-    # ----------------------------------------------
+
+    # --------------------------------------------------------
+    # HOME 04 - TWO-STORY FARMHOUSE
+    # --------------------------------------------------------
 
     guemes_home_04:
+
       enabled: false
+
       name: "Two-Story Farmhouse"
       world: earthbound
+
       width: 24
       length: 32
-      price: 800
 
+      price: 800
       design: FARMHOUSE
 
       min-x: null
@@ -146,6 +166,7 @@ properties:
 
       front-x: null
       front-z: null
+
       ground-y: null
       facing: null
 
@@ -159,18 +180,22 @@ properties:
 
       marker-facing: null
 
-    # ----------------------------------------------
-    # HOME 5 - CABIN
-    # ----------------------------------------------
+
+    # --------------------------------------------------------
+    # HOME 05 - CABIN
+    # --------------------------------------------------------
 
     guemes_home_05:
+
       enabled: false
+
       name: "Cabin"
       world: earthbound
+
       width: 24
       length: 32
-      price: 600
 
+      price: 600
       design: CABIN
 
       min-x: null
@@ -178,6 +203,7 @@ properties:
 
       front-x: null
       front-z: null
+
       ground-y: null
       facing: null
 
@@ -191,18 +217,22 @@ properties:
 
       marker-facing: null
 
-    # ----------------------------------------------
-    # HOME 6 - TWO-STORY TRADITIONAL
-    # ----------------------------------------------
+
+    # --------------------------------------------------------
+    # HOME 06 - TWO-STORY TRADITIONAL
+    # --------------------------------------------------------
 
     guemes_home_06:
+
       enabled: false
+
       name: "Two-Story Traditional"
       world: earthbound
+
       width: 24
       length: 32
-      price: 850
 
+      price: 850
       design: TRADITIONAL
 
       min-x: null
@@ -210,6 +240,7 @@ properties:
 
       front-x: null
       front-z: null
+
       ground-y: null
       facing: null
 
@@ -222,3 +253,36 @@ properties:
       sign-z: null
 
       marker-facing: null
+
+
+# ============================================================
+# EARTHBOUND DEVELOPMENT DIAGNOSTICS
+# ============================================================
+
+diagnostics:
+
+  # Searches for six potential Friends Alpha home locations.
+  #
+  # Requires successfully loaded:
+  #
+  # - Terrain elevation data
+  # - Water classification data
+  # - Real-world road data
+  # - Smoothed road elevation profiles
+  # - Road spatial index
+  #
+  # Reports candidate property coordinates in the console.
+  #
+  # Does not:
+  #
+  # - Construct houses
+  # - Modify terrain
+  # - Generate chunks
+  # - Register property ownership
+  # - Automatically update this configuration
+  #
+  # Residential development must remain disabled.
+  #
+  # Keep disabled during normal server operation.
+
+  residential-site-search: false
