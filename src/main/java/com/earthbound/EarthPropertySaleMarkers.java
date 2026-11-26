@@ -5,22 +5,36 @@ import java.util.Locale;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.Banner;
 import org.bukkit.block.Sign;
+import org.bukkit.block.TileState;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Rotatable;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.NamespacedKey;
 
 public class EarthPropertySaleMarkers {
 
+    private static EarthBound plugin;
+    private static NamespacedKey markerKey;
+
+
     /*
-     * ==========================================================
-     * INITIALIZE PROPERTY SALE MARKERS
-     * ==========================================================
+     * INITIALIZE PROPERTY SALE SYSTEM
      */
 
-    public static void setup(EarthBound plugin) {
+    public static void setup(EarthBound earthBound) {
+
+        plugin = earthBound;
+
+        markerKey = new NamespacedKey(
+                plugin,
+                "sale_property"
+        );
 
         ConfigurationSection homes =
                 plugin.getConfig().getConfigurationSection(
@@ -40,14 +54,19 @@ public class EarthPropertySaleMarkers {
 
             if (home == null
                     || !home.getBoolean("enabled", false)) {
-
                 continue;
             }
 
             EarthProperty property =
                     EarthPropertyManager.getProperty(propertyId);
 
-            if (property == null || property.isOwned()) {
+            if (property == null) {
+                continue;
+            }
+
+            if (property.isOwned()) {
+
+                removeMarkers(propertyId);
                 continue;
             }
 
@@ -56,17 +75,14 @@ public class EarthPropertySaleMarkers {
                             propertyId
                     );
 
-            if (bannerLocation == null) {
-                continue;
-            }
-
             Location signLocation =
                     getSignLocation(home);
 
-            if (signLocation == null) {
+            if (bannerLocation == null
+                    || signLocation == null) {
 
                 plugin.getLogger().warning(
-                        "Missing property sign coordinates: "
+                        "Missing sale marker coordinates: "
                         + propertyId
                 );
 
@@ -78,47 +94,68 @@ public class EarthPropertySaleMarkers {
                     signLocation.getBlockX(),
                     signLocation.getBlockZ())) {
 
-                plugin.getLogger().warning(
-                        "Sign is outside property: "
-                        + propertyId
-                );
-
                 continue;
             }
 
             if (bannerLocation.getBlock().equals(
                     signLocation.getBlock())) {
 
-                plugin.getLogger().warning(
-                        "Banner and sign locations overlap: "
-                        + propertyId
-                );
-
                 continue;
             }
 
+            BlockFace facing = getFacing(home);
+
             if (placeMarkers(
-                    plugin,
                     property,
                     bannerLocation,
-                    signLocation)) {
+                    signLocation,
+                    facing)) {
 
                 placed++;
             }
         }
 
         plugin.getLogger().info(
-                "EarthBound placed or verified "
+                "EarthBound sale marker sets ready: "
                 + placed
-                + " property sale marker sets."
         );
     }
 
 
     /*
-     * ==========================================================
-     * GET PROPERTY SIGN LOCATION
-     * ==========================================================
+     * READ ROAD-FACING DIRECTION
+     */
+
+    private static BlockFace getFacing(
+            ConfigurationSection home
+    ) {
+
+        String direction =
+                home.getString("marker-facing", "NORTH");
+
+        try {
+
+            BlockFace facing = BlockFace.valueOf(
+                    direction.toUpperCase(Locale.ROOT)
+            );
+
+            if (facing == BlockFace.NORTH
+                    || facing == BlockFace.SOUTH
+                    || facing == BlockFace.EAST
+                    || facing == BlockFace.WEST) {
+
+                return facing;
+            }
+
+        } catch (IllegalArgumentException ignored) {
+        }
+
+        return BlockFace.NORTH;
+    }
+
+
+    /*
+     * GET CONFIGURED SIGN LOCATION
      */
 
     private static Location getSignLocation(
@@ -155,57 +192,113 @@ public class EarthPropertySaleMarkers {
 
 
     /*
-     * ==========================================================
-     * PLACE BLUE BANNER AND PRICE SIGN
-     * ==========================================================
+     * VERIFY OFFICIAL MARKER METADATA
+     */
+
+    private static boolean hasMarker(
+            Block block,
+            String propertyId
+    ) {
+
+        if (markerKey == null
+                || block == null
+                || propertyId == null) {
+
+            return false;
+        }
+
+        if (!(block.getState() instanceof TileState state)) {
+            return false;
+        }
+
+        String storedId =
+                state.getPersistentDataContainer().get(
+                        markerKey,
+                        PersistentDataType.STRING
+                );
+
+        return propertyId.equals(storedId);
+    }
+
+
+    /*
+     * VERIFY OFFICIAL BLUE BANNER
+     */
+
+    public static boolean isOfficialBanner(
+            Block block,
+            String propertyId
+    ) {
+
+        if (block == null) {
+            return false;
+        }
+
+        if (block.getType() != Material.BLUE_BANNER) {
+            return false;
+        }
+
+        return EarthPropertyBannerRegistry.isOfficialBanner(
+                propertyId,
+                block.getLocation()
+        ) && hasMarker(block, propertyId);
+    }
+
+
+    /*
+     * SET ROAD-FACING ROTATION
+     */
+
+    private static void setRotation(
+            Block block,
+            BlockFace facing
+    ) {
+
+        BlockData data = block.getBlockData();
+
+        if (data instanceof Rotatable rotatable) {
+
+            rotatable.setRotation(facing);
+
+            block.setBlockData(rotatable, false);
+        }
+    }
+
+
+    /*
+     * PLACE PROPERTY SALE MARKERS
      */
 
     private static boolean placeMarkers(
-            EarthBound plugin,
             EarthProperty property,
             Location bannerLocation,
-            Location signLocation
+            Location signLocation,
+            BlockFace facing
     ) {
+
+        String propertyId = property.getId();
 
         Block bannerBlock = bannerLocation.getBlock();
         Block signBlock = signLocation.getBlock();
 
-        NamespacedKey markerKey =
-                new NamespacedKey(plugin, "sale_property");
-
-        String propertyId = property.getId();
-
         boolean existingBanner =
                 bannerBlock.getType() == Material.BLUE_BANNER
-                && bannerBlock.getState()
-                        instanceof org.bukkit.block.Banner banner
-                && propertyId.equals(
-                        banner.getPersistentDataContainer().get(
-                                markerKey,
-                                PersistentDataType.STRING
-                        )
-                );
+                && hasMarker(bannerBlock, propertyId);
 
         boolean existingSign =
                 signBlock.getType() == Material.OAK_SIGN
-                && signBlock.getState() instanceof Sign sign
-                && propertyId.equals(
-                        sign.getPersistentDataContainer().get(
-                                markerKey,
-                                PersistentDataType.STRING
-                        )
-                );
+                && hasMarker(signBlock, propertyId);
 
 
         /*
-         * NEVER REPLACE UNRELATED BLOCKS
+         * NEVER OVERWRITE UNRELATED BLOCKS
          */
 
         if (!bannerBlock.getType().isAir()
                 && !existingBanner) {
 
             plugin.getLogger().warning(
-                    "Property banner location obstructed: "
+                    "Banner location obstructed: "
                     + propertyId
             );
 
@@ -216,17 +309,18 @@ public class EarthPropertySaleMarkers {
                 && !existingSign) {
 
             plugin.getLogger().warning(
-                    "Property sign location obstructed: "
+                    "Sign location obstructed: "
                     + propertyId
             );
 
             return false;
         }
 
+        if (bannerBlock.getY()
+                <= bannerBlock.getWorld().getMinHeight()) {
 
-        /*
-         * VERIFY SOLID GROUND
-         */
+            return false;
+        }
 
         if (!bannerBlock.getRelative(0, -1, 0)
                 .getType().isSolid()) {
@@ -242,7 +336,7 @@ public class EarthPropertySaleMarkers {
 
 
         /*
-         * PLACE BLUE FOR SALE BANNER
+         * PLACE BLUE BANNER
          */
 
         if (!existingBanner) {
@@ -251,23 +345,29 @@ public class EarthPropertySaleMarkers {
                     Material.BLUE_BANNER,
                     false
             );
+        }
 
-            if (bannerBlock.getState()
-                    instanceof org.bukkit.block.Banner banner) {
+        setRotation(bannerBlock, facing);
 
-                banner.getPersistentDataContainer().set(
-                        markerKey,
-                        PersistentDataType.STRING,
-                        propertyId
-                );
+        if (!(bannerBlock.getState()
+                instanceof Banner banner)) {
 
-                banner.update(true, false);
-            }
+            return false;
+        }
+
+        banner.getPersistentDataContainer().set(
+                markerKey,
+                PersistentDataType.STRING,
+                propertyId
+        );
+
+        if (!banner.update(true, false)) {
+            return false;
         }
 
 
         /*
-         * PLACE PROPERTY PRICE SIGN
+         * PLACE PRICE SIGN
          */
 
         if (!existingSign) {
@@ -278,39 +378,46 @@ public class EarthPropertySaleMarkers {
             );
         }
 
-        if (signBlock.getState() instanceof Sign sign) {
+        setRotation(signBlock, facing);
 
-            sign.setLine(0, "FOR SALE");
+        if (!(signBlock.getState() instanceof Sign sign)) {
+            return false;
+        }
 
-            sign.setLine(
-                    1,
-                    shorten(property.getName(), 15)
-            );
+        sign.setWaxed(false);
 
-            sign.setLine(
-                    2,
-                    String.format(
-                            Locale.US,
-                            "$%,.0f",
-                            property.getPrice()
-                    )
-            );
+        sign.setLine(0, "FOR SALE");
 
-            sign.setLine(3, "Click Blue Banner");
+        sign.setLine(
+                1,
+                shorten(property.getName(), 15)
+        );
 
-            sign.getPersistentDataContainer().set(
-                    markerKey,
-                    PersistentDataType.STRING,
-                    propertyId
-            );
+        sign.setLine(
+                2,
+                String.format(
+                        Locale.US,
+                        "$%,.0f",
+                        property.getPrice()
+                )
+        );
 
-            sign.setWaxed(true);
+        sign.setLine(3, "Click Banner");
 
-            sign.update(true, false);
+        sign.getPersistentDataContainer().set(
+                markerKey,
+                PersistentDataType.STRING,
+                propertyId
+        );
+
+        sign.setWaxed(true);
+
+        if (!sign.update(true, false)) {
+            return false;
         }
 
         plugin.getLogger().info(
-                "Property sale markers ready: "
+                "Sale markers ready: "
                 + propertyId
         );
 
@@ -319,9 +426,71 @@ public class EarthPropertySaleMarkers {
 
 
     /*
-     * ==========================================================
+     * REMOVE OFFICIAL MARKERS AFTER PURCHASE
+     */
+
+    public static void removeMarkers(String propertyId) {
+
+        if (plugin == null || propertyId == null) {
+            return;
+        }
+
+        EarthProperty property =
+                EarthPropertyManager.getProperty(propertyId);
+
+        if (property == null || !property.isOwned()) {
+            return;
+        }
+
+        Location bannerLocation =
+                EarthPropertyBannerRegistry.getBannerLocation(
+                        propertyId
+                );
+
+        if (bannerLocation != null) {
+
+            Block block = bannerLocation.getBlock();
+
+            if (isOfficialBanner(block, propertyId)) {
+
+                block.setType(Material.AIR, false);
+            }
+        }
+
+        ConfigurationSection home =
+                plugin.getConfig().getConfigurationSection(
+                        "properties.alpha-homes." + propertyId
+                );
+
+        if (home != null) {
+
+            Location signLocation = getSignLocation(home);
+
+            if (signLocation != null
+                    && property.contains(
+                            signLocation.getWorld().getName(),
+                            signLocation.getBlockX(),
+                            signLocation.getBlockZ())) {
+
+                Block sign = signLocation.getBlock();
+
+                if (sign.getType() == Material.OAK_SIGN
+                        && hasMarker(sign, propertyId)) {
+
+                    sign.setType(Material.AIR, false);
+                }
+            }
+        }
+
+        plugin.getLogger().info(
+                "Sale marker cleanup finished: "
+                + propertyId
+        );
+    }
+
+
+    /*
      * SHORTEN SIGN TEXT
-     * ==========================================================
      */
 
     private static String shorten(
