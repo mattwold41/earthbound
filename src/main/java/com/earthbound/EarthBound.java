@@ -26,6 +26,13 @@ public class EarthBound extends JavaPlugin {
     private static final double GUEMES_SPAWN_Z = -355.0;
 
     /*
+     * RESIDENTIAL SITE SEARCH DIAGNOSTICS
+     */
+
+    private static final String SITE_SEARCH_CONFIG =
+            "diagnostics.residential-site-search";
+
+    /*
      * ENABLE EARTHBOUND
      */
 
@@ -228,6 +235,14 @@ public class EarthBound extends JavaPlugin {
         );
 
         /*
+         * OPTIONAL RESIDENTIAL SITE SEARCH
+         */
+
+        runResidentialSiteDiagnostics(
+                geographicDataReady
+        );
+
+        /*
          * DISABLE NORMAL MOB SPAWNING
          */
 
@@ -342,6 +357,197 @@ public class EarthBound extends JavaPlugin {
         getLogger().info(
                 "EarthBound enabled!"
         );
+    }
+
+    /*
+     * ========================================================
+     * RESIDENTIAL SITE SEARCH DIAGNOSTICS
+     * ========================================================
+     *
+     * Read-only geographic search.
+     *
+     * Does not construct homes, generate chunks,
+     * register properties or modify configuration.
+     *
+     * Disabled by default.
+     */
+
+    private void runResidentialSiteDiagnostics(
+            boolean geographicDataReady
+    ) {
+
+        if (!getConfig().getBoolean(
+                SITE_SEARCH_CONFIG,
+                false
+        )) {
+
+            getLogger().info(
+                    "Residential site search diagnostics disabled."
+            );
+
+            return;
+        }
+
+        /*
+         * Require all geographic systems.
+         */
+
+        if (!geographicDataReady
+                || !EarthTerrainLoader.isLoaded()
+                || !EarthRoadData.isLoaded()
+                || !EarthRoadSpatialIndex.isLoaded()) {
+
+            getLogger().warning(
+                    "Residential site search cancelled: "
+                    + "geographic data is not ready."
+            );
+
+            return;
+        }
+
+        /*
+         * Diagnostic search must not run while
+         * residential construction is enabled.
+         */
+
+        if (EarthGuemesGenerator
+                .isResidentialGenerationEnabled()) {
+
+            getLogger().warning(
+                    "Residential site search cancelled: "
+                    + "construction is already enabled."
+            );
+
+            return;
+        }
+
+        /*
+         * Do not search for new locations while
+         * approved residential sites are registered.
+         */
+
+        if (EarthGuemesGenerator
+                .getResidentialSiteCount() > 0) {
+
+            getLogger().warning(
+                    "Residential site search cancelled: "
+                    + "residential sites are already registered."
+            );
+
+            return;
+        }
+
+        /*
+         * Require residential configuration to
+         * remain disabled during diagnostic searches.
+         */
+
+        if (getConfig().getBoolean(
+                "residential.enabled",
+                false
+        )) {
+
+            getLogger().warning(
+                    "Residential site search cancelled: "
+                    + "disable residential development first."
+            );
+
+            return;
+        }
+
+        getLogger().info(
+                "========================================"
+        );
+
+        getLogger().info(
+                "EARTHBOUND RESIDENTIAL SITE SEARCH"
+        );
+
+        getLogger().info(
+                "Diagnostic mode: enabled"
+        );
+
+        getLogger().info(
+                "Residential construction: disabled"
+        );
+
+        getLogger().info(
+                "Searching for six Alpha home locations..."
+        );
+
+        getLogger().info(
+                "Diagnostic search may extend startup time."
+        );
+
+        long startTime = System.nanoTime();
+
+        try {
+
+            var candidates =
+                    EarthAlphaSiteFinder.findSites();
+
+            getLogger().info(
+                    "Residential candidates located: "
+                    + candidates.size()
+                    + " / 6"
+            );
+
+            if (candidates.size() == 6) {
+
+                getLogger().info(
+                        "Six candidate residential sites found."
+                );
+
+                getLogger().info(
+                        "Review all reported coordinates "
+                        + "before approving development."
+                );
+
+            } else {
+
+                getLogger().warning(
+                        "Residential search did not locate "
+                        + "all six required properties."
+                );
+
+                getLogger().warning(
+                        "Residential construction remains locked."
+                );
+            }
+
+        } catch (RuntimeException exception) {
+
+            getLogger().log(
+                    java.util.logging.Level.WARNING,
+                    "Residential diagnostic search failed.",
+                    exception
+            );
+
+        } finally {
+
+            long elapsedMilliseconds =
+                    (System.nanoTime() - startTime)
+                            / 1000000L;
+
+            getLogger().info(
+                    "Residential search duration: "
+                    + elapsedMilliseconds
+                    + " ms"
+            );
+
+            getLogger().info(
+                    "Residential site search finished."
+            );
+
+            getLogger().info(
+                    "Diagnostic results were not "
+                    + "automatically registered."
+            );
+
+            getLogger().info(
+                    "========================================"
+            );
+        }
     }
 
     /*
