@@ -1,63 +1,96 @@
 package com.earthbound;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class EarthPropertyManager {
 
     private static JavaPlugin plugin;
-    private static File propertyFile;
-    private static FileConfiguration propertyData;
+
+    private static boolean ownershipLoaded = false;
 
     private static final Map<String, EarthProperty> properties =
             new LinkedHashMap<>();
 
+
     /*
+     * ============================================================
      * INITIALIZE PROPERTY SYSTEM
+     * ============================================================
      */
 
     public static void setup(JavaPlugin earthBoundPlugin) {
 
         plugin = earthBoundPlugin;
+
+        ownershipLoaded = false;
+
         properties.clear();
 
-        if (!plugin.getDataFolder().exists()) {
-            plugin.getDataFolder().mkdirs();
+        registerAlphaProperties();
+
+        if (!EarthEconomy.isReady()) {
+
+            plugin.getLogger().severe(
+                    "Property ownership could not be loaded "
+                    + "because the economy is unavailable."
+            );
+
+            plugin.getLogger().severe(
+                    "Property purchases are disabled. "
+                    + "Registered plots remain protected."
+            );
+
+            return;
         }
 
-        propertyFile = new File(
-                plugin.getDataFolder(),
-                "properties.yml"
-        );
-
-        propertyData =
-                YamlConfiguration.loadConfiguration(propertyFile);
-
-        registerAlphaProperties();
-        loadOwners();
+        ownershipLoaded = loadOwners();
 
         plugin.getLogger().info(
                 "EarthBound properties registered: "
                 + properties.size()
         );
+
+        if (ownershipLoaded) {
+
+            plugin.getLogger().info(
+                    "Secure property ownership loaded!"
+            );
+
+        } else {
+
+            plugin.getLogger().severe(
+                    "Property ownership initialization failed. "
+                    + "Purchases are disabled."
+            );
+        }
     }
 
+
+    public static boolean isReady() {
+
+        return ownershipLoaded
+                && EarthEconomy.isReady();
+    }
+
+
     /*
+     * ============================================================
      * LOAD ALPHA PROPERTIES FROM CONFIG.YML
+     * ============================================================
      */
 
     private static void registerAlphaProperties() {
@@ -84,10 +117,20 @@ public class EarthPropertyManager {
 
             if (home == null
                     || !home.getBoolean("enabled", false)) {
+
                 continue;
             }
 
             try {
+
+                if (!validPropertyId(id)) {
+
+                    plugin.getLogger().warning(
+                            "Invalid property ID: " + id
+                    );
+
+                    continue;
+                }
 
                 String name =
                         home.getString("name", id);
@@ -95,22 +138,24 @@ public class EarthPropertyManager {
                 String world =
                         home.getString("world", "earthbound");
 
-                if (!home.contains("min-x")
-                        || !home.contains("min-z")
+                if (!home.isInt("min-x")
+                        || !home.isInt("min-z")
                         || !home.contains("price")) {
 
                     plugin.getLogger().warning(
-                            "Missing coordinates or price for "
-                            + id
+                            "Missing or invalid coordinates "
+                            + "or price for " + id
                     );
 
                     continue;
                 }
 
                 int minX = home.getInt("min-x");
+
                 int minZ = home.getInt("min-z");
 
                 int width = home.getInt("width", 24);
+
                 int length = home.getInt("length", 32);
 
                 if (width <= 0 || length <= 0
@@ -124,11 +169,9 @@ public class EarthPropertyManager {
                     continue;
                 }
 
-                double price =
-                        home.getDouble("price");
+                double price = home.getDouble("price");
 
-                if (!Double.isFinite(price)
-                        || price <= 0.0) {
+                if (!validPrice(price)) {
 
                     plugin.getLogger().warning(
                             "Invalid property price: "
@@ -181,8 +224,40 @@ public class EarthPropertyManager {
         }
     }
 
+
     /*
+     * ============================================================
+     * PROPERTY VALIDATION
+     * ============================================================
+     */
+
+    private static boolean validPropertyId(String id) {
+
+        return id != null
+                && id.matches("[A-Za-z0-9_-]{1,128}");
+    }
+
+
+    private static boolean validPrice(double price) {
+
+        if (!Double.isFinite(price)
+                || price < 0.01
+                || price > 1000000000.0) {
+
+            return false;
+        }
+
+        double rounded =
+                Math.round(price * 100.0) / 100.0;
+
+        return Double.compare(price, rounded) == 0;
+    }
+
+
+    /*
+     * ============================================================
      * REGISTER A PROPERTY
+     * ============================================================
      */
 
     public static boolean registerProperty(
@@ -190,7 +265,10 @@ public class EarthPropertyManager {
     ) {
 
         if (property == null
+                || !validPropertyId(property.getId())
+                || !validPrice(property.getPrice())
                 || properties.containsKey(property.getId())) {
+
             return false;
         }
 
@@ -207,10 +285,50 @@ public class EarthPropertyManager {
             }
         }
 
+        /*
+         * Restore ownership for properties registered
+         * after the initial startup process.
+         */
+
+        if (ownershipLoaded) {
+
+            if (!EarthEconomy.isReady()) {
+
+                return false;
+            }
+
+            try {
+
+                property.setOwner(
+                        EarthEconomy.getPropertyOwner(
+                                property.getId()
+                        )
+                );
+
+            } catch (RuntimeException exception) {
+
+                plugin.getLogger().severe(
+                        "Could not restore ownership for "
+                        + property.getId()
+                );
+
+                return false;
+            }
+
+        } else {
+
+            /*
+             * Ownership will be restored during setup.
+             */
+
+            property.setOwner(null);
+        }
+
         properties.put(property.getId(), property);
 
         return true;
     }
+
 
     private static boolean overlaps(
             EarthProperty first,
@@ -220,6 +338,7 @@ public class EarthPropertyManager {
         if (!first.getWorldName().equals(
                 second.getWorldName()
         )) {
+
             return false;
         }
 
@@ -229,18 +348,23 @@ public class EarthPropertyManager {
                 && first.getMaxZ() >= second.getMinZ();
     }
 
+
     /*
+     * ============================================================
      * PROPERTY LOOKUPS
+     * ============================================================
      */
 
     public static EarthProperty getProperty(String id) {
 
         if (id == null) {
+
             return null;
         }
 
         return properties.get(id);
     }
+
 
     public static Collection<EarthProperty> getProperties() {
 
@@ -249,12 +373,14 @@ public class EarthPropertyManager {
         );
     }
 
+
     public static EarthProperty getPropertyAt(
             Location location
     ) {
 
         if (location == null
                 || location.getWorld() == null) {
+
             return null;
         }
 
@@ -265,6 +391,7 @@ public class EarthPropertyManager {
                     location.getBlockX(),
                     location.getBlockZ()
             )) {
+
                 return property;
             }
         }
@@ -272,19 +399,22 @@ public class EarthPropertyManager {
         return null;
     }
 
+
     public static List<EarthProperty> getOwnedProperties(
             UUID playerId
     ) {
 
         List<EarthProperty> owned = new ArrayList<>();
 
-        if (playerId == null) {
+        if (playerId == null || !ownershipLoaded) {
+
             return owned;
         }
 
         for (EarthProperty property : properties.values()) {
 
             if (property.isOwnedBy(playerId)) {
+
                 owned.add(property);
             }
         }
@@ -292,20 +422,25 @@ public class EarthPropertyManager {
         return owned;
     }
 
+
     public static boolean ownsProperty(
             Player player,
             EarthProperty property
     ) {
 
-        return player != null
+        return ownershipLoaded
+                && player != null
                 && property != null
                 && property.isOwnedBy(
                         player.getUniqueId()
                 );
     }
 
+
     /*
+     * ============================================================
      * PURCHASE GOVERNMENT PROPERTY
+     * ============================================================
      */
 
     public static boolean purchaseProperty(
@@ -314,6 +449,35 @@ public class EarthPropertyManager {
     ) {
 
         if (player == null || propertyId == null) {
+
+            return false;
+        }
+
+        /*
+         * All purchases must run on the server thread.
+         */
+
+        if (!Bukkit.isPrimaryThread()) {
+
+            plugin.getLogger().warning(
+                    "Asynchronous property purchase rejected."
+            );
+
+            return false;
+        }
+
+        if (!player.isOnline()) {
+
+            return false;
+        }
+
+        if (!isReady()) {
+
+            player.sendMessage(
+                    "Property purchases are temporarily "
+                    + "unavailable."
+            );
+
             return false;
         }
 
@@ -329,6 +493,10 @@ public class EarthPropertyManager {
             return false;
         }
 
+        /*
+         * CHECK EXISTING OWNERSHIP
+         */
+
         if (property.isOwned()) {
 
             player.sendMessage(
@@ -337,6 +505,11 @@ public class EarthPropertyManager {
 
             return false;
         }
+
+        /*
+         * FRIENDS ALPHA:
+         * ONE PROPERTY PER PLAYER
+         */
 
         if (!getOwnedProperties(
                 player.getUniqueId()
@@ -351,7 +524,32 @@ public class EarthPropertyManager {
 
         double price = property.getPrice();
 
-        if (EarthEconomy.getBalance(player) < price) {
+        if (!validPrice(price)) {
+
+            player.sendMessage(
+                    "This property has an invalid price."
+            );
+
+            return false;
+        }
+
+        /*
+         * CHECK PLAYER BALANCE
+         */
+
+        double balance =
+                EarthEconomy.getBalance(player);
+
+        if (!EarthEconomy.isReady()) {
+
+            player.sendMessage(
+                    "The economy is temporarily unavailable."
+            );
+
+            return false;
+        }
+
+        if (balance < price) {
 
             player.sendMessage(
                     "You do not have enough money."
@@ -360,46 +558,78 @@ public class EarthPropertyManager {
             return false;
         }
 
-        boolean paid =
+        /*
+         * ATOMIC PROPERTY TRANSACTION
+         *
+         * EarthEconomy commits all of the following:
+         *
+         * 1. Player balance deduction
+         * 2. Anacortes treasury deposit
+         * 3. Washington treasury deposit
+         * 4. USA treasury deposit
+         * 5. Property ownership
+         * 6. Transaction history
+         */
+
+        boolean purchased =
                 EarthEconomy.purchaseGovernmentProperty(
                         player,
                         price,
                         property.getId()
                 );
 
-        if (!paid) {
+        if (!purchased) {
 
-            player.sendMessage(
-                    "Property payment failed."
-            );
+            if (!EarthEconomy.isReady()) {
 
-            return false;
-        }
+                player.sendMessage(
+                        "Financial storage is unavailable. "
+                        + "Contact an administrator before retrying."
+                );
 
-        property.setOwner(player.getUniqueId());
+            } else {
 
-        if (!save()) {
-
-            plugin.getLogger().severe(
-                    "Property ownership save failed after "
-                    + "payment for " + propertyId
-                    + ". Administrator review required."
-            );
-
-            player.sendMessage(
-                    "Your purchase needs administrator "
-                    + "verification. Do not purchase again."
-            );
+                player.sendMessage(
+                        "Property purchase could not "
+                        + "be completed."
+                );
+            }
 
             return false;
         }
+
+        /*
+         * The purchase has already been committed.
+         *
+         * Update the in-memory property owner.
+         * No additional ownership save is required.
+         */
+
+        property.setOwner(
+                player.getUniqueId()
+        );
+
+        plugin.getLogger().info(
+                "Property purchased: "
+                + property.getId()
+                + " by "
+                + player.getName()
+                + " ("
+                + player.getUniqueId()
+                + ") for $"
+                + String.format(
+                        Locale.US,
+                        "%.2f",
+                        price
+                )
+        );
 
         player.sendMessage(
                 "You purchased "
                 + property.getName()
                 + " for $"
                 + String.format(
-                        java.util.Locale.US,
+                        Locale.US,
                         "%.2f",
                         price
                 )
@@ -409,115 +639,135 @@ public class EarthPropertyManager {
         return true;
     }
 
+
     /*
-     * LOAD SAVED OWNERS
+     * ============================================================
+     * RESTORE SAVED PROPERTY OWNERS
+     * ============================================================
      */
 
-    private static void loadOwners() {
+    private static boolean loadOwners() {
+
+        Map<String, UUID> restoredOwners =
+                new LinkedHashMap<>();
+
+        try {
+
+            /*
+             * Read every owner before changing any
+             * in-memory ownership records.
+             */
+
+            for (EarthProperty property : properties.values()) {
+
+                UUID owner =
+                        EarthEconomy.getPropertyOwner(
+                                property.getId()
+                        );
+
+                restoredOwners.put(
+                        property.getId(),
+                        owner
+                );
+            }
+
+        } catch (RuntimeException exception) {
+
+            plugin.getLogger().severe(
+                    "Could not load property ownership: "
+                    + exception.getMessage()
+            );
+
+            return false;
+        }
+
+        int ownedCount = 0;
 
         for (EarthProperty property : properties.values()) {
 
-            String savedOwner =
-                    propertyData.getString(
-                            "properties."
-                            + property.getId()
-                            + ".owner"
+            UUID owner =
+                    restoredOwners.get(
+                            property.getId()
                     );
 
-            if (savedOwner == null
-                    || savedOwner.isBlank()) {
-                continue;
-            }
+            property.setOwner(owner);
 
-            try {
+            if (owner != null) {
 
-                property.setOwner(
-                        UUID.fromString(savedOwner)
-                );
-
-            } catch (IllegalArgumentException exception) {
-
-                plugin.getLogger().warning(
-                        "Invalid owner UUID for "
-                        + property.getId()
-                );
+                ownedCount++;
             }
         }
+
+        plugin.getLogger().info(
+                "Restored "
+                + ownedCount
+                + " owned properties."
+        );
+
+        return true;
     }
 
+
     /*
-     * SAVE PROPERTY OWNERSHIP
+     * ============================================================
+     * VERIFY SAVED PROPERTY OWNERSHIP
+     * ============================================================
      */
 
     public static boolean save() {
 
-        if (propertyData == null
-                || propertyFile == null) {
+        /*
+         * Compatibility with EarthBound.onDisable().
+         *
+         * Ownership is saved automatically by EarthEconomy
+         * when the financial transaction is committed.
+         *
+         * This method verifies that the current property
+         * owners match the authoritative financial records.
+         *
+         * Never overwrite economy-v2.yml using a separate
+         * property ownership file.
+         */
+
+        if (!isReady()) {
+
             return false;
-        }
-
-        for (EarthProperty property : properties.values()) {
-
-            String path =
-                    "properties."
-                    + property.getId();
-
-            propertyData.set(
-                    path + ".name",
-                    property.getName()
-            );
-
-            propertyData.set(
-                    path + ".world",
-                    property.getWorldName()
-            );
-
-            propertyData.set(
-                    path + ".price",
-                    property.getPrice()
-            );
-
-            propertyData.set(
-                    path + ".minX",
-                    property.getMinX()
-            );
-
-            propertyData.set(
-                    path + ".maxX",
-                    property.getMaxX()
-            );
-
-            propertyData.set(
-                    path + ".minZ",
-                    property.getMinZ()
-            );
-
-            propertyData.set(
-                    path + ".maxZ",
-                    property.getMaxZ()
-            );
-
-            propertyData.set(
-                    path + ".owner",
-                    property.getOwner() == null
-                            ? null
-                            : property.getOwner().toString()
-            );
         }
 
         try {
 
-            propertyData.save(propertyFile);
+            for (EarthProperty property : properties.values()) {
+
+                UUID savedOwner =
+                        EarthEconomy.getPropertyOwner(
+                                property.getId()
+                        );
+
+                if (!Objects.equals(
+                        savedOwner,
+                        property.getOwner()
+                )) {
+
+                    plugin.getLogger().severe(
+                            "Property ownership mismatch: "
+                            + property.getId()
+                    );
+
+                    return false;
+                }
+            }
+
             return true;
 
-        } catch (IOException exception) {
+        } catch (RuntimeException exception) {
 
             plugin.getLogger().severe(
-                    "Failed to save properties: "
+                    "Property ownership verification failed: "
                     + exception.getMessage()
             );
 
             return false;
         }
     }
+
 }
