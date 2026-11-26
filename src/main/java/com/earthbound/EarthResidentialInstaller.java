@@ -1,3 +1,4 @@
+
 package com.earthbound;
 
 import java.util.ArrayList;
@@ -10,6 +11,7 @@ import java.util.UUID;
 import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.World;
 
 import com.earthbound.EarthAlphaResidentialGenerator
@@ -24,31 +26,33 @@ import com.earthbound.EarthResidentialInstallation
  * Friends Alpha
  * ============================================================
  *
- * Stage 1: Controlled construction planning.
+ * Controlled construction planning and execution preflight.
  *
  * Responsibilities:
  *
  * - Calculate required construction chunks.
- * - Identify shared construction chunks.
+ * - Prevent shared construction chunks.
+ * - Enforce temporary Alpha chunk separation.
  * - Verify approved installation identities.
- * - Prevent duplicate installation planning.
+ * - Verify current ownership and property boundaries.
  * - Detect existing generated chunks.
  * - Protect neighboring residential properties.
  * - Prepare immutable construction plans.
+ * - Revalidate plans before future execution.
+ * - Inspect individual installation readiness.
  *
  * IMPORTANT:
  *
- * This stage does not generate chunks or modify blocks.
+ * No methods in this class currently generate chunks,
+ * modify blocks or change installation records.
  *
- * Physical construction remains locked until
- * the generator integration is completed.
+ * Physical construction remains locked.
  * ============================================================
  */
 
 public final class EarthResidentialInstaller {
 
-    private static final String WORLD_NAME =
-            "earthbound";
+    private static final String WORLD_NAME = "earthbound";
 
     private static final int REQUIRED_HOMES = 6;
 
@@ -77,43 +81,32 @@ public final class EarthResidentialInstaller {
         READY,
 
         INVALID_PLUGIN,
-
         MAIN_THREAD_REQUIRED,
-
         INVALID_WORLD,
-
         GEOGRAPHIC_DATA_UNAVAILABLE,
-
         INSTALLATION_STORAGE_UNAVAILABLE,
-
         ECONOMY_UNAVAILABLE,
-
         PROPERTY_SYSTEM_UNAVAILABLE,
-
         INVALID_PROPERTY_COUNT,
-
         INVALID_PROPERTY,
-
         DUPLICATE_PROPERTY,
-
         PROPERTY_ALREADY_OWNED,
-
         PROPERTY_BOUNDARY_MISMATCH,
-
         INVALID_INSTALLATION_STATUS,
-
         INSTALLATION_IDENTITY_MISMATCH,
-
         UNSAFE_SITE,
-
         INVALID_CHUNK_COUNT,
-
         SHARED_CONSTRUCTION_CHUNK,
 
+        UNSAFE_CHUNK_SEPARATION,
+        INVALID_DEVELOPMENT_PLAN,
+        STALE_DEVELOPMENT_PLAN,
+        PROPERTY_NOT_IN_PLAN,
+        AUTHORIZATION_DISABLED,
+        PHYSICAL_CONSTRUCTION_LOCKED,
+
         EXISTING_LOADED_CHUNK,
-
         EXISTING_GENERATED_CHUNK,
-
         PLANNING_FAILED
     }
 
@@ -135,7 +128,6 @@ public final class EarthResidentialInstaller {
         ) {
 
             this.chunkX = chunkX;
-
             this.chunkZ = chunkZ;
         }
 
@@ -224,8 +216,7 @@ public final class EarthResidentialInstaller {
 
             this.worldId = worldId;
 
-            this.properties =
-                    List.copyOf(properties);
+            this.properties = List.copyOf(properties);
         }
 
         public UUID getWorldId() {
@@ -299,9 +290,7 @@ public final class EarthResidentialInstaller {
         ) {
 
             this.status = status;
-
             this.message = message;
-
             this.plan = plan;
         }
 
@@ -329,14 +318,66 @@ public final class EarthResidentialInstaller {
 
     /*
      * ========================================================
+     * INDIVIDUAL INSTALLATION PREFLIGHT RESULT
+     * ========================================================
+     */
+
+    public static final class PreflightResult {
+
+        private final PlanStatus status;
+
+        private final String message;
+
+        private final PropertyPlan property;
+
+        private PreflightResult(
+                PlanStatus status,
+                String message,
+                PropertyPlan property
+        ) {
+
+            this.status = status;
+            this.message = message;
+            this.property = property;
+        }
+
+        public PlanStatus getStatus() {
+
+            return status;
+        }
+
+        public String getMessage() {
+
+            return message;
+        }
+
+        public PropertyPlan getProperty() {
+
+            return property;
+        }
+
+        /*
+         * A successful preflight is not construction
+         * authorization and does not reserve chunks.
+         */
+
+        public boolean isReady() {
+
+            return status == PlanStatus.READY
+                    && property != null;
+        }
+    }
+
+    /*
+     * ========================================================
      * PREPARE RESIDENTIAL DEVELOPMENT
      * ========================================================
      *
-     * Read-only planning.
+     * Read-only initial planning.
      *
      * Requires persistent approval for all six homes.
      *
-     * No chunks are loaded or generated by this method.
+     * No chunks are loaded or generated.
      * ========================================================
      */
 
@@ -388,8 +429,7 @@ public final class EarthResidentialInstaller {
         if (!EarthResidentialInstallation.isReady()) {
 
             return reject(
-                    PlanStatus
-                            .INSTALLATION_STORAGE_UNAVAILABLE,
+                    PlanStatus.INSTALLATION_STORAGE_UNAVAILABLE,
                     "Installation storage is unavailable."
             );
         }
@@ -429,22 +469,8 @@ public final class EarthResidentialInstaller {
             }
 
             /*
-             * Track every property ID and every
-             * construction chunk in the development.
-             */
-
-            Set<String> propertyIds =
-                    new HashSet<>();
-
-            Map<Long, String> chunkOwners =
-                    new HashMap<>();
-
-            List<PropertyPlan> propertyPlans =
-                    new ArrayList<>();
-
-            /*
-             * Validate the complete development
-             * before preparing installation plans.
+             * Validate all geographic and existing
+             * chunk safety requirements.
              */
 
             EarthResidentialSafety.SafetyResult safety =
@@ -462,6 +488,17 @@ public final class EarthResidentialInstaller {
                         safety.getMessage()
                 );
             }
+
+            /*
+             * Track every property and construction chunk.
+             */
+
+            Set<String> propertyIds = new HashSet<>();
+
+            Map<Long, String> chunkOwners = new HashMap<>();
+
+            List<PropertyPlan> propertyPlans =
+                    new ArrayList<>();
 
             for (ResidentialSite site : sites) {
 
@@ -499,8 +536,7 @@ public final class EarthResidentialInstaller {
                 if (status != InstallationStatus.APPROVED) {
 
                     return reject(
-                            PlanStatus
-                                    .INVALID_INSTALLATION_STATUS,
+                            PlanStatus.INVALID_INSTALLATION_STATUS,
                             "Property is not available for "
                             + "initial construction: "
                             + propertyId
@@ -511,8 +547,8 @@ public final class EarthResidentialInstaller {
                 }
 
                 /*
-                 * Verify exact approved installation
-                 * coordinates and world identity.
+                 * Verify exact approved location
+                 * and world identity.
                  */
 
                 if (!EarthResidentialInstallation
@@ -522,16 +558,14 @@ public final class EarthResidentialInstaller {
                         )) {
 
                     return reject(
-                            PlanStatus
-                                    .INSTALLATION_IDENTITY_MISMATCH,
+                            PlanStatus.INSTALLATION_IDENTITY_MISMATCH,
                             "Installation identity mismatch: "
                             + propertyId
                     );
                 }
 
                 /*
-                 * Never plan construction on an
-                 * already owned property.
+                 * Never construct on an owned property.
                  */
 
                 if (EarthEconomy
@@ -545,10 +579,6 @@ public final class EarthResidentialInstaller {
                     );
                 }
 
-                /*
-                 * Verify current ownership boundaries.
-                 */
-
                 PlanResult boundaryCheck =
                         verifyPropertyBoundaries(
                                 world,
@@ -559,11 +589,6 @@ public final class EarthResidentialInstaller {
 
                     return boundaryCheck;
                 }
-
-                /*
-                 * Calculate every Minecraft chunk
-                 * intersecting the property.
-                 */
 
                 List<ConstructionChunk> chunks =
                         calculateRequiredChunks(site);
@@ -579,11 +604,6 @@ public final class EarthResidentialInstaller {
                     );
                 }
 
-                /*
-                 * Detect chunks shared by more
-                 * than one residential property.
-                 */
-
                 for (ConstructionChunk chunk : chunks) {
 
                     String previousProperty =
@@ -593,14 +613,12 @@ public final class EarthResidentialInstaller {
                             );
 
                     if (previousProperty != null
-
                             && !previousProperty.equals(
                                     propertyId
                             )) {
 
                         return reject(
-                                PlanStatus
-                                        .SHARED_CONSTRUCTION_CHUNK,
+                                PlanStatus.SHARED_CONSTRUCTION_CHUNK,
                                 "Properties "
                                 + previousProperty
                                 + " and "
@@ -611,37 +629,16 @@ public final class EarthResidentialInstaller {
                         );
                     }
 
-                    /*
-                     * Do not load existing chunks
-                     * to inspect their contents.
-                     */
+                    PlanResult chunkCheck =
+                            inspectConstructionChunk(
+                                    world,
+                                    propertyId,
+                                    chunk
+                            );
 
-                    if (world.isChunkLoaded(
-                            chunk.getChunkX(),
-                            chunk.getChunkZ()
-                    )) {
+                    if (chunkCheck != null) {
 
-                        return reject(
-                                PlanStatus.EXISTING_LOADED_CHUNK,
-                                "Construction chunk already loaded: "
-                                + propertyId
-                                + " at "
-                                + chunk
-                        );
-                    }
-
-                    if (world.isChunkGenerated(
-                            chunk.getChunkX(),
-                            chunk.getChunkZ()
-                    )) {
-
-                        return reject(
-                                PlanStatus.EXISTING_GENERATED_CHUNK,
-                                "Construction chunk already generated: "
-                                + propertyId
-                                + " at "
-                                + chunk
-                        );
+                        return chunkCheck;
                     }
                 }
 
@@ -653,16 +650,31 @@ public final class EarthResidentialInstaller {
                 );
             }
 
+            /*
+             * INDEPENDENT FRIENDS ALPHA SAFETY CHECK
+             *
+             * Do not rely on the authorization system
+             * having previously checked chunk separation.
+             *
+             * Enforce the same temporary requirements
+             * directly within construction planning.
+             */
+
+            if (!EarthAlphaSiteFinder
+                    .hasDevelopmentChunkClearance(sites)) {
+
+                return reject(
+                        PlanStatus.UNSAFE_CHUNK_SEPARATION,
+                        "Development violates temporary Alpha "
+                        + "property or construction chunk separation."
+                );
+            }
+
             DevelopmentPlan plan =
                     new DevelopmentPlan(
                             world.getUID(),
                             propertyPlans
                     );
-
-            /*
-             * Report the construction plan without
-             * activating physical construction.
-             */
 
             reportDevelopmentPlan(
                     plugin,
@@ -693,6 +705,459 @@ public final class EarthResidentialInstaller {
 
     /*
      * ========================================================
+     * INSPECT CONSTRUCTION CHUNK
+     * ========================================================
+     *
+     * Read-only inspection.
+     *
+     * Never load chunks to determine whether
+     * they are safe for construction.
+     * ========================================================
+     */
+
+    private static PlanResult inspectConstructionChunk(
+            World world,
+            String propertyId,
+            ConstructionChunk chunk
+    ) {
+
+        if (world.isChunkLoaded(
+                chunk.getChunkX(),
+                chunk.getChunkZ()
+        )) {
+
+            return reject(
+                    PlanStatus.EXISTING_LOADED_CHUNK,
+                    "Construction chunk already loaded: "
+                    + propertyId
+                    + " at "
+                    + chunk
+            );
+        }
+
+        if (world.isChunkGenerated(
+                chunk.getChunkX(),
+                chunk.getChunkZ()
+        )) {
+
+            return reject(
+                    PlanStatus.EXISTING_GENERATED_CHUNK,
+                    "Construction chunk already generated: "
+                    + propertyId
+                    + " at "
+                    + chunk
+            );
+        }
+
+        return null;
+    }
+
+    /*
+     * ========================================================
+     * INDIVIDUAL PROPERTY EXECUTION PREFLIGHT
+     * ========================================================
+     *
+     * Inspects a requested property against the original
+     * approved development plan.
+     *
+     * Supports sequential installation planning:
+     *
+     * - APPROVED properties must remain ungenerated.
+     * - COMPLETED properties retain their original identities.
+     * - IN_PROGRESS and FAILED properties suspend execution.
+     *
+     * Does not authorize construction.
+     * Does not change installation records.
+     * Does not load chunks or place blocks.
+     * ========================================================
+     */
+
+    public static PreflightResult preflightInstallation(
+            EarthBound plugin,
+            World world,
+            DevelopmentPlan developmentPlan,
+            String propertyId,
+            boolean geographicDataReady
+    ) {
+
+        if (plugin == null || !plugin.isEnabled()) {
+
+            return rejectPreflight(
+                    PlanStatus.INVALID_PLUGIN,
+                    "EarthBound is unavailable."
+            );
+        }
+
+        if (!Bukkit.isPrimaryThread()) {
+
+            return rejectPreflight(
+                    PlanStatus.MAIN_THREAD_REQUIRED,
+                    "Installation preflight requires "
+                    + "the server main thread."
+            );
+        }
+
+        if (world == null
+                || !WORLD_NAME.equals(world.getName())
+                || Bukkit.getWorld(world.getUID()) != world) {
+
+            return rejectPreflight(
+                    PlanStatus.INVALID_WORLD,
+                    "Invalid EarthBound world."
+            );
+        }
+
+        if (developmentPlan == null
+                || developmentPlan.getPropertyCount()
+                        != REQUIRED_HOMES
+
+                || !world.getUID().equals(
+                        developmentPlan.getWorldId()
+                )) {
+
+            return rejectPreflight(
+                    PlanStatus.INVALID_DEVELOPMENT_PLAN,
+                    "Missing or invalid development plan."
+            );
+        }
+
+        if (!isValidPropertyId(propertyId)) {
+
+            return rejectPreflight(
+                    PlanStatus.INVALID_PROPERTY,
+                    "Invalid residential property ID."
+            );
+        }
+
+        if (!geographicDataReady) {
+
+            return rejectPreflight(
+                    PlanStatus.GEOGRAPHIC_DATA_UNAVAILABLE,
+                    "Geographic data is unavailable."
+            );
+        }
+
+        if (!EarthResidentialInstallation.isReady()) {
+
+            return rejectPreflight(
+                    PlanStatus.INSTALLATION_STORAGE_UNAVAILABLE,
+                    "Installation storage is unavailable."
+            );
+        }
+
+        if (!EarthEconomy.isReady()) {
+
+            return rejectPreflight(
+                    PlanStatus.ECONOMY_UNAVAILABLE,
+                    "EarthBound economy is unavailable."
+            );
+        }
+
+        if (!EarthPropertyManager.isReady()) {
+
+            return rejectPreflight(
+                    PlanStatus.PROPERTY_SYSTEM_UNAVAILABLE,
+                    "Property ownership information "
+                    + "is unavailable."
+            );
+        }
+
+        try {
+
+            PropertyPlan requested =
+                    developmentPlan.getProperty(
+                            propertyId
+                    );
+
+            if (requested == null) {
+
+                return rejectPreflight(
+                        PlanStatus.PROPERTY_NOT_IN_PLAN,
+                        "Requested property is not in "
+                        + "the development plan."
+                );
+            }
+
+            List<ResidentialSite> sites =
+                    List.copyOf(
+                            EarthGuemesGenerator
+                                    .getResidentialSites()
+                    );
+
+            if (sites.size() != REQUIRED_HOMES) {
+
+                return rejectPreflight(
+                        PlanStatus.INVALID_PROPERTY_COUNT,
+                        "Exactly six residential sites "
+                        + "must remain registered."
+                );
+            }
+
+            /*
+             * Recheck temporary Alpha chunk separation
+             * across the entire development.
+             */
+
+            if (!EarthAlphaSiteFinder
+                    .hasDevelopmentChunkClearance(sites)) {
+
+                return rejectPreflight(
+                        PlanStatus.UNSAFE_CHUNK_SEPARATION,
+                        "Development chunk separation "
+                        + "verification failed."
+                );
+            }
+
+            Set<String> checkedIds = new HashSet<>();
+
+            for (ResidentialSite site : sites) {
+
+                if (site == null
+                        || !isValidPropertyId(
+                                site.getPropertyId()
+                        )) {
+
+                    return rejectPreflight(
+                            PlanStatus.INVALID_PROPERTY,
+                            "Invalid registered residential site."
+                    );
+                }
+
+                String currentId =
+                        site.getPropertyId();
+
+                if (!checkedIds.add(currentId)) {
+
+                    return rejectPreflight(
+                            PlanStatus.DUPLICATE_PROPERTY,
+                            "Duplicate residential property: "
+                            + currentId
+                    );
+                }
+
+                PropertyPlan original =
+                        developmentPlan.getProperty(
+                                currentId
+                        );
+
+                /*
+                 * Compare the current configuration
+                 * against the original construction plan.
+                 */
+
+                if (original == null
+                        || !sameSite(
+                                original.getSite(),
+                                site
+                        )
+
+                        || !sameChunks(
+                                original.getChunks(),
+                                calculateRequiredChunks(site)
+                        )) {
+
+                    return rejectPreflight(
+                            PlanStatus.STALE_DEVELOPMENT_PLAN,
+                            "Construction plan has changed: "
+                            + currentId
+                    );
+                }
+
+                if (!EarthResidentialInstallation
+                        .matchesApprovedSite(
+                                world,
+                                site
+                        )) {
+
+                    return rejectPreflight(
+                            PlanStatus.INSTALLATION_IDENTITY_MISMATCH,
+                            "Saved installation identity mismatch: "
+                            + currentId
+                    );
+                }
+
+                InstallationStatus status =
+                        EarthResidentialInstallation
+                                .getStatus(currentId);
+
+                /*
+                 * Previously completed properties
+                 * must never be constructed again.
+                 */
+
+                if (status == InstallationStatus.COMPLETED) {
+
+                    if (propertyId.equals(currentId)) {
+
+                        return rejectPreflight(
+                                PlanStatus.INVALID_INSTALLATION_STATUS,
+                                "Requested property is already completed."
+                        );
+                    }
+
+                    continue;
+                }
+
+                /*
+                 * Interrupted, failed or unapproved
+                 * installations suspend the development.
+                 */
+
+                if (status != InstallationStatus.APPROVED) {
+
+                    return rejectPreflight(
+                            PlanStatus.INVALID_INSTALLATION_STATUS,
+                            "Unresolved installation: "
+                            + currentId
+                            + " ("
+                            + status.name()
+                            + ")"
+                    );
+                }
+
+                /*
+                 * Every unfinished property must
+                 * remain unowned and safe.
+                 */
+
+                if (EarthEconomy
+                        .getPropertyOwner(currentId)
+                        != null) {
+
+                    return rejectPreflight(
+                            PlanStatus.PROPERTY_ALREADY_OWNED,
+                            "Unfinished property has an owner: "
+                            + currentId
+                    );
+                }
+
+                PlanResult boundaryCheck =
+                        verifyPropertyBoundaries(
+                                world,
+                                site
+                        );
+
+                if (boundaryCheck != null) {
+
+                    return rejectPreflight(
+                            boundaryCheck.getStatus(),
+                            boundaryCheck.getMessage()
+                    );
+                }
+
+                EarthResidentialSafety.SafetyResult safety =
+                        EarthResidentialSafety.inspectSite(
+                                world,
+                                site,
+                                geographicDataReady
+                        );
+
+                if (!safety.isSafe()) {
+
+                    return rejectPreflight(
+                            PlanStatus.UNSAFE_SITE,
+                            currentId
+                            + ": "
+                            + safety.getMessage()
+                    );
+                }
+
+                for (ConstructionChunk chunk
+                        : original.getChunks()) {
+
+                    PlanResult chunkCheck =
+                            inspectConstructionChunk(
+                                    world,
+                                    currentId,
+                                    chunk
+                            );
+
+                    if (chunkCheck != null) {
+
+                        return rejectPreflight(
+                                chunkCheck.getStatus(),
+                                chunkCheck.getMessage()
+                        );
+                    }
+                }
+            }
+
+            return new PreflightResult(
+                    PlanStatus.READY,
+                    "Read-only installation preflight passed: "
+                    + propertyId
+                    + ". No construction was authorized.",
+                    requested
+            );
+
+        } catch (RuntimeException exception) {
+
+            plugin.getLogger().log(
+                    Level.SEVERE,
+                    "Residential installation preflight failed.",
+                    exception
+            );
+
+            return rejectPreflight(
+                    PlanStatus.PLANNING_FAILED,
+                    "Unexpected installation preflight failure."
+            );
+        }
+    }
+
+    /*
+     * ========================================================
+     * CHECK PHYSICAL EXECUTION READINESS
+     * ========================================================
+     *
+     * Separate physical construction safety gate.
+     *
+     * Passing this method would not replace explicit
+     * administrator authorization or persistent
+     * installation tracking.
+     *
+     * No construction is performed by this method.
+     * ========================================================
+     */
+
+    public static PreflightResult checkExecutionReadiness(
+            EarthBound plugin,
+            World world,
+            DevelopmentPlan developmentPlan,
+            String propertyId,
+            boolean geographicDataReady
+    ) {
+
+        if (!PHYSICAL_CONSTRUCTION_APPROVED) {
+
+            return rejectPreflight(
+                    PlanStatus.PHYSICAL_CONSTRUCTION_LOCKED,
+                    "Physical residential construction "
+                    + "remains locked."
+            );
+        }
+
+        if (!EarthResidentialAuthorization
+                .isAuthorizationEnabled(plugin)) {
+
+            return rejectPreflight(
+                    PlanStatus.AUTHORIZATION_DISABLED,
+                    "Residential installation authorization "
+                    + "is disabled."
+            );
+        }
+
+        return preflightInstallation(
+                plugin,
+                world,
+                developmentPlan,
+                propertyId,
+                geographicDataReady
+        );
+    }
+
+    /*
+     * ========================================================
      * VERIFY PROPERTY PROTECTION BOUNDARIES
      * ========================================================
      */
@@ -702,8 +1167,33 @@ public final class EarthResidentialInstaller {
             ResidentialSite site
     ) {
 
-        String propertyId =
-                site.getPropertyId();
+        String propertyId = site.getPropertyId();
+
+        if (calculateRequiredChunks(site).isEmpty()) {
+
+            return reject(
+                    PlanStatus.PROPERTY_BOUNDARY_MISMATCH,
+                    "Invalid residential property dimensions: "
+                    + propertyId
+            );
+        }
+
+        /*
+         * Protect against invalid world coordinates
+         * before scanning property boundaries.
+         */
+
+        if (site.getMinX() < -29999900
+                || site.getMaxX() > 29999900
+                || site.getMinZ() < -29999900
+                || site.getMaxZ() > 29999900) {
+
+            return reject(
+                    PlanStatus.INVALID_PROPERTY,
+                    "Residential property coordinates "
+                    + "are outside safe world limits."
+            );
+        }
 
         for (int x = site.getMinX();
                 x <= site.getMaxX();
@@ -713,8 +1203,8 @@ public final class EarthResidentialInstaller {
                     z <= site.getMaxZ();
                     z++) {
 
-                org.bukkit.Location location =
-                        new org.bukkit.Location(
+                Location location =
+                        new Location(
                                 world,
                                 x,
                                 site.getGroundY(),
@@ -731,8 +1221,7 @@ public final class EarthResidentialInstaller {
                         )) {
 
                     return reject(
-                            PlanStatus
-                                    .PROPERTY_BOUNDARY_MISMATCH,
+                            PlanStatus.PROPERTY_BOUNDARY_MISMATCH,
                             "Missing or conflicting property "
                             + "protection at "
                             + x
@@ -756,8 +1245,7 @@ public final class EarthResidentialInstaller {
                         || property.getMaxZ() != site.getMaxZ()) {
 
                     return reject(
-                            PlanStatus
-                                    .PROPERTY_BOUNDARY_MISMATCH,
+                            PlanStatus.PROPERTY_BOUNDARY_MISMATCH,
                             "Construction and ownership "
                             + "boundaries differ: "
                             + propertyId
@@ -765,11 +1253,6 @@ public final class EarthResidentialInstaller {
                 }
             }
         }
-
-        /*
-         * Null indicates that no boundary
-         * or ownership conflict was detected.
-         */
 
         return null;
     }
@@ -779,8 +1262,7 @@ public final class EarthResidentialInstaller {
      * CALCULATE REQUIRED CONSTRUCTION CHUNKS
      * ========================================================
      *
-     * Use floor division to handle negative
-     * Minecraft coordinates correctly.
+     * Floor division handles negative coordinates.
      * ========================================================
      */
 
@@ -796,16 +1278,15 @@ public final class EarthResidentialInstaller {
 
         long width =
                 (long) site.getMaxX()
-                        - site.getMinX()
-                        + 1L;
+                - site.getMinX()
+                + 1L;
 
         long length =
                 (long) site.getMaxZ()
-                        - site.getMinZ()
-                        + 1L;
+                - site.getMinZ()
+                + 1L;
 
-        if (width != 24L
-                || length != 32L) {
+        if (width != 24L || length != 32L) {
 
             return List.of();
         }
@@ -836,13 +1317,13 @@ public final class EarthResidentialInstaller {
 
         long chunkWidth =
                 (long) maximumChunkX
-                        - minimumChunkX
-                        + 1L;
+                - minimumChunkX
+                + 1L;
 
         long chunkLength =
                 (long) maximumChunkZ
-                        - minimumChunkZ
-                        + 1L;
+                - minimumChunkZ
+                + 1L;
 
         long chunkCount =
                 chunkWidth * chunkLength;
@@ -879,13 +1360,14 @@ public final class EarthResidentialInstaller {
 
     /*
      * ========================================================
-     * RECHECK DEVELOPMENT PLAN
+     * RECHECK INITIAL DEVELOPMENT PLAN
      * ========================================================
      *
-     * A saved in-memory plan is only a snapshot.
+     * This method is for the initial development,
+     * before any installation has started.
      *
-     * Rebuild and compare the complete plan before
-     * accepting it for any future construction.
+     * Once individual houses have been completed,
+     * use preflightInstallation instead.
      * ========================================================
      */
 
@@ -1020,32 +1502,31 @@ public final class EarthResidentialInstaller {
             List<ConstructionChunk> second
     ) {
 
-        if (first.size() != second.size()) {
+        if (first == null
+                || second == null
+                || first.isEmpty()
+                || first.size() != second.size()) {
 
             return false;
         }
 
-        Set<Long> firstKeys =
-                new HashSet<>();
+        Set<Long> firstKeys = new HashSet<>();
 
-        Set<Long> secondKeys =
-                new HashSet<>();
+        Set<Long> secondKeys = new HashSet<>();
 
         for (ConstructionChunk chunk : first) {
 
-            firstKeys.add(
-                    chunk.getKey()
-            );
+            firstKeys.add(chunk.getKey());
         }
 
         for (ConstructionChunk chunk : second) {
 
-            secondKeys.add(
-                    chunk.getKey()
-            );
+            secondKeys.add(chunk.getKey());
         }
 
-        return firstKeys.equals(secondKeys);
+        return firstKeys.size() == first.size()
+                && secondKeys.size() == second.size()
+                && firstKeys.equals(secondKeys);
     }
 
     /*
@@ -1096,8 +1577,7 @@ public final class EarthResidentialInstaller {
 
             plugin.getLogger().info(
                     "House design: "
-                    + property.getSite()
-                            .getDesign().name()
+                    + property.getSite().getDesign().name()
             );
 
             plugin.getLogger().info(
@@ -1120,7 +1600,18 @@ public final class EarthResidentialInstaller {
         );
 
         plugin.getLogger().info(
-                "Physical construction: LOCKED"
+                "Adjacent construction chunks: NONE"
+        );
+
+        plugin.getLogger().info(
+                "Temporary Alpha chunk separation: VERIFIED"
+        );
+
+        plugin.getLogger().info(
+                "Physical construction: "
+                + (PHYSICAL_CONSTRUCTION_APPROVED
+                    ? "ENABLED"
+                    : "LOCKED")
         );
 
         plugin.getLogger().info(
@@ -1162,7 +1653,7 @@ public final class EarthResidentialInstaller {
 
     /*
      * ========================================================
-     * REJECT CONSTRUCTION PLAN
+     * RESULT HELPERS
      * ========================================================
      */
 
@@ -1172,6 +1663,18 @@ public final class EarthResidentialInstaller {
     ) {
 
         return new PlanResult(
+                status,
+                message,
+                null
+        );
+    }
+
+    private static PreflightResult rejectPreflight(
+            PlanStatus status,
+            String message
+    ) {
+
+        return new PreflightResult(
                 status,
                 message,
                 null
