@@ -1,11 +1,8 @@
 package com.earthbound;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
@@ -17,6 +14,14 @@ import org.bukkit.inventory.PlayerInventory;
 
 public class EarthStoreCommand implements CommandExecutor {
 
+    private static final int MAX_ITEMS = 2304;
+
+    /*
+     * ============================================================
+     * STORE COMMAND
+     * ============================================================
+     */
+
     @Override
     public boolean onCommand(
             CommandSender sender,
@@ -26,22 +31,48 @@ public class EarthStoreCommand implements CommandExecutor {
     ) {
 
         if (!(sender instanceof Player)) {
+
             sender.sendMessage("Players only.");
+
             return true;
         }
 
         Player player = (Player) sender;
 
+        if (!Bukkit.isPrimaryThread()) {
+
+            player.sendMessage(
+                    ChatColor.RED
+                    + "Store transaction unavailable."
+            );
+
+            return true;
+        }
+
         if (args.length == 0) {
+
             showStore(player);
+
+            return true;
+        }
+
+        if (!EarthEconomy.isReady()) {
+
+            player.sendMessage(
+                    ChatColor.RED
+                    + "The General Store is temporarily unavailable."
+            );
+
             return true;
         }
 
         if (args.length != 3) {
+
             player.sendMessage(
                     ChatColor.RED
                     + "Use: /store buy/sell item amount"
             );
+
             return true;
         }
 
@@ -50,52 +81,75 @@ public class EarthStoreCommand implements CommandExecutor {
 
         if (!action.equals("buy")
                 && !action.equals("sell")) {
+
             player.sendMessage(
                     ChatColor.RED
                     + "Use buy or sell."
             );
+
             return true;
         }
 
         Material material =
                 Material.matchMaterial(args[1]);
 
-        if (material == null || !material.isItem()
+        if (material == null
+                || !material.isItem()
                 || material.isAir()) {
+
             player.sendMessage(
                     ChatColor.RED
                     + "Unknown item: " + args[1]
             );
+
             return true;
         }
 
         int amount;
 
         try {
+
             amount = Integer.parseInt(args[2]);
-        } catch (NumberFormatException e) {
+
+        } catch (NumberFormatException exception) {
+
             player.sendMessage(
-                    ChatColor.RED + "Invalid amount."
+                    ChatColor.RED
+                    + "Invalid amount."
             );
+
             return true;
         }
 
-        if (amount <= 0 || amount > 2304) {
+        if (amount <= 0 || amount > MAX_ITEMS) {
+
             player.sendMessage(
                     ChatColor.RED
-                    + "Amount must be between 1 and 2304."
+                    + "Amount must be between 1 and "
+                    + MAX_ITEMS + "."
             );
+
             return true;
         }
 
         if (action.equals("buy")) {
+
             buy(player, material, amount);
+
         } else {
+
             sell(player, material, amount);
         }
 
         return true;
     }
+
+
+    /*
+     * ============================================================
+     * DISPLAY GENERAL STORE
+     * ============================================================
+     */
 
     private void showStore(Player player) {
 
@@ -107,12 +161,15 @@ public class EarthStoreCommand implements CommandExecutor {
         player.sendMessage(
                 ChatColor.YELLOW + "Buy:"
         );
+
         player.sendMessage(
                 ChatColor.WHITE + "Bread: $10 each"
         );
+
         player.sendMessage(
                 ChatColor.WHITE + "Wheat seeds: $2 each"
         );
+
         player.sendMessage(
                 ChatColor.WHITE + "Oak logs: $8 each"
         );
@@ -120,12 +177,15 @@ public class EarthStoreCommand implements CommandExecutor {
         player.sendMessage(
                 ChatColor.YELLOW + "Sell:"
         );
+
         player.sendMessage(
                 ChatColor.WHITE + "Oak logs: $4 each"
         );
+
         player.sendMessage(
                 ChatColor.WHITE + "Wheat: $3 each"
         );
+
         player.sendMessage(
                 ChatColor.WHITE + "Stone: $1 each"
         );
@@ -134,7 +194,22 @@ public class EarthStoreCommand implements CommandExecutor {
                 ChatColor.GRAY
                 + "Example: /store buy bread 10"
         );
+
+        if (!EarthEconomy.isReady()) {
+
+            player.sendMessage(
+                    ChatColor.RED
+                    + "Transactions temporarily unavailable."
+            );
+        }
     }
+
+
+    /*
+     * ============================================================
+     * BUY ITEMS FROM GENERAL STORE
+     * ============================================================
+     */
 
     private void buy(
             Player player,
@@ -146,82 +221,139 @@ public class EarthStoreCommand implements CommandExecutor {
                 EarthStore.getBuyPrice(material);
 
         if (!validPrice(unitPrice)) {
+
             player.sendMessage(
                     ChatColor.RED
                     + "The store does not sell that item."
             );
+
             return;
         }
 
-        double total = unitPrice * amount;
+        double total =
+                transactionTotal(unitPrice, amount);
 
         if (!validPrice(total)) {
+
             player.sendMessage(
                     ChatColor.RED
                     + "Invalid transaction total."
             );
+
             return;
         }
 
-        total = Math.round(total * 100.0) / 100.0;
+        double balance =
+                EarthEconomy.getBalance(player);
 
-        if (EarthEconomy.getBalance(player) < total) {
+        if (!EarthEconomy.isReady()) {
+
+            player.sendMessage(
+                    ChatColor.RED
+                    + "Financial storage is unavailable."
+            );
+
+            return;
+        }
+
+        if (balance < total) {
+
             player.sendMessage(
                     ChatColor.RED
                     + "Not enough money."
             );
+
             return;
         }
 
         PlayerInventory inventory =
                 player.getInventory();
 
-        if (!canFit(inventory, material, amount)) {
+        /*
+         * Create independent inventory snapshots.
+         */
+
+        ItemStack[] original =
+                copyContents(
+                        inventory.getStorageContents()
+                );
+
+        ItemStack[] proposed =
+                copyContents(original);
+
+        /*
+         * Prepare the entire purchase without changing
+         * the player's actual inventory.
+         */
+
+        if (!insertItems(
+                proposed,
+                material,
+                amount,
+                inventory.getMaxStackSize()
+        )) {
+
             player.sendMessage(
                     ChatColor.RED
                     + "Not enough inventory space."
             );
+
             return;
         }
 
-        if (!EarthEconomy.payStore(
+        /*
+         * Apply inventory changes before committing
+         * the financial transaction.
+         */
+
+        if (!applyInventory(
                 player,
-                total,
-                "Store purchase: "
-                + amount + " " + material.name()
+                inventory,
+                original,
+                proposed
         )) {
-            player.sendMessage(
-                    ChatColor.RED
-                    + "Payment could not be completed."
-            );
+
             return;
         }
 
-        // Minecraft item stacks cannot exceed their
-        // maximum stack size.
-        int remaining = amount;
+        boolean paid =
+                EarthEconomy.payStore(
+                        player,
+                        total,
+                        "Store purchase: "
+                        + amount
+                        + " "
+                        + material.name()
+                );
 
-        while (remaining > 0) {
+        if (!paid) {
 
-            int stackSize = Math.min(
-                    remaining,
-                    material.getMaxStackSize()
+            rollbackInventory(
+                    player,
+                    inventory,
+                    original
             );
 
-            inventory.addItem(
-                    new ItemStack(material, stackSize)
-            );
-
-            remaining -= stackSize;
+            return;
         }
 
         player.sendMessage(
                 ChatColor.GREEN
-                + "Bought " + amount + " "
+                + "Bought "
+                + amount
+                + " "
                 + material.name()
-                + " for $" + money(total)
+                + " for $"
+                + money(total)
         );
     }
+
+
+    /*
+     * ============================================================
+     * SELL ITEMS TO GENERAL STORE
+     * ============================================================
+     */
 
     private void sell(
             Player player,
@@ -233,118 +365,188 @@ public class EarthStoreCommand implements CommandExecutor {
                 EarthStore.getSellPrice(material);
 
         if (!validPrice(unitPrice)) {
+
             player.sendMessage(
                     ChatColor.RED
                     + "The store does not buy that item."
             );
+
             return;
         }
 
-        double total = unitPrice * amount;
+        double total =
+                transactionTotal(unitPrice, amount);
 
         if (!validPrice(total)) {
+
             player.sendMessage(
                     ChatColor.RED
                     + "Invalid transaction total."
             );
+
             return;
         }
 
-        total = Math.round(total * 100.0) / 100.0;
-
         if (EarthEconomy.getStoreBalance() < total) {
+
             player.sendMessage(
                     ChatColor.RED
                     + "The General Store cannot afford "
                     + "this purchase right now."
             );
+
             return;
         }
 
         PlayerInventory inventory =
                 player.getInventory();
 
-        int owned = countItems(inventory, material);
+        ItemStack[] original =
+                copyContents(
+                        inventory.getStorageContents()
+                );
+
+        ItemStack[] proposed =
+                copyContents(original);
+
+        int owned =
+                countItems(original, material);
 
         if (owned < amount) {
+
             player.sendMessage(
                     ChatColor.RED
-                    + "You only have " + owned
-                    + " " + material.name()
+                    + "You only have "
+                    + owned
+                    + " "
+                    + material.name()
             );
+
             return;
         }
 
-        // Save a snapshot so inventory can be restored
-        // if the financial transaction fails.
-        ItemStack[] snapshot =
-                inventory.getStorageContents().clone();
+        /*
+         * Prepare item removal without modifying
+         * the original inventory.
+         */
 
-        removeItems(inventory, material, amount);
-
-        if (!EarthEconomy.storePaysPlayer(
-                player,
-                total,
-                "Store purchase from player: "
-                + amount + " " + material.name()
+        if (!removeItems(
+                proposed,
+                material,
+                amount
         )) {
-
-            inventory.setStorageContents(snapshot);
 
             player.sendMessage(
                     ChatColor.RED
-                    + "Payment failed. Items restored."
+                    + "Could not prepare sale."
             );
+
+            return;
+        }
+
+        if (!applyInventory(
+                player,
+                inventory,
+                original,
+                proposed
+        )) {
+
+            return;
+        }
+
+        /*
+         * Commit payment from the General Store.
+         */
+
+        boolean paid =
+                EarthEconomy.storePaysPlayer(
+                        player,
+                        total,
+                        "Store purchase from player: "
+                        + amount
+                        + " "
+                        + material.name()
+                );
+
+        if (!paid) {
+
+            rollbackInventory(
+                    player,
+                    inventory,
+                    original
+            );
+
             return;
         }
 
         player.sendMessage(
                 ChatColor.GREEN
-                + "Sold " + amount + " "
+                + "Sold "
+                + amount
+                + " "
                 + material.name()
-                + " for $" + money(total)
+                + " for $"
+                + money(total)
         );
     }
 
-    private boolean validPrice(double amount) {
-        return Double.isFinite(amount) && amount > 0.0;
-    }
 
-    private String money(double amount) {
-        return String.format(
-                Locale.US, "%.2f", amount
-        );
-    }
+    /*
+     * ============================================================
+     * DEEP INVENTORY COPY
+     * ============================================================
+     */
 
-    private int countItems(
-            PlayerInventory inventory,
-            Material material
+    private ItemStack[] copyContents(
+            ItemStack[] contents
     ) {
 
-        int count = 0;
+        ItemStack[] copy =
+                new ItemStack[contents.length];
 
-        for (ItemStack item :
-                inventory.getStorageContents()) {
+        for (int i = 0; i < contents.length; i++) {
 
-            if (item != null
-                    && item.getType() == material) {
-                count += item.getAmount();
+            if (contents[i] != null) {
+
+                copy[i] = contents[i].clone();
             }
         }
 
-        return count;
+        return copy;
     }
 
-    private void removeItems(
-            PlayerInventory inventory,
+
+    /*
+     * ============================================================
+     * PREPARE ITEM INSERTION
+     * ============================================================
+     */
+
+    private boolean insertItems(
+            ItemStack[] contents,
             Material material,
-            int amount
+            int amount,
+            int inventoryLimit
     ) {
 
-        ItemStack[] contents =
-                inventory.getStorageContents();
-
         int remaining = amount;
+
+        ItemStack plain =
+                new ItemStack(material);
+
+        int stackLimit = Math.min(
+                material.getMaxStackSize(),
+                inventoryLimit
+        );
+
+        if (stackLimit <= 0) {
+
+            return false;
+        }
+
+        /*
+         * Fill existing compatible item stacks first.
+         */
 
         for (int i = 0;
                 i < contents.length && remaining > 0;
@@ -353,60 +555,354 @@ public class EarthStoreCommand implements CommandExecutor {
             ItemStack item = contents[i];
 
             if (item == null
-                    || item.getType() != material) {
+                    || item.getType().isAir()
+                    || !item.isSimilar(plain)) {
+
+                continue;
+            }
+
+            int limit = Math.min(
+                    stackLimit,
+                    item.getMaxStackSize()
+            );
+
+            int available =
+                    limit - item.getAmount();
+
+            if (available <= 0) {
+
+                continue;
+            }
+
+            int added = Math.min(
+                    available,
+                    remaining
+            );
+
+            item.setAmount(
+                    item.getAmount() + added
+            );
+
+            remaining -= added;
+        }
+
+        /*
+         * Fill empty storage slots.
+         */
+
+        for (int i = 0;
+                i < contents.length && remaining > 0;
+                i++) {
+
+            ItemStack item = contents[i];
+
+            if (item != null
+                    && !item.getType().isAir()) {
+
+                continue;
+            }
+
+            int added = Math.min(
+                    remaining,
+                    stackLimit
+            );
+
+            contents[i] =
+                    new ItemStack(material, added);
+
+            remaining -= added;
+        }
+
+        return remaining == 0;
+    }
+
+
+    /*
+     * ============================================================
+     * COUNT SELLABLE ITEMS
+     * ============================================================
+     */
+
+    private int countItems(
+            ItemStack[] contents,
+            Material material
+    ) {
+
+        int count = 0;
+
+        ItemStack plain =
+                new ItemStack(material);
+
+        for (ItemStack item : contents) {
+
+            if (item != null
+                    && item.isSimilar(plain)
+                    && item.getAmount() > 0) {
+
+                count += item.getAmount();
+            }
+        }
+
+        return count;
+    }
+
+
+    /*
+     * ============================================================
+     * PREPARE ITEM REMOVAL
+     * ============================================================
+     */
+
+    private boolean removeItems(
+            ItemStack[] contents,
+            Material material,
+            int amount
+    ) {
+
+        int remaining = amount;
+
+        ItemStack plain =
+                new ItemStack(material);
+
+        for (int i = 0;
+                i < contents.length && remaining > 0;
+                i++) {
+
+            ItemStack item = contents[i];
+
+            if (item == null
+                    || !item.isSimilar(plain)
+                    || item.getAmount() <= 0) {
+
                 continue;
             }
 
             int taken = Math.min(
-                    remaining, item.getAmount()
+                    remaining,
+                    item.getAmount()
             );
 
-            int left = item.getAmount() - taken;
+            int left =
+                    item.getAmount() - taken;
 
             if (left == 0) {
+
                 contents[i] = null;
+
             } else {
+
                 item.setAmount(left);
             }
 
             remaining -= taken;
         }
 
-        inventory.setStorageContents(contents);
+        return remaining == 0;
     }
 
-    private boolean canFit(
+
+    /*
+     * ============================================================
+     * APPLY INVENTORY CHANGES
+     * ============================================================
+     */
+
+    private boolean applyInventory(
+            Player player,
             PlayerInventory inventory,
-            Material material,
-            int amount
+            ItemStack[] original,
+            ItemStack[] proposed
     ) {
 
-        int available = 0;
-        int maxStack = material.getMaxStackSize();
+        try {
 
-        for (ItemStack item :
-                inventory.getStorageContents()) {
+            inventory.setStorageContents(proposed);
 
-            if (item == null || item.getType().isAir()) {
-                available += maxStack;
-            } else if (item.getType() == material
-                    && item.getAmount() < maxStack) {
+            /*
+             * Verify that the inventory matches
+             * the prepared transaction.
+             */
 
-                // Only count stacks that can merge with
-                // an ordinary store-issued item.
-                ItemStack plain = new ItemStack(material);
+            if (!sameContents(
+                    proposed,
+                    inventory.getStorageContents()
+            )) {
 
-                if (item.isSimilar(plain)) {
-                    available +=
-                            maxStack - item.getAmount();
-                }
+                throw new IllegalStateException(
+                        "Inventory verification failed."
+                );
             }
 
-            if (available >= amount) {
-                return true;
+            return true;
+
+        } catch (RuntimeException exception) {
+
+            Bukkit.getLogger().severe(
+                    "[EarthBound] Inventory update failed for "
+                    + player.getUniqueId()
+                    + ": "
+                    + exception.getMessage()
+            );
+
+            rollbackInventory(
+                    player,
+                    inventory,
+                    original
+            );
+
+            return false;
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * RESTORE INVENTORY AFTER FAILED TRANSACTION
+     * ============================================================
+     */
+
+    private void rollbackInventory(
+            Player player,
+            PlayerInventory inventory,
+            ItemStack[] original
+    ) {
+
+        try {
+
+            inventory.setStorageContents(
+                    copyContents(original)
+            );
+
+            if (!sameContents(
+                    original,
+                    inventory.getStorageContents()
+            )) {
+
+                throw new IllegalStateException(
+                        "Inventory restoration verification failed."
+                );
+            }
+
+            player.sendMessage(
+                    ChatColor.RED
+                    + "Transaction failed. Inventory restored."
+            );
+
+            if (!EarthEconomy.isReady()) {
+
+                player.sendMessage(
+                        ChatColor.RED
+                        + "Financial storage requires "
+                        + "administrator review."
+                );
+            }
+
+        } catch (RuntimeException exception) {
+
+            Bukkit.getLogger().severe(
+                    "[EarthBound] CRITICAL: Inventory rollback "
+                    + "failed for "
+                    + player.getName()
+                    + " ("
+                    + player.getUniqueId()
+                    + "): "
+                    + exception.getMessage()
+            );
+
+            player.sendMessage(
+                    ChatColor.RED
+                    + "Inventory recovery failed. "
+                    + "Contact an administrator immediately."
+            );
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * VERIFY INVENTORY CONTENTS
+     * ============================================================
+     */
+
+    private boolean sameContents(
+            ItemStack[] first,
+            ItemStack[] second
+    ) {
+
+        if (first.length != second.length) {
+
+            return false;
+        }
+
+        for (int i = 0; i < first.length; i++) {
+
+            ItemStack a = first[i];
+
+            ItemStack b = second[i];
+
+            boolean emptyA =
+                    a == null || a.getType().isAir();
+
+            boolean emptyB =
+                    b == null || b.getType().isAir();
+
+            if (emptyA && emptyB) {
+
+                continue;
+            }
+
+            if (emptyA || emptyB) {
+
+                return false;
+            }
+
+            if (!a.equals(b)) {
+
+                return false;
             }
         }
 
-        return false;
+        return true;
     }
+
+
+    /*
+     * ============================================================
+     * MONEY VALIDATION
+     * ============================================================
+     */
+
+    private boolean validPrice(double amount) {
+
+        return Double.isFinite(amount)
+                && amount >= 0.01
+                && amount <= 1000000000.0;
+    }
+
+
+    private double transactionTotal(
+            double unitPrice,
+            int amount
+    ) {
+
+        double total = unitPrice * amount;
+
+        if (!validPrice(total)) {
+
+            return -1.0;
+        }
+
+        return Math.round(total * 100.0) / 100.0;
+    }
+
+
+    private String money(double amount) {
+
+        return String.format(
+                Locale.US,
+                "%,.2f",
+                amount
+        );
+    }
+
 }
