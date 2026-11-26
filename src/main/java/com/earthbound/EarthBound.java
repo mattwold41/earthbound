@@ -13,9 +13,7 @@ import com.earthbound.roads.EarthRoadData;
 public class EarthBound extends JavaPlugin {
 
     /*
-     * ============================================================
      * GUEMES ISLAND SPAWN
-     * ============================================================
      */
 
     private static final double GUEMES_SPAWN_X = -654.0;
@@ -24,9 +22,7 @@ public class EarthBound extends JavaPlugin {
 
 
     /*
-     * ============================================================
      * ENABLE EARTHBOUND
-     * ============================================================
      */
 
     @Override
@@ -68,7 +64,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * PLAYER-TO-PLAYER PAYMENTS
+         * PLAYER PAYMENTS
          */
 
         if (getCommand("pay") != null) {
@@ -123,6 +119,10 @@ public class EarthBound extends JavaPlugin {
                     new EarthStoreCommand()
             );
 
+            getLogger().info(
+                    "General Store command registered!"
+            );
+
         } else {
 
             getLogger().warning(
@@ -132,16 +132,13 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
-         * PROPERTY OWNERSHIP SYSTEM
-         * ========================================================
+         * PROPERTY OWNERSHIP
          *
-         * Government property sale revenue:
+         * Government property sale distribution:
          *
-         * 60% - Anacortes
-         * 20% - Washington
-         * 20% - USA
-         *
+         * 60% Anacortes
+         * 20% Washington
+         * 20% USA
          */
 
         EarthPropertyManager.setup(this);
@@ -152,27 +149,23 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
-         * BLUE FOR SALE BANNER LISTENER
-         * ========================================================
+         * PROPERTY PURCHASE LISTENER
          */
 
         EarthPropertyBannerRegistry.clear();
 
         Bukkit.getPluginManager().registerEvents(
-                new EarthPropertyListener(),
+                new EarthPropertyListener(this),
                 this
         );
 
         getLogger().info(
-                "EarthBound property banner listener registered!"
+                "EarthBound property purchase listener registered!"
         );
 
 
         /*
-         * ========================================================
          * LOAD GUEMES TERRAIN
-         * ========================================================
          */
 
         EarthTerrainDownloader.loadGuemesIsland();
@@ -192,9 +185,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * LOAD GUEMES WATER
-         * ========================================================
          */
 
         boolean waterLoaded =
@@ -206,9 +197,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * LOAD GUEMES ROADS
-         * ========================================================
          */
 
         boolean roadsLoaded =
@@ -220,9 +209,7 @@ public class EarthBound extends JavaPlugin {
 
 
         /*
-         * ========================================================
          * DISABLE NORMAL MOB SPAWNING
-         * ========================================================
          */
 
         Bukkit.getScheduler().runTask(
@@ -235,17 +222,13 @@ public class EarthBound extends JavaPlugin {
                                 org.bukkit.GameRule.DO_MOB_SPAWNING,
                                 false
                         );
-
                     }
-
                 }
         );
 
 
         /*
-         * ========================================================
          * SET GUEMES SPAWN
-         * ========================================================
          */
 
         Bukkit.getScheduler().runTask(
@@ -277,21 +260,12 @@ public class EarthBound extends JavaPlugin {
                     getLogger().info(
                             "Guemes spawn set!"
                     );
-
                 }
         );
 
 
         /*
-         * ========================================================
-         * AUTOMATIC PROPERTY SALE SYSTEM
-         * ========================================================
-         *
-         * 1. Verify that the EarthBound world exists.
-         * 2. Register official property banner locations.
-         * 3. Place physical blue banners and price signs.
-         * 4. Skip disabled or purchased properties.
-         *
+         * AUTOMATIC REAL ESTATE SYSTEM
          */
 
         Bukkit.getScheduler().runTask(
@@ -305,8 +279,7 @@ public class EarthBound extends JavaPlugin {
 
                         getLogger().warning(
                                 "EarthBound world not found. "
-                                + "Property sale system "
-                                + "was not initialized."
+                                + "Real estate initialization skipped."
                         );
 
                         return;
@@ -314,61 +287,50 @@ public class EarthBound extends JavaPlugin {
 
 
                     /*
-                     * REGISTER OFFICIAL BANNER LOCATIONS
+                     * REGISTER OFFICIAL BANNERS
                      */
 
                     EarthPropertyBannerRegistry.setup(this);
 
-                    int bannerCount =
-                            EarthPropertyBannerRegistry
-                                    .getBannerCount();
-
                     getLogger().info(
                             "Official property banners registered: "
-                            + bannerCount
+                            + EarthPropertyBannerRegistry
+                                    .getBannerCount()
                     );
 
 
                     /*
-                     * PLACE PHYSICAL BANNERS AND SIGNS
+                     * PLACE UNSOLD PROPERTY MARKERS
+                     *
+                     * CLEAN UP SOLD PROPERTY MARKERS
                      */
 
                     EarthPropertySaleMarkers.setup(this);
 
                     getLogger().info(
-                            "EarthBound property sale marker "
+                            "EarthBound real estate system "
                             + "initialization finished!"
                     );
-
                 }
         );
 
 
         /*
-         * ========================================================
          * STARTUP COMPLETE
-         * ========================================================
          */
 
         getLogger().info(
                 "EarthBound enabled!"
         );
-
     }
 
 
     /*
-     * ============================================================
-     * SAVE EARTHBOUND DATA ON SHUTDOWN
-     * ============================================================
+     * SAVE EARTHBOUND DATA
      */
 
     @Override
     public void onDisable() {
-
-        /*
-         * SAVE PROPERTY OWNERSHIP
-         */
 
         if (EarthPropertyManager.save()) {
 
@@ -383,21 +345,11 @@ public class EarthBound extends JavaPlugin {
             );
         }
 
-
-        /*
-         * SAVE ECONOMY
-         */
-
         EarthEconomy.save();
 
         getLogger().info(
                 "EarthBound economy saved!"
         );
-
-
-        /*
-         * CLEAR PROPERTY BANNER REGISTRY
-         */
 
         EarthPropertyBannerRegistry.clear();
 
@@ -405,22 +357,14 @@ public class EarthBound extends JavaPlugin {
                 "EarthBound banner registry cleared!"
         );
 
-
-        /*
-         * SHUTDOWN COMPLETE
-         */
-
         getLogger().info(
                 "EarthBound shutdown complete."
         );
-
     }
 
 
     /*
-     * ============================================================
      * EARTH WORLD GENERATOR
-     * ============================================================
      */
 
     @Override
@@ -430,7 +374,6 @@ public class EarthBound extends JavaPlugin {
     ) {
 
         return new EarthGenerator();
-
     }
 
 }
