@@ -1,8 +1,11 @@
 package com.earthbound;
 
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -16,10 +19,24 @@ import org.bukkit.inventory.Inventory;
 
 public class EarthPropertyListener implements Listener {
 
+    private final EarthBound plugin;
+
+    private final Set<UUID> pendingPurchases =
+            new HashSet<>();
+
+
     /*
-     * ==========================================================
+     * INITIALIZE LISTENER
+     */
+
+    public EarthPropertyListener(EarthBound plugin) {
+
+        this.plugin = plugin;
+    }
+
+
+    /*
      * CLICK BLUE FOR SALE BANNER
-     * ==========================================================
      */
 
     @EventHandler
@@ -27,11 +44,13 @@ public class EarthPropertyListener implements Listener {
 
         if (event.getAction()
                 != Action.RIGHT_CLICK_BLOCK) {
+
             return;
         }
 
         if (event.getHand()
                 != EquipmentSlot.HAND) {
+
             return;
         }
 
@@ -40,18 +59,6 @@ public class EarthPropertyListener implements Listener {
         if (block == null) {
             return;
         }
-
-        Material material = block.getType();
-
-        if (material != Material.BLUE_BANNER
-                && material != Material.BLUE_WALL_BANNER) {
-            return;
-        }
-
-        /*
-         * Only recognize blue banners that are
-         * explicitly registered as For Sale markers.
-         */
 
         EarthProperty property =
                 EarthPropertyManager.getPropertyAt(
@@ -62,16 +69,10 @@ public class EarthPropertyListener implements Listener {
             return;
         }
 
-        /*
-         * Until official banner coordinates are
-         * registered, do not treat every blue banner
-         * inside a plot as a For Sale sign.
-         */
+        if (!EarthPropertySaleMarkers.isOfficialBanner(
+                block,
+                property.getId())) {
 
-        if (!EarthPropertyBannerRegistry.isOfficialBanner(
-                property.getId(),
-                block.getLocation()
-        )) {
             return;
         }
 
@@ -89,16 +90,21 @@ public class EarthPropertyListener implements Listener {
             return;
         }
 
+        if (pendingPurchases.contains(
+                player.getUniqueId())) {
+
+            return;
+        }
+
         EarthPropertyMenu.open(
                 player,
                 property
         );
     }
 
+
     /*
-     * ==========================================================
-     * PROPERTY PURCHASE MENU CLICKS
-     * ==========================================================
+     * PROPERTY PURCHASE MENU
      */
 
     @EventHandler
@@ -108,52 +114,51 @@ public class EarthPropertyListener implements Listener {
                 event.getView().getTopInventory();
 
         if (!EarthPropertyMenu.isPropertyMenu(
-                topInventory
-        )) {
+                topInventory)) {
+
             return;
         }
-
-        /*
-         * Protect the menu from item movement,
-         * shift-clicking and other inventory actions.
-         */
 
         event.setCancelled(true);
 
         if (!(event.getWhoClicked()
-                instanceof Player)) {
+                instanceof Player player)) {
+
             return;
         }
-
-        Player player =
-                (Player) event.getWhoClicked();
 
         int rawSlot = event.getRawSlot();
 
         if (rawSlot < 0
                 || rawSlot >= topInventory.getSize()) {
+
             return;
         }
 
-        /*
-         * CANCEL BUTTON
-         */
+        UUID playerId = player.getUniqueId();
 
-        if (EarthPropertyMenu.isCancelSlot(
-                rawSlot
-        )) {
-
-            player.closeInventory();
+        if (pendingPurchases.contains(playerId)) {
             return;
         }
 
+
         /*
-         * BUY HOME BUTTON
+         * CANCEL PURCHASE
          */
 
-        if (!EarthPropertyMenu.isBuySlot(
-                rawSlot
-        )) {
+        if (EarthPropertyMenu.isCancelSlot(rawSlot)) {
+
+            closeMenuSafely(player, topInventory);
+
+            return;
+        }
+
+
+        /*
+         * BUY HOME
+         */
+
+        if (!EarthPropertyMenu.isBuySlot(rawSlot)) {
             return;
         }
 
@@ -163,14 +168,14 @@ public class EarthPropertyListener implements Listener {
                 );
 
         if (propertyId == null) {
-            player.closeInventory();
+
+            closeMenuSafely(player, topInventory);
+
             return;
         }
 
         EarthProperty property =
-                EarthPropertyManager.getProperty(
-                        propertyId
-                );
+                EarthPropertyManager.getProperty(propertyId);
 
         if (property == null
                 || property.isOwned()) {
@@ -180,18 +185,103 @@ public class EarthPropertyListener implements Listener {
                     + "This home is no longer available."
             );
 
-            player.closeInventory();
+            closeMenuSafely(player, topInventory);
+
             return;
         }
 
+
         /*
-         * The property manager handles:
-         *
-         * - Balance validation
-         * - One-home-per-player rule
-         * - Government treasury distribution
-         * - Ownership assignment
-         * - Ownership saving
+         * PREVENT REPEATED PURCHASE CLICKS
+         */
+
+        if (!pendingPurchases.add(playerId)) {
+            return;
+        }
+
+
+        /*
+         * PROCESS PURCHASE ON NEXT SERVER TICK
+         */
+
+        Bukkit.getScheduler().runTask(
+                plugin,
+                () -> {
+
+                    try {
+
+                        if (!player.isOnline()) {
+                            return;
+                        }
+
+                        if (player.getOpenInventory()
+                                .getTopInventory()
+                                != topInventory) {
+
+                            return;
+                        }
+
+                        player.closeInventory();
+
+                        completePurchase(
+                                player,
+                                propertyId
+                        );
+
+                    } finally {
+
+                        pendingPurchases.remove(playerId);
+                    }
+                }
+        );
+    }
+
+
+    /*
+     * COMPLETE PROPERTY PURCHASE
+     */
+
+    private void completePurchase(
+            Player player,
+            String propertyId
+    ) {
+
+        EarthProperty property =
+                EarthPropertyManager.getProperty(propertyId);
+
+        if (property == null
+                || property.isOwned()) {
+
+            player.sendMessage(
+                    ChatColor.RED
+                    + "This home is no longer available."
+            );
+
+            return;
+        }
+
+        org.bukkit.Location bannerLocation =
+                EarthPropertyBannerRegistry.getBannerLocation(
+                        propertyId
+                );
+
+        if (bannerLocation == null
+                || !EarthPropertySaleMarkers.isOfficialBanner(
+                        bannerLocation.getBlock(),
+                        propertyId)) {
+
+            player.sendMessage(
+                    ChatColor.RED
+                    + "This property is not currently for sale."
+            );
+
+            return;
+        }
+
+
+        /*
+         * PROPERTY MANAGER HANDLES PAYMENT,
+         * GOVERNMENT REVENUE AND OWNERSHIP
          */
 
         boolean purchased =
@@ -200,69 +290,76 @@ public class EarthPropertyListener implements Listener {
                         propertyId
                 );
 
-        player.closeInventory();
-
         if (!purchased) {
             return;
         }
 
+
         /*
-         * REMOVE FOR SALE BANNER
-         *
-         * Only remove a banner if it is still
-         * the official marker for this property.
+         * REMOVE BLUE BANNER AND PRICE SIGN
          */
 
-        Location bannerLocation =
-                EarthPropertyBannerRegistry.getBannerLocation(
-                        propertyId
-                );
+        try {
 
-        if (bannerLocation != null) {
+            EarthPropertySaleMarkers.removeMarkers(
+                    propertyId
+            );
 
-            Block banner =
-                    bannerLocation.getBlock();
+        } catch (RuntimeException exception) {
 
-            if (EarthPropertyBannerRegistry.isOfficialBanner(
-                    propertyId,
-                    bannerLocation
-            )) {
-
-                Material bannerType =
-                        banner.getType();
-
-                if (bannerType == Material.BLUE_BANNER
-                        || bannerType == Material.BLUE_WALL_BANNER) {
-
-                    banner.setType(
-                            Material.AIR,
-                            false
-                    );
-                }
-            }
+            plugin.getLogger().warning(
+                    "Property purchased, but marker cleanup failed: "
+                    + propertyId
+                    + " - "
+                    + exception.getMessage()
+            );
         }
 
         player.sendMessage(
                 ChatColor.GREEN
-                + "Your new home is now registered "
-                + "in your name!"
+                + "Congratulations! Your new home "
+                + "is registered in your name."
         );
     }
 
+
     /*
-     * ==========================================================
-     * PREVENT DRAGGING ITEMS INTO PROPERTY MENU
-     * ==========================================================
+     * CLOSE INVENTORY SAFELY
+     */
+
+    private void closeMenuSafely(
+            Player player,
+            Inventory inventory
+    ) {
+
+        Bukkit.getScheduler().runTask(
+                plugin,
+                () -> {
+
+                    if (player.isOnline()
+                            && player.getOpenInventory()
+                                    .getTopInventory()
+                                    == inventory) {
+
+                        player.closeInventory();
+                    }
+                }
+        );
+    }
+
+
+    /*
+     * PREVENT DRAGGING ITEMS INTO PURCHASE MENU
      */
 
     @EventHandler
     public void onMenuDrag(InventoryDragEvent event) {
 
         if (EarthPropertyMenu.isPropertyMenu(
-                event.getView().getTopInventory()
-        )) {
+                event.getView().getTopInventory())) {
 
             event.setCancelled(true);
         }
     }
+
 }
