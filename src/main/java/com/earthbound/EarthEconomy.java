@@ -2,10 +2,18 @@ package com.earthbound;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.UUID;
 
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
@@ -14,20 +22,26 @@ public class EarthEconomy {
     private static EarthBound plugin;
 
     private static File economyFile;
-    private static File transactionsFile;
 
     private static YamlConfiguration data;
-    private static YamlConfiguration transactions;
 
-    private static final Map<UUID, Double> balances =
-            new HashMap<>();
+    private static boolean ready = false;
 
-    private static double anacortesTreasury = 0.0;
-    private static double washingtonTreasury = 0.0;
-    private static double usaTreasury = 0.0;
-    private static double storeBalance = 10000.0;
+    /*
+     * All internal amounts are stored as integer cents.
+     *
+     * Maximum individual transaction: $1 billion.
+     * Maximum account balance: $1 trillion.
+     */
 
-    private static long transactionId = 0L;
+    private static final long MAX_TRANSACTION =
+            100_000_000_000L;
+
+    private static final long MAX_BALANCE =
+            100_000_000_000_000L;
+
+    private static final String STORE =
+            "accounts.general-store";
 
     public enum Treasury {
         ANACORTES,
@@ -35,664 +49,1400 @@ public class EarthEconomy {
         USA
     }
 
-    public static void setup(EarthBound earthBound) {
+
+    /*
+     * ============================================================
+     * INITIALIZE ECONOMY
+     * ============================================================
+     */
+
+    public static synchronized void setup(
+            EarthBound earthBound
+    ) {
 
         plugin = earthBound;
-
-        balances.clear();
-
-        anacortesTreasury = 0.0;
-        washingtonTreasury = 0.0;
-        usaTreasury = 0.0;
-        storeBalance = 10000.0;
-        transactionId = 0L;
+        ready = false;
+        data = null;
 
         File folder = plugin.getDataFolder();
 
-        if (!folder.exists()) {
-            folder.mkdirs();
-        }
-
-        economyFile = new File(folder, "economy.yml");
-        transactionsFile =
-                new File(folder, "transactions.yml");
-
-        data = YamlConfiguration.loadConfiguration(economyFile);
-        transactions = YamlConfiguration.loadConfiguration(
-                transactionsFile
+        economyFile = new File(
+                folder,
+                "economy-v2.yml"
         );
 
-        // Preserve player balances from earlier versions.
-        for (String key : data.getKeys(false)) {
+        try {
 
-            try {
-                UUID uuid = UUID.fromString(key);
-                double amount = data.getDouble(key);
+            Files.createDirectories(folder.toPath());
 
-                if (validBalance(amount)) {
-                    balances.put(uuid, amount);
-                }
+            if (economyFile.exists()) {
 
-            } catch (IllegalArgumentException ignored) {
-                // Ignore non-player keys.
+                YamlConfiguration loaded =
+                        loadFile(economyFile);
+
+                validateData(loaded);
+
+                data = loaded;
+
+            } else {
+
+                YamlConfiguration migrated =
+                        migrateLegacyData(folder);
+
+                validateData(migrated);
+
+                writeAtomically(migrated);
+
+                data = migrated;
             }
+
+            ready = true;
+
+            plugin.getLogger().info(
+                    "EarthBound secure economy loaded!"
+            );
+
+        } catch (Exception exception) {
+
+            ready = false;
+
+            plugin.getLogger().severe(
+                    "Economy initialization failed: "
+                    + exception.getMessage()
+            );
+
+            plugin.getLogger().severe(
+                    "Financial transactions are disabled "
+                    + "until the economy is repaired."
+            );
         }
-
-        // Preserve any money held by the original
-        // single government treasury.
-        double legacyTreasury = readBalance(
-                "accounts.treasury", 0.0
-        );
-
-        anacortesTreasury = readBalance(
-                "accounts.anacortes", legacyTreasury
-        );
-
-        washingtonTreasury = readBalance(
-                "accounts.washington", 0.0
-        );
-
-        usaTreasury = readBalance(
-                "accounts.usa", 0.0
-        );
-
-        storeBalance = readBalance(
-                "accounts.general-store", 10000.0
-        );
-
-        transactionId = Math.max(
-                0L,
-                transactions.getLong("next-id", 0L)
-        );
-
-        save();
-
-        plugin.getLogger().info(
-                "EarthBound economy loaded: "
-                + balances.size() + " player accounts."
-        );
     }
 
-    private static double readBalance(
-            String path,
-            double fallback
+
+    /*
+     * LOAD YAML WITHOUT SILENTLY IGNORING ERRORS
+     */
+
+    private static YamlConfiguration loadFile(
+            File file
+    ) throws Exception {
+
+        YamlConfiguration result =
+                new YamlConfiguration();
+
+        if (file.exists()) {
+            result.load(file);
+        }
+
+        return result;
+    }
+
+
+    /*
+     * ============================================================
+     * MONEY CONVERSION
+     * ============================================================
+     */
+
+    private static long toCents(double amount) {
+
+        if (!Double.isFinite(amount)
+                || amount < 0.0) {
+
+            throw new IllegalArgumentException(
+                    "Invalid money amount."
+            );
+        }
+
+        long cents = BigDecimal.valueOf(amount)
+                .movePointRight(2)
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValueExact();
+
+        if (cents < 0 || cents > MAX_BALANCE) {
+
+            throw new IllegalArgumentException(
+                    "Money amount exceeds account limits."
+            );
+        }
+
+        return cents;
+    }
+
+
+    private static long transactionCents(
+            double amount
     ) {
 
-        if (!data.contains(path)) {
-            return fallback;
-        }
-
-        double amount = data.getDouble(path, fallback);
-
-        return validBalance(amount) ? amount : fallback;
-    }
-
-    private static boolean validBalance(double amount) {
-        return Double.isFinite(amount) && amount >= 0.0;
-    }
-
-    private static boolean validAmount(double amount) {
-        return Double.isFinite(amount) && amount > 0.0;
-    }
-
-    private static double roundMoney(double amount) {
-        return Math.round(amount * 100.0) / 100.0;
-    }
-
-    public static void save() {
-
-        if (data == null || economyFile == null) {
-            return;
-        }
-
-        for (Map.Entry<UUID, Double> entry :
-                balances.entrySet()) {
-
-            data.set(
-                    entry.getKey().toString(),
-                    entry.getValue()
-            );
-        }
-
-        data.set(
-                "accounts.anacortes",
-                anacortesTreasury
-        );
-
-        data.set(
-                "accounts.washington",
-                washingtonTreasury
-        );
-
-        data.set(
-                "accounts.usa",
-                usaTreasury
-        );
-
-        data.set(
-                "accounts.general-store",
-                storeBalance
-        );
-
-        // Remove the obsolete single-treasury entry
-        // after migrating its funds.
-        data.set("accounts.treasury", null);
-
         try {
-            data.save(economyFile);
-        } catch (IOException e) {
-            plugin.getLogger().severe(
-                    "Could not save economy.yml: "
-                    + e.getMessage()
-            );
-        }
 
-        saveTransactions();
-    }
+            long cents = toCents(amount);
 
-    private static void saveTransactions() {
+            if (cents <= 0
+                    || cents > MAX_TRANSACTION) {
 
-        if (transactions == null
-                || transactionsFile == null) {
-            return;
-        }
+                return -1;
+            }
 
-        transactions.set("next-id", transactionId);
+            return cents;
 
-        try {
-            transactions.save(transactionsFile);
-        } catch (IOException e) {
-            plugin.getLogger().severe(
-                    "Could not save transactions.yml: "
-                    + e.getMessage()
-            );
+        } catch (RuntimeException exception) {
+
+            return -1;
         }
     }
 
-    private static void record(
-            String from,
-            String to,
-            double amount,
-            String reason
-    ) {
 
-        transactionId++;
+    private static double toDollars(long cents) {
 
-        String path = "history." + transactionId;
-
-        transactions.set(
-                path + ".timestamp",
-                System.currentTimeMillis()
-        );
-
-        transactions.set(path + ".from", from);
-        transactions.set(path + ".to", to);
-        transactions.set(path + ".amount", amount);
-        transactions.set(path + ".reason", reason);
-
-        save();
+        return cents / 100.0;
     }
 
-    public static void createAccount(Player player) {
 
-        UUID uuid = player.getUniqueId();
+    private static String playerPath(UUID uuid) {
 
-        if (balances.containsKey(uuid)) {
-            return;
-        }
-
-        double startingMoney = plugin.getConfig()
-                .getDouble(
-                        "economy.starting-money",
-                        100000.0
-                );
-
-        if (!validBalance(startingMoney)) {
-            startingMoney = 100000.0;
-        }
-
-        startingMoney = roundMoney(startingMoney);
-
-        balances.put(uuid, startingMoney);
-
-        record(
-                "SYSTEM",
-                uuid.toString(),
-                startingMoney,
-                "New player starting balance"
-        );
+        return "players." + uuid;
     }
 
-    public static double getBalance(Player player) {
 
-        createAccount(player);
-
-        return balances.get(player.getUniqueId());
-    }
-
-    public static double getStoreBalance() {
-        return storeBalance;
-    }
-
-    public static double getTreasuryBalance(
+    private static String treasuryPath(
             Treasury treasury
     ) {
 
         switch (treasury) {
+
             case ANACORTES:
-                return anacortesTreasury;
+                return "accounts.anacortes";
 
             case WASHINGTON:
-                return washingtonTreasury;
+                return "accounts.washington";
 
             case USA:
-                return usaTreasury;
+                return "accounts.usa";
 
             default:
-                return 0.0;
+                throw new IllegalArgumentException(
+                        "Unknown treasury."
+                );
         }
     }
 
-    // Compatibility with older code that expects
-    // one government treasury.
-    public static double getTreasuryBalance() {
 
-        return anacortesTreasury
-                + washingtonTreasury
-                + usaTreasury;
+    /*
+     * ============================================================
+     * MIGRATE EXISTING ECONOMY
+     * ============================================================
+     */
+
+    private static YamlConfiguration migrateLegacyData(
+            File folder
+    ) throws Exception {
+
+        YamlConfiguration result =
+                new YamlConfiguration();
+
+        File legacyEconomyFile =
+                new File(folder, "economy.yml");
+
+        File legacyTransactionsFile =
+                new File(folder, "transactions.yml");
+
+        File legacyPropertiesFile =
+                new File(folder, "properties.yml");
+
+        YamlConfiguration legacy =
+                loadFile(legacyEconomyFile);
+
+        YamlConfiguration oldTransactions =
+                loadFile(legacyTransactionsFile);
+
+        YamlConfiguration oldProperties =
+                loadFile(legacyPropertiesFile);
+
+        result.set("version", 2);
+
+        result.createSection("players");
+        result.createSection("accounts");
+        result.createSection("property-owners");
+        result.createSection("history");
+
+
+        /*
+         * MIGRATE EXISTING PLAYER BALANCES
+         */
+
+        for (String key : legacy.getKeys(false)) {
+
+            UUID uuid;
+
+            try {
+
+                uuid = UUID.fromString(key);
+
+            } catch (IllegalArgumentException ignored) {
+
+                continue;
+            }
+
+            result.set(
+                    playerPath(uuid),
+                    readLegacyMoney(legacy, key, 0.0)
+            );
+        }
+
+
+        /*
+         * MIGRATE GOVERNMENT AND STORE BALANCES
+         */
+
+        long oldTreasury = readLegacyMoney(
+                legacy,
+                "accounts.treasury",
+                0.0
+        );
+
+        result.set(
+                "accounts.anacortes",
+                readLegacyMoney(
+                        legacy,
+                        "accounts.anacortes",
+                        toDollars(oldTreasury)
+                )
+        );
+
+        result.set(
+                "accounts.washington",
+                readLegacyMoney(
+                        legacy,
+                        "accounts.washington",
+                        0.0
+                )
+        );
+
+        result.set(
+                "accounts.usa",
+                readLegacyMoney(
+                        legacy,
+                        "accounts.usa",
+                        0.0
+                )
+        );
+
+        result.set(
+                STORE,
+                readLegacyMoney(
+                        legacy,
+                        "accounts.general-store",
+                        10000.0
+                )
+        );
+
+
+        /*
+         * PRESERVE EXISTING PROPERTY OWNERSHIP
+         */
+
+        ConfigurationSection properties =
+                oldProperties.getConfigurationSection(
+                        "properties"
+                );
+
+        if (properties != null) {
+
+            for (String id : properties.getKeys(false)) {
+
+                String owner = properties.getString(
+                        id + ".owner"
+                );
+
+                if (owner == null
+                        || owner.isBlank()) {
+
+                    continue;
+                }
+
+                if (!validPropertyId(id)) {
+
+                    throw new IllegalArgumentException(
+                            "Invalid legacy property ID: "
+                            + id
+                    );
+                }
+
+                UUID uuid = UUID.fromString(owner);
+
+                result.set(
+                        "property-owners." + id,
+                        uuid.toString()
+                );
+            }
+        }
+
+
+        /*
+         * PRESERVE HISTORICAL TRANSACTION RECORDS
+         */
+
+        long nextId = Math.max(
+                0L,
+                oldTransactions.getLong(
+                        "next-id",
+                        0L
+                )
+        );
+
+        ConfigurationSection history =
+                oldTransactions.getConfigurationSection(
+                        "history"
+                );
+
+        if (history != null) {
+
+            for (String id : history.getKeys(false)) {
+
+                ConfigurationSection entry =
+                        history.getConfigurationSection(id);
+
+                if (entry == null) {
+
+                    throw new IllegalArgumentException(
+                            "Invalid legacy transaction: "
+                            + id
+                    );
+                }
+
+                for (String field :
+                        entry.getKeys(true)) {
+
+                    if (!entry.isConfigurationSection(
+                            field)) {
+
+                        result.set(
+                                "legacy-history."
+                                + id + "." + field,
+                                entry.get(field)
+                        );
+                    }
+                }
+
+                try {
+
+                    nextId = Math.max(
+                            nextId,
+                            Long.parseLong(id)
+                    );
+
+                } catch (NumberFormatException ignored) {
+                    // Preserve the historical record.
+                }
+            }
+        }
+
+        result.set("next-id", nextId);
+
+        plugin.getLogger().info(
+                "Legacy economy migration prepared."
+        );
+
+        return result;
     }
 
-    public static void addMoney(
+
+    private static long readLegacyMoney(
+            YamlConfiguration source,
+            String path,
+            double fallback
+    ) {
+
+        if (!source.contains(path)) {
+
+            return toCents(fallback);
+        }
+
+        Object value = source.get(path);
+
+        if (!(value instanceof Number)) {
+
+            throw new IllegalArgumentException(
+                    "Invalid legacy balance: " + path
+            );
+        }
+
+        return toCents(
+                ((Number) value).doubleValue()
+        );
+    }
+
+
+    /*
+     * ============================================================
+     * VALIDATE SAVED DATA
+     * ============================================================
+     */
+
+    private static long readCents(
+            YamlConfiguration source,
+            String path
+    ) {
+
+        Object value = source.get(path);
+
+        if (!(value instanceof Integer)
+                && !(value instanceof Long)) {
+
+            throw new IllegalArgumentException(
+                    "Invalid account: " + path
+            );
+        }
+
+        long cents = ((Number) value).longValue();
+
+        if (cents < 0 || cents > MAX_BALANCE) {
+
+            throw new IllegalArgumentException(
+                    "Invalid balance: " + path
+            );
+        }
+
+        return cents;
+    }
+
+
+    private static boolean validPropertyId(
+            String id
+    ) {
+
+        return id != null
+                && id.matches("[A-Za-z0-9_-]{1,128}");
+    }
+
+
+    private static void validateData(
+            YamlConfiguration source
+    ) {
+
+        if (source.getInt("version") != 2) {
+
+            throw new IllegalArgumentException(
+                    "Unsupported economy version."
+            );
+        }
+
+        readCents(source, STORE);
+
+        for (Treasury treasury : Treasury.values()) {
+
+            readCents(
+                    source,
+                    treasuryPath(treasury)
+            );
+        }
+
+        ConfigurationSection players =
+                source.getConfigurationSection(
+                        "players"
+                );
+
+        if (players == null) {
+
+            throw new IllegalArgumentException(
+                    "Missing player accounts."
+            );
+        }
+
+        for (String key : players.getKeys(false)) {
+
+            UUID.fromString(key);
+
+            readCents(
+                    source,
+                    "players." + key
+            );
+        }
+
+        ConfigurationSection owners =
+                source.getConfigurationSection(
+                        "property-owners"
+                );
+
+        if (owners == null) {
+
+            throw new IllegalArgumentException(
+                    "Missing property ownership records."
+            );
+        }
+
+        for (String id : owners.getKeys(false)) {
+
+            if (!validPropertyId(id)) {
+
+                throw new IllegalArgumentException(
+                        "Invalid property ID: " + id
+                );
+            }
+
+            UUID.fromString(
+                    owners.getString(id, "")
+            );
+        }
+
+        long nextId = source.getLong("next-id", -1);
+
+        if (nextId < 0
+                || nextId == Long.MAX_VALUE) {
+
+            throw new IllegalArgumentException(
+                    "Invalid transaction ID."
+            );
+        }
+
+        ConfigurationSection history =
+                source.getConfigurationSection("history");
+
+        if (history == null) {
+
+            throw new IllegalArgumentException(
+                    "Missing transaction history."
+            );
+        }
+
+        for (String id : history.getKeys(false)) {
+
+            long number = Long.parseLong(id);
+
+            if (number <= 0 || number > nextId) {
+
+                throw new IllegalArgumentException(
+                        "Invalid transaction history ID."
+                );
+            }
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * ATOMIC FINANCIAL STORAGE
+     * ============================================================
+     */
+
+    private static void writeAtomically(
+            YamlConfiguration proposed
+    ) throws IOException {
+
+        Path destination = economyFile.toPath();
+
+        Path temporary = Files.createTempFile(
+                destination.getParent(),
+                "earthbound-economy-",
+                ".tmp"
+        );
+
+        boolean moved = false;
+
+        try {
+
+            byte[] bytes = proposed.saveToString()
+                    .getBytes(StandardCharsets.UTF_8);
+
+            try (FileChannel channel =
+                    FileChannel.open(
+                            temporary,
+                            StandardOpenOption.WRITE,
+                            StandardOpenOption.TRUNCATE_EXISTING
+                    )) {
+
+                ByteBuffer buffer =
+                        ByteBuffer.wrap(bytes);
+
+                while (buffer.hasRemaining()) {
+
+                    channel.write(buffer);
+                }
+
+                channel.force(true);
+            }
+
+            Files.move(
+                    temporary,
+                    destination,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+            );
+
+            moved = true;
+
+        } finally {
+
+            if (!moved) {
+
+                try {
+
+                    Files.deleteIfExists(temporary);
+
+                } catch (IOException ignored) {
+                    // Preserve the original failure.
+                }
+            }
+        }
+    }
+
+
+    private static YamlConfiguration copyData()
+            throws Exception {
+
+        YamlConfiguration copy =
+                new YamlConfiguration();
+
+        copy.loadFromString(
+                data.saveToString()
+        );
+
+        return copy;
+    }
+
+
+    private static boolean commit(
+            YamlConfiguration proposed
+    ) {
+
+        try {
+
+            validateData(proposed);
+
+            writeAtomically(proposed);
+
+            data = proposed;
+
+            return true;
+
+        } catch (Exception exception) {
+
+            ready = false;
+
+            plugin.getLogger().severe(
+                    "Financial commit failed: "
+                    + exception.getMessage()
+            );
+
+            plugin.getLogger().severe(
+                    "Economy disabled pending administrator review."
+            );
+
+            return false;
+        }
+    }
+
+
+    public static synchronized void save() {
+
+        /*
+         * Every successful transaction is already saved.
+         * Never overwrite committed financial data during
+         * shutdown following a failed transaction.
+         */
+
+        if (!ready || data == null) {
+
+            return;
+        }
+    }
+
+
+    public static synchronized boolean isReady() {
+
+        return ready;
+    }
+
+
+    /*
+     * ============================================================
+     * TRANSACTION HISTORY
+     * ============================================================
+     */
+
+    private static void record(
+            YamlConfiguration proposed,
+            String from,
+            String to,
+            long cents,
+            String reason
+    ) {
+
+        long id = Math.addExact(
+                proposed.getLong("next-id"),
+                1L
+        );
+
+        proposed.set("next-id", id);
+
+        String path = "history." + id;
+
+        proposed.set(
+                path + ".timestamp",
+                System.currentTimeMillis()
+        );
+
+        proposed.set(path + ".from", from);
+        proposed.set(path + ".to", to);
+        proposed.set(path + ".amount-cents", cents);
+
+        proposed.set(
+                path + ".reason",
+                reason == null ? "" : reason
+        );
+    }
+
+
+    /*
+     * ============================================================
+     * PLAYER ACCOUNTS
+     * ============================================================
+     */
+
+    private static boolean ensureAccount(
+            Player player
+    ) {
+
+        if (!ready || player == null) {
+
+            return false;
+        }
+
+        UUID uuid = player.getUniqueId();
+
+        String path = playerPath(uuid);
+
+        if (data.contains(path)) {
+
+            return true;
+        }
+
+        try {
+
+            long startingMoney = toCents(
+                    plugin.getConfig().getDouble(
+                            "economy.starting-money",
+                            100000.0
+                    )
+            );
+
+            YamlConfiguration proposed =
+                    copyData();
+
+            proposed.set(path, startingMoney);
+
+            record(
+                    proposed,
+                    "SYSTEM",
+                    uuid.toString(),
+                    startingMoney,
+                    "New player starting balance"
+            );
+
+            return commit(proposed);
+
+        } catch (Exception exception) {
+
+            plugin.getLogger().severe(
+                    "Account creation failed: "
+                    + exception.getMessage()
+            );
+
+            return false;
+        }
+    }
+
+
+    public static synchronized void createAccount(
+            Player player
+    ) {
+
+        ensureAccount(player);
+    }
+
+
+    public static synchronized double getBalance(
+            Player player
+    ) {
+
+        if (!ensureAccount(player)) {
+
+            return 0.0;
+        }
+
+        return toDollars(
+                readCents(
+                        data,
+                        playerPath(player.getUniqueId())
+                )
+        );
+    }
+
+
+    public static synchronized double getStoreBalance() {
+
+        if (!ready) {
+
+            return 0.0;
+        }
+
+        return toDollars(
+                readCents(data, STORE)
+        );
+    }
+
+
+    public static synchronized double getTreasuryBalance(
+            Treasury treasury
+    ) {
+
+        if (!ready || treasury == null) {
+
+            return 0.0;
+        }
+
+        return toDollars(
+                readCents(
+                        data,
+                        treasuryPath(treasury)
+                )
+        );
+    }
+
+
+    public static synchronized double getTreasuryBalance() {
+
+        return getTreasuryBalance(Treasury.ANACORTES)
+                + getTreasuryBalance(Treasury.WASHINGTON)
+                + getTreasuryBalance(Treasury.USA);
+    }
+
+
+    /*
+     * ============================================================
+     * SECURE MONEY TRANSFER ENGINE
+     * ============================================================
+     */
+
+    private static boolean moveMoney(
+            String fromPath,
+            String toPath,
+            String fromName,
+            String toName,
+            long cents,
+            String reason
+    ) {
+
+        if (!ready
+                || cents <= 0
+                || cents > MAX_TRANSACTION
+                || (fromPath == null && toPath == null)) {
+
+            return false;
+        }
+
+        if (fromPath != null
+                && fromPath.equals(toPath)) {
+
+            return false;
+        }
+
+        try {
+
+            YamlConfiguration proposed =
+                    copyData();
+
+            if (fromPath != null) {
+
+                long available = readCents(
+                        proposed,
+                        fromPath
+                );
+
+                if (available < cents) {
+
+                    return false;
+                }
+
+                proposed.set(
+                        fromPath,
+                        available - cents
+                );
+            }
+
+            if (toPath != null) {
+
+                long updated = Math.addExact(
+                        readCents(proposed, toPath),
+                        cents
+                );
+
+                if (updated > MAX_BALANCE) {
+
+                    return false;
+                }
+
+                proposed.set(toPath, updated);
+            }
+
+            record(
+                    proposed,
+                    fromName,
+                    toName,
+                    cents,
+                    reason
+            );
+
+            return commit(proposed);
+
+        } catch (Exception exception) {
+
+            plugin.getLogger().severe(
+                    "Transaction rejected: "
+                    + exception.getMessage()
+            );
+
+            return false;
+        }
+    }
+
+
+    /*
+     * SYSTEM CREDITS
+     */
+
+    public static synchronized void addMoney(
             Player player,
             double amount
     ) {
 
-        if (!validAmount(amount)) {
+        long cents = transactionCents(amount);
+
+        if (cents <= 0 || !ensureAccount(player)) {
+
             return;
         }
-
-        amount = roundMoney(amount);
-
-        if (amount <= 0.0) {
-            return;
-        }
-
-        createAccount(player);
 
         UUID uuid = player.getUniqueId();
 
-        double updated =
-                balances.get(uuid) + amount;
-
-        if (!validBalance(updated)) {
-            return;
-        }
-
-        balances.put(uuid, roundMoney(updated));
-
-        record(
+        moveMoney(
+                null,
+                playerPath(uuid),
                 "SYSTEM",
                 uuid.toString(),
-                amount,
+                cents,
                 "Money credited"
         );
     }
 
-    public static boolean removeMoney(
+
+    /*
+     * SYSTEM DEBITS
+     */
+
+    public static synchronized boolean removeMoney(
             Player player,
             double amount
     ) {
 
-        if (!validAmount(amount)) {
+        long cents = transactionCents(amount);
+
+        if (cents <= 0 || !ensureAccount(player)) {
+
             return false;
         }
-
-        amount = roundMoney(amount);
-
-        if (amount <= 0.0) {
-            return false;
-        }
-
-        createAccount(player);
 
         UUID uuid = player.getUniqueId();
 
-        double current = balances.get(uuid);
-
-        if (current < amount) {
-            return false;
-        }
-
-        balances.put(
-                uuid,
-                roundMoney(current - amount)
-        );
-
-        record(
+        return moveMoney(
+                playerPath(uuid),
+                null,
                 uuid.toString(),
                 "SYSTEM",
-                amount,
+                cents,
                 "Money removed"
         );
-
-        return true;
     }
 
-    public static boolean payStore(
+
+    /*
+     * ============================================================
+     * GENERAL STORE
+     * ============================================================
+     */
+
+    public static synchronized boolean payStore(
             Player player,
             double amount,
             String reason
     ) {
 
-        if (!validAmount(amount)) {
+        long cents = transactionCents(amount);
+
+        if (cents <= 0 || !ensureAccount(player)) {
+
             return false;
         }
-
-        amount = roundMoney(amount);
-
-        if (amount <= 0.0) {
-            return false;
-        }
-
-        createAccount(player);
 
         UUID uuid = player.getUniqueId();
 
-        double current = balances.get(uuid);
-        double updatedStore = storeBalance + amount;
-
-        if (current < amount
-                || !validBalance(updatedStore)) {
-            return false;
-        }
-
-        balances.put(
-                uuid,
-                roundMoney(current - amount)
-        );
-
-        storeBalance = roundMoney(updatedStore);
-
-        record(
+        return moveMoney(
+                playerPath(uuid),
+                STORE,
                 uuid.toString(),
                 "GENERAL_STORE",
-                amount,
+                cents,
                 reason
         );
-
-        return true;
     }
 
-    public static boolean storePaysPlayer(
+
+    public static synchronized boolean storePaysPlayer(
             Player player,
             double amount,
             String reason
     ) {
 
-        if (!validAmount(amount)) {
+        long cents = transactionCents(amount);
+
+        if (cents <= 0 || !ensureAccount(player)) {
+
             return false;
         }
-
-        amount = roundMoney(amount);
-
-        if (amount <= 0.0) {
-            return false;
-        }
-
-        createAccount(player);
 
         UUID uuid = player.getUniqueId();
 
-        double updated =
-                balances.get(uuid) + amount;
-
-        if (storeBalance < amount
-                || !validBalance(updated)) {
-            return false;
-        }
-
-        storeBalance =
-                roundMoney(storeBalance - amount);
-
-        balances.put(
-                uuid,
-                roundMoney(updated)
-        );
-
-        record(
+        return moveMoney(
+                STORE,
+                playerPath(uuid),
                 "GENERAL_STORE",
                 uuid.toString(),
-                amount,
+                cents,
                 reason
         );
-
-        return true;
     }
 
-    /**
-     * Government-owned property purchase.
-     *
-     * Revenue distribution:
-     * 60% Anacortes
-     * 20% Washington
-     * 20% USA
+
+    /*
+     * ============================================================
+     * PROPERTY OWNERSHIP LOOKUP
+     * ============================================================
      */
-    public static boolean purchaseGovernmentProperty(
-            Player player,
-            double amount,
-            String propertyName
+
+    public static synchronized UUID getPropertyOwner(
+            String propertyId
     ) {
 
-        if (!validAmount(amount)) {
+        if (!ready || data == null
+                || !validPropertyId(propertyId)) {
+
+            throw new IllegalStateException(
+                    "Property ownership data unavailable."
+            );
+        }
+
+        String owner = data.getString(
+                "property-owners." + propertyId
+        );
+
+        if (owner == null) {
+
+            return null;
+        }
+
+        return UUID.fromString(owner);
+    }
+
+
+    /*
+     * ============================================================
+     * ATOMIC GOVERNMENT PROPERTY PURCHASE
+     * ============================================================
+     */
+
+    public static synchronized boolean
+            purchaseGovernmentProperty(
+                    Player player,
+                    double amount,
+                    String propertyId
+            ) {
+
+        long cents = transactionCents(amount);
+
+        if (cents <= 0
+                || !validPropertyId(propertyId)
+                || !ensureAccount(player)) {
+
             return false;
         }
 
-        amount = roundMoney(amount);
+        EarthProperty property =
+                EarthPropertyManager.getProperty(
+                        propertyId
+                );
 
-        if (amount <= 0.0) {
+        if (property == null
+                || property.isOwned()
+                || transactionCents(property.getPrice())
+                        != cents) {
+
             return false;
         }
-
-        createAccount(player);
 
         UUID uuid = player.getUniqueId();
 
-        double current = balances.get(uuid);
+        String ownerPath =
+                "property-owners." + propertyId;
 
-        if (current < amount) {
+        if (data.contains(ownerPath)) {
+
             return false;
         }
 
-        // Calculate using cents to ensure that
-        // the three shares always total the payment.
-        long cents = Math.round(amount * 100.0);
+        /*
+         * FRIENDS ALPHA:
+         * ONE PROPERTY PER PLAYER
+         */
 
-        long cityCents = cents * 60 / 100;
-        long stateCents = cents * 20 / 100;
-        long federalCents =
-                cents - cityCents - stateCents;
+        ConfigurationSection owners =
+                data.getConfigurationSection(
+                        "property-owners"
+                );
 
-        double cityShare = cityCents / 100.0;
-        double stateShare = stateCents / 100.0;
-        double federalShare = federalCents / 100.0;
+        if (owners == null) {
 
-        if (!validBalance(
-                anacortesTreasury + cityShare
-        ) || !validBalance(
-                washingtonTreasury + stateShare
-        ) || !validBalance(
-                usaTreasury + federalShare
-        )) {
             return false;
         }
 
-        balances.put(
-                uuid,
-                roundMoney(current - amount)
-        );
+        for (String id : owners.getKeys(false)) {
 
-        anacortesTreasury = roundMoney(
-                anacortesTreasury + cityShare
-        );
+            if (uuid.toString().equals(
+                    owners.getString(id))) {
 
-        washingtonTreasury = roundMoney(
-                washingtonTreasury + stateShare
-        );
+                return false;
+            }
+        }
 
-        usaTreasury = roundMoney(
-                usaTreasury + federalShare
-        );
+        try {
 
-        record(
-                uuid.toString(),
-                "ANACORTES_TREASURY",
-                cityShare,
-                "Property purchase: " + propertyName
-        );
+            YamlConfiguration proposed =
+                    copyData();
 
-        record(
-                uuid.toString(),
-                "WASHINGTON_TREASURY",
-                stateShare,
-                "Property purchase: " + propertyName
-        );
+            String account = playerPath(uuid);
 
-        record(
-                uuid.toString(),
-                "USA_TREASURY",
-                federalShare,
-                "Property purchase: " + propertyName
-        );
+            long balance = readCents(
+                    proposed,
+                    account
+            );
 
-        return true;
+            if (balance < cents) {
+
+                return false;
+            }
+
+            /*
+             * GOVERNMENT REVENUE DISTRIBUTION
+             *
+             * 60% ANACORTES
+             * 20% WASHINGTON
+             * 20% USA
+             */
+
+            long cityShare = cents * 60 / 100;
+
+            long stateShare = cents * 20 / 100;
+
+            long federalShare =
+                    cents - cityShare - stateShare;
+
+            long cityBalance = Math.addExact(
+                    readCents(
+                            proposed,
+                            "accounts.anacortes"
+                    ),
+                    cityShare
+            );
+
+            long stateBalance = Math.addExact(
+                    readCents(
+                            proposed,
+                            "accounts.washington"
+                    ),
+                    stateShare
+            );
+
+            long federalBalance = Math.addExact(
+                    readCents(
+                            proposed,
+                            "accounts.usa"
+                    ),
+                    federalShare
+            );
+
+            if (cityBalance > MAX_BALANCE
+                    || stateBalance > MAX_BALANCE
+                    || federalBalance > MAX_BALANCE) {
+
+                return false;
+            }
+
+            proposed.set(
+                    account,
+                    balance - cents
+            );
+
+            proposed.set(
+                    "accounts.anacortes",
+                    cityBalance
+            );
+
+            proposed.set(
+                    "accounts.washington",
+                    stateBalance
+            );
+
+            proposed.set(
+                    "accounts.usa",
+                    federalBalance
+            );
+
+            /*
+             * SAVE OWNERSHIP IN THE SAME TRANSACTION
+             */
+
+            proposed.set(
+                    ownerPath,
+                    uuid.toString()
+            );
+
+            String reason =
+                    "Property purchase: " + propertyId;
+
+            record(
+                    proposed,
+                    uuid.toString(),
+                    "ANACORTES_TREASURY",
+                    cityShare,
+                    reason
+            );
+
+            record(
+                    proposed,
+                    uuid.toString(),
+                    "WASHINGTON_TREASURY",
+                    stateShare,
+                    reason
+            );
+
+            record(
+                    proposed,
+                    uuid.toString(),
+                    "USA_TREASURY",
+                    federalShare,
+                    reason
+            );
+
+            /*
+             * ALL BALANCES AND OWNERSHIP ARE
+             * COMMITTED TOGETHER.
+             */
+
+            return commit(proposed);
+
+        } catch (Exception exception) {
+
+            plugin.getLogger().severe(
+                    "Property purchase rejected: "
+                    + exception.getMessage()
+            );
+
+            return false;
+        }
     }
 
-    /**
-     * Pay a player from an existing government
-     * treasury for approved work or materials.
+
+    /*
+     * ============================================================
+     * GOVERNMENT TREASURY PAYMENTS
+     * ============================================================
      */
-    public static boolean treasuryPaysPlayer(
+
+    public static synchronized boolean treasuryPaysPlayer(
             Treasury treasury,
             Player player,
             double amount,
             String reason
     ) {
 
-        if (treasury == null || !validAmount(amount)) {
+        long cents = transactionCents(amount);
+
+        if (treasury == null
+                || cents <= 0
+                || reason == null
+                || reason.isBlank()
+                || reason.length() > 512
+                || !ensureAccount(player)) {
+
             return false;
         }
-
-        amount = roundMoney(amount);
-
-        if (amount <= 0.0) {
-            return false;
-        }
-
-        createAccount(player);
-
-        double available =
-                getTreasuryBalance(treasury);
 
         UUID uuid = player.getUniqueId();
 
-        double updated =
-                balances.get(uuid) + amount;
-
-        if (available < amount
-                || !validBalance(updated)) {
-            return false;
-        }
-
-        switch (treasury) {
-            case ANACORTES:
-                anacortesTreasury = roundMoney(
-                        anacortesTreasury - amount
-                );
-                break;
-
-            case WASHINGTON:
-                washingtonTreasury = roundMoney(
-                        washingtonTreasury - amount
-                );
-                break;
-
-            case USA:
-                usaTreasury = roundMoney(
-                        usaTreasury - amount
-                );
-                break;
-        }
-
-        balances.put(
-                uuid,
-                roundMoney(updated)
-        );
-
-        record(
+        return moveMoney(
+                treasuryPath(treasury),
+                playerPath(uuid),
                 treasury.name() + "_TREASURY",
                 uuid.toString(),
-                amount,
+                cents,
                 reason
         );
-
-        return true;
     }
 
-    public static boolean transfer(
+
+    /*
+     * ============================================================
+     * PLAYER-TO-PLAYER PAYMENTS
+     * ============================================================
+     */
+
+    public static synchronized boolean transfer(
             Player sender,
             Player recipient,
             double amount
     ) {
 
-        if (sender.getUniqueId().equals(
-                recipient.getUniqueId()
-        )) {
+        if (sender == null || recipient == null) {
+
             return false;
         }
-
-        if (!validAmount(amount)) {
-            return false;
-        }
-
-        amount = roundMoney(amount);
-
-        if (amount <= 0.0) {
-            return false;
-        }
-
-        createAccount(sender);
-        createAccount(recipient);
 
         UUID from = sender.getUniqueId();
+
         UUID to = recipient.getUniqueId();
 
-        double senderBalance = balances.get(from);
+        if (from.equals(to)) {
 
-        double updatedRecipient =
-                balances.get(to) + amount;
-
-        if (senderBalance < amount
-                || !validBalance(updatedRecipient)) {
             return false;
         }
 
-        balances.put(
-                from,
-                roundMoney(senderBalance - amount)
-        );
+        long cents = transactionCents(amount);
 
-        balances.put(
-                to,
-                roundMoney(updatedRecipient)
-        );
+        if (cents <= 0
+                || !ensureAccount(sender)
+                || !ensureAccount(recipient)) {
 
-        record(
+            return false;
+        }
+
+        return moveMoney(
+                playerPath(from),
+                playerPath(to),
                 from.toString(),
                 to.toString(),
-                amount,
+                cents,
                 "Player transfer"
         );
-
-        return true;
     }
+
 }
