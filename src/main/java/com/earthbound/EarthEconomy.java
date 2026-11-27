@@ -1113,8 +1113,8 @@ public class EarthEconomy {
                 playerPath(uuid),
                 null,
                 uuid.toString(),
-                cents,
                 "SYSTEM",
+                cents,
                 "Money removed"
         );
     }
