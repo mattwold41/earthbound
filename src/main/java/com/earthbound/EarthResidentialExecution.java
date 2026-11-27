@@ -1,4 +1,3 @@
-
 package com.earthbound;
 
 import java.util.ArrayList;
@@ -19,40 +18,9 @@ import com.earthbound.EarthResidentialInstaller.ConstructionChunk;
 import com.earthbound.EarthResidentialInstaller.DevelopmentPlan;
 import com.earthbound.EarthResidentialInstaller.PropertyPlan;
 import com.earthbound.EarthResidentialInstaller.PreflightResult;
-
 import com.earthbound.EarthResidentialInstallation.InstallationStatus;
 import com.earthbound.EarthResidentialAuthorization.AuthorizationResult;
 import com.earthbound.EarthResidentialVerification.VerificationResult;
-
-/*
- * ============================================================
- * EARTHBOUND RESIDENTIAL EXECUTION
- * Friends Alpha
- * ============================================================
- *
- * Responsibilities:
- *
- * - Final construction preflight.
- * - Explicit console authorization.
- * - Persistent installation start.
- * - Individual construction permits.
- * - Sequential asynchronous chunk requests.
- * - Temporary construction chunk retention.
- * - Main-thread execution monitoring.
- * - Physical structure verification.
- * - World save request.
- * - Persistent installation completion.
- * - Failure handling.
- * - Construction permit withdrawal.
- * - Chunk ticket cleanup.
- *
- * Successful generation alone does NOT mean completion.
- *
- * Property sales are not activated by this class.
- *
- * Physical construction remains locked.
- * ============================================================
- */
 
 public final class EarthResidentialExecution {
 
@@ -66,62 +34,30 @@ public final class EarthResidentialExecution {
     private static final long CHUNK_TIMEOUT_NANOS =
             120_000_000_000L;
 
-    /*
-     * Execution state is accessed exclusively
-     * on the server main thread.
-     */
-
     private static ExecutionSession activeSession;
 
     private EarthResidentialExecution() {
     }
 
-    /*
-     * ========================================================
-     * EXECUTION STATUS
-     * ========================================================
-     */
-
     public enum ExecutionStatus {
 
         STARTED,
-
         EXECUTION_LOCKED,
-
         INVALID_PLUGIN,
-
         MAIN_THREAD_REQUIRED,
-
         ADMINISTRATOR_REQUIRED,
-
         CONFIRMATION_REQUIRED,
-
         INVALID_WORLD,
-
         EXECUTION_ALREADY_ACTIVE,
-
         PREFLIGHT_REJECTED,
-
         AUTHORIZATION_REJECTED,
-
         PERMIT_REJECTED,
-
         EXECUTION_FAILED,
-
         GENERATING,
-
         AWAITING_VERIFICATION,
-
         COMPLETED,
-
         FAILED
     }
-
-    /*
-     * ========================================================
-     * EXECUTION RESULT
-     * ========================================================
-     */
 
     public static final class ExecutionResult {
 
@@ -133,7 +69,6 @@ public final class EarthResidentialExecution {
                 ExecutionStatus status,
                 String message
         ) {
-
             this.status = status;
             this.message = message;
         }
@@ -152,9 +87,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * INDIVIDUAL EXECUTION SESSION
-     * ========================================================
      */
 
     private static final class ExecutionSession {
@@ -175,11 +108,6 @@ public final class EarthResidentialExecution {
 
         private final boolean geographicDataReady;
 
-        /*
-         * Only tickets acquired by this execution session
-         * are tracked for removal.
-         */
-
         private final List<ConstructionChunk> retainedChunks =
                 new ArrayList<>();
 
@@ -194,6 +122,8 @@ public final class EarthResidentialExecution {
 
         private int nextChunkIndex;
 
+        private boolean authorizationPending;
+
         private boolean installationStarted;
 
         private boolean permitIssued;
@@ -207,27 +137,18 @@ public final class EarthResidentialExecution {
         ) {
 
             this.plugin = plugin;
-
             this.world = world;
-
             this.worldId = world.getUID();
-
             this.propertyId = property.getPropertyId();
-
             this.property = property;
-
             this.development = development;
-
             this.chunks = List.copyOf(property.getChunks());
-
             this.geographicDataReady = geographicDataReady;
         }
     }
 
     /*
-     * ========================================================
      * START CONTROLLED RESIDENTIAL EXECUTION
-     * ========================================================
      */
 
     public static ExecutionResult start(
@@ -293,12 +214,6 @@ public final class EarthResidentialExecution {
             );
         }
 
-        /*
-         * Never allow simultaneous installations.
-         *
-         * Failed sessions remain reserved for manual review.
-         */
-
         if (activeSession != null) {
 
             return result(
@@ -310,10 +225,6 @@ public final class EarthResidentialExecution {
         ExecutionSession session = null;
 
         try {
-
-            /*
-             * Final read-only preflight.
-             */
 
             PreflightResult preflight =
                     EarthResidentialInstaller
@@ -356,19 +267,33 @@ public final class EarthResidentialExecution {
             activeSession = session;
 
             /*
-             * Persist IN_PROGRESS before permitting generation.
+             * Open the restricted authorization window.
+             *
+             * Permission is withdrawn immediately after
+             * the synchronous authorization call.
              */
 
-            AuthorizationResult authorization =
-                    EarthResidentialAuthorization
-                            .authorizeInstallationStart(
-                                    plugin,
-                                    sender,
-                                    world,
-                                    propertyId,
-                                    geographicDataReady,
-                                    confirmation
-                            );
+            AuthorizationResult authorization;
+
+            session.authorizationPending = true;
+
+            try {
+
+                authorization =
+                        EarthResidentialAuthorization
+                                .authorizeInstallationStart(
+                                        plugin,
+                                        sender,
+                                        world,
+                                        propertyId,
+                                        geographicDataReady,
+                                        confirmation
+                                );
+
+            } finally {
+
+                session.authorizationPending = false;
+            }
 
             if (!authorization.isAuthorized()) {
 
@@ -408,7 +333,7 @@ public final class EarthResidentialExecution {
             session.installationStarted = true;
 
             /*
-             * Independently verify persistent installation start.
+             * Verify persistent installation start.
              */
 
             if (!EarthResidentialInstallation.isReady()
@@ -429,7 +354,7 @@ public final class EarthResidentialExecution {
             }
 
             /*
-             * Issue permission for the exact approved property.
+             * Issue permission only for the approved property.
              */
 
             boolean permitIssued =
@@ -512,15 +437,10 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
-     * MAIN-THREAD EXECUTION MONITOR
-     * ========================================================
+     * MAIN THREAD EXECUTION MONITOR
      *
      * Never wait synchronously for an incomplete future.
-     *
-     * Only one explicit construction chunk request
-     * may be pending at a time.
-     * ========================================================
+     * Only one construction chunk request may be pending.
      */
 
     private static void monitor(
@@ -552,10 +472,6 @@ public final class EarthResidentialExecution {
                 return;
             }
 
-            /*
-             * Inspect the pending asynchronous request.
-             */
-
             if (session.pendingChunk != null) {
 
                 if (!session.pendingChunk.isDone()) {
@@ -574,10 +490,6 @@ public final class EarthResidentialExecution {
 
                     return;
                 }
-
-                /*
-                 * Future is already complete.
-                 */
 
                 Chunk completedChunk =
                         session.pendingChunk.join();
@@ -606,11 +518,6 @@ public final class EarthResidentialExecution {
 
                     return;
                 }
-
-                /*
-                 * Keep this chunk loaded until
-                 * physical verification is resolved.
-                 */
 
                 if (!retainConstructionChunk(
                         session,
@@ -641,10 +548,6 @@ public final class EarthResidentialExecution {
                 );
             }
 
-            /*
-             * All required chunk requests have completed.
-             */
-
             if (session.nextChunkIndex
                     >= session.chunks.size()) {
 
@@ -652,10 +555,6 @@ public final class EarthResidentialExecution {
 
                 return;
             }
-
-            /*
-             * Request the next authorized chunk.
-             */
 
             ConstructionChunk next =
                     session.chunks.get(
@@ -696,15 +595,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
-     * RETAIN COMPLETED CONSTRUCTION CHUNK
-     * ========================================================
-     *
-     * Use plugin chunk tickets only after an authorized
-     * asynchronous construction request has completed.
-     *
-     * Do not deliberately load a missing chunk here.
-     * ========================================================
+     * RETAIN COMPLETED CONSTRUCTION CHUNKS
      */
 
     private static boolean retainConstructionChunk(
@@ -744,10 +635,7 @@ public final class EarthResidentialExecution {
         }
 
         /*
-         * Reject an unexpected existing EarthBound ticket.
-         *
-         * This avoids removing a ticket acquired by
-         * another EarthBound system.
+         * Never take ownership of another system's ticket.
          */
 
         if (session.world.getPluginChunkTickets(
@@ -770,10 +658,6 @@ public final class EarthResidentialExecution {
             return false;
         }
 
-        /*
-         * Track ownership immediately after acquisition.
-         */
-
         session.retainedChunks.add(chunk);
 
         if (!session.world.isChunkLoaded(chunkX, chunkZ)
@@ -793,9 +677,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * CHECK RETAINED CONSTRUCTION CHUNKS
-     * ========================================================
      */
 
     private static boolean verifyRetainedChunks(
@@ -872,16 +754,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * RELEASE SESSION CHUNK TICKETS
-     * ========================================================
-     *
-     * Remove only tickets acquired by this session.
-     *
-     * Never forcibly unload construction chunks.
-     *
-     * Failed removals remain tracked for shutdown cleanup.
-     * ========================================================
      */
 
     private static boolean releaseConstructionChunks(
@@ -892,9 +765,7 @@ public final class EarthResidentialExecution {
 
         for (int index =
                     session.retainedChunks.size() - 1;
-
                 index >= 0;
-
                 index--) {
 
             ConstructionChunk chunk =
@@ -961,9 +832,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * REVALIDATE ACTIVE EXECUTION
-     * ========================================================
      */
 
     private static String validateActiveExecution(
@@ -996,14 +865,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * COMMON INSTALLATION CONDITIONS
-     * ========================================================
-     *
-     * Used during generation and completion.
-     *
-     * Does not require an active construction permit.
-     * ========================================================
      */
 
     private static String validateInstallationConditions(
@@ -1086,11 +948,6 @@ public final class EarthResidentialExecution {
             return "Residential chunk separation invalid.";
         }
 
-        /*
-         * Confirm current registered sites still match
-         * their original approved installation identities.
-         */
-
         for (var currentSite : currentSites) {
 
             if (!EarthResidentialInstallation
@@ -1113,8 +970,8 @@ public final class EarthResidentialExecution {
         }
 
         /*
-         * Verify neighboring unfinished properties
-         * remain unowned and ungenerated.
+         * Neighboring unfinished properties must remain
+         * unowned and ungenerated.
          */
 
         for (PropertyPlan neighboring
@@ -1186,9 +1043,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * ACTIVE PROPERTY BOUNDARY INSPECTION
-     * ========================================================
      */
 
     private static final class PlanResultAdapter {
@@ -1269,13 +1124,10 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * FINISH CHUNK GENERATION
-     * ========================================================
      *
-     * Generation completion does not automatically
-     * establish successful installation.
-     * ========================================================
+     * Generation alone does not establish successful
+     * installation completion.
      */
 
     private static void finishGeneration(
@@ -1320,10 +1172,6 @@ public final class EarthResidentialExecution {
             return;
         }
 
-        /*
-         * Withdraw permission before physical inspection.
-         */
-
         EarthGuemesGenerator.revokeConstructionPermit();
 
         session.permitIssued = false;
@@ -1350,25 +1198,10 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * VERIFY AND COMPLETE INSTALLATION
-     * ========================================================
      *
-     * Required sequence:
-     *
-     * 1. Confirm execution identity.
-     * 2. Confirm generation permit withdrawn.
-     * 3. Confirm required chunks retained.
-     * 4. Verify physical residential structure.
-     * 5. Request world save.
-     * 6. Repeat final safety and physical checks.
-     * 7. Persist COMPLETED.
-     * 8. Release construction chunk tickets.
-     * 9. Release successful execution session.
-     *
-     * World saving and ledger persistence are not
-     * a single atomic transaction.
-     * ========================================================
+     * World saving and installation ledger persistence
+     * are not a single atomic transaction.
      */
 
     private static void verifyAndComplete(
@@ -1394,10 +1227,6 @@ public final class EarthResidentialExecution {
 
                 return;
             }
-
-            /*
-             * Initial physical structure verification.
-             */
 
             VerificationResult verification =
                     EarthResidentialVerification.verify(
@@ -1427,11 +1256,7 @@ public final class EarthResidentialExecution {
             );
 
             /*
-             * Request a Minecraft world save while
-             * construction chunks remain retained.
-             *
-             * This does not establish an atomic
-             * world-storage and ledger transaction.
+             * Request world save while chunks remain retained.
              */
 
             session.plugin.getLogger().info(
@@ -1440,13 +1265,6 @@ public final class EarthResidentialExecution {
             );
 
             session.world.save();
-
-            /*
-             * World save operations may trigger other
-             * server activity or plugin event handlers.
-             *
-             * Recheck installation conditions afterward.
-             */
 
             invalidReason =
                     validateCompletionConditions(session);
@@ -1460,8 +1278,6 @@ public final class EarthResidentialExecution {
 
             /*
              * Repeat physical verification after saving.
-             *
-             * Do not rely solely on the earlier result.
              */
 
             VerificationResult finalVerification =
@@ -1519,10 +1335,6 @@ public final class EarthResidentialExecution {
                 return;
             }
 
-            /*
-             * Independently confirm ledger completion.
-             */
-
             if (!EarthResidentialInstallation.isReady()
 
                     || EarthResidentialInstallation
@@ -1545,11 +1357,6 @@ public final class EarthResidentialExecution {
             }
 
             session.status = ExecutionStatus.COMPLETED;
-
-            /*
-             * Release only this execution session's
-             * temporary construction tickets.
-             */
 
             boolean ticketsReleased =
                     releaseConstructionChunks(session);
@@ -1603,13 +1410,6 @@ public final class EarthResidentialExecution {
 
             if (!ticketsReleased) {
 
-                /*
-                 * Completion was already persisted.
-                 *
-                 * Do not attempt to rewrite COMPLETED
-                 * as FAILED because cleanup was unsuccessful.
-                 */
-
                 session.plugin.getLogger().severe(
                         "Completed installation requires "
                         + "chunk ticket cleanup review."
@@ -1617,13 +1417,6 @@ public final class EarthResidentialExecution {
 
                 return;
             }
-
-            /*
-             * Release the successful session.
-             *
-             * A future installation must independently
-             * pass all preflight and authorization checks.
-             */
 
             activeSession = null;
 
@@ -1636,11 +1429,6 @@ public final class EarthResidentialExecution {
             );
 
             if (session.status == ExecutionStatus.COMPLETED) {
-
-                /*
-                 * Persistent completion must not be
-                 * reversed by a later cleanup error.
-                 */
 
                 releaseConstructionChunks(session);
 
@@ -1660,9 +1448,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * VALIDATE COMPLETION CONDITIONS
-     * ========================================================
      */
 
     private static String validateCompletionConditions(
@@ -1698,9 +1484,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * CONFIRM VERIFICATION RESULT IDENTITY
-     * ========================================================
      */
 
     private static boolean isMatchingVerification(
@@ -1727,16 +1511,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * FAILURE HANDLING
-     * ========================================================
-     *
-     * Withdraw construction permission.
-     * Cancel the monitor.
-     * Release temporary construction tickets.
-     * Persist FAILED when possible.
-     * Retain unresolved sessions for manual review.
-     * ========================================================
      */
 
     private static void fail(
@@ -1745,11 +1520,6 @@ public final class EarthResidentialExecution {
     ) {
 
         session.status = ExecutionStatus.FAILED;
-
-        /*
-         * Revoke permission even if local permit state
-         * is uncertain following an unexpected error.
-         */
 
         if (activeSession == session) {
 
@@ -1761,10 +1531,7 @@ public final class EarthResidentialExecution {
         cancelMonitor(session);
 
         /*
-         * A pending request may still finish.
-         *
-         * Cancelling a CompletableFuture does not prove
-         * Paper cancelled underlying chunk generation.
+         * A pending asynchronous request may still finish.
          */
 
         if (session.pendingChunk != null
@@ -1866,9 +1633,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * CANCEL EXECUTION MONITOR
-     * ========================================================
      */
 
     private static void cancelMonitor(
@@ -1884,9 +1649,73 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
+     * RESTRICTED INSTALLATION AUTHORIZATION GATE
+     *
+     * Only valid during the synchronous authorization
+     * call belonging to the reserved startup session.
+     *
+     * This method does not authorize construction,
+     * issue permits or modify installation records.
+     */
+
+    static boolean isInstallationAuthorizationPending(
+            EarthBound plugin,
+            World world,
+            String propertyId
+    ) {
+
+        if (!Bukkit.isPrimaryThread()
+
+                || !isExecutionEnabled()
+
+                || plugin == null
+
+                || !plugin.isEnabled()
+
+                || world == null
+
+                || propertyId == null) {
+
+            return false;
+        }
+
+        ExecutionSession session = activeSession;
+
+        return session != null
+
+                && session.authorizationPending
+
+                && session.plugin == plugin
+
+                && session.world == world
+
+                && session.worldId.equals(world.getUID())
+
+                && WORLD_NAME.equals(world.getName())
+
+                && Bukkit.getWorld(session.worldId) == world
+
+                && session.propertyId.equals(propertyId)
+
+                && session.status == ExecutionStatus.GENERATING
+
+                && !session.installationStarted
+
+                && !session.permitIssued
+
+                && session.monitorTask == null
+
+                && session.pendingChunk == null
+
+                && session.nextChunkIndex == 0
+
+                && !session.chunks.isEmpty()
+
+                && session.retainedChunks.isEmpty();
+    }
+
+    /*
      * EXECUTION STATUS ACCESS
-     * ========================================================
      */
 
     public static boolean hasActiveExecution() {
@@ -1951,14 +1780,9 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * EXECUTION SHUTDOWN
-     * ========================================================
      *
-     * Called before installation ledger shutdown.
-     *
-     * Never mark an interrupted installation completed.
-     * ========================================================
+     * Never mark interrupted installations completed.
      */
 
     public static void shutdown() {
@@ -1980,12 +1804,6 @@ public final class EarthResidentialExecution {
         try {
 
             if (session.status == ExecutionStatus.COMPLETED) {
-
-                /*
-                 * Persistent completion already succeeded.
-                 *
-                 * Only cleanup remains.
-                 */
 
                 cancelMonitor(session);
 
@@ -2023,9 +1841,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * EXECUTION INTEGRATION LOCK STATUS
-     * ========================================================
      */
 
     public static boolean isExecutionEnabled() {
@@ -2037,9 +1853,7 @@ public final class EarthResidentialExecution {
     }
 
     /*
-     * ========================================================
      * RESULT HELPER
-     * ========================================================
      */
 
     private static ExecutionResult result(
