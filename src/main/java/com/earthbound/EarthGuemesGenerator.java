@@ -21,20 +21,11 @@ import com.earthbound.roads.EarthRoadSpatialIndex;
 import com.earthbound.terrain.EarthTerrainLoader;
 import com.earthbound.terrain.EarthElevation;
 
-import com.earthbound.EarthAlphaResidentialGenerator
-        .ResidentialSite;
-
-import com.earthbound.EarthResidentialSafety
-        .SafetyResult;
-
-import com.earthbound.EarthResidentialInstallation
-        .InstallationStatus;
-
-import com.earthbound.EarthResidentialInstaller
-        .ConstructionChunk;
-
-import com.earthbound.EarthResidentialInstaller
-        .PropertyPlan;
+import com.earthbound.EarthAlphaResidentialGenerator.ResidentialSite;
+import com.earthbound.EarthResidentialSafety.SafetyResult;
+import com.earthbound.EarthResidentialInstallation.InstallationStatus;
+import com.earthbound.EarthResidentialInstaller.ConstructionChunk;
+import com.earthbound.EarthResidentialInstaller.PropertyPlan;
 
 /*
  * ============================================================
@@ -46,9 +37,12 @@ import com.earthbound.EarthResidentialInstaller
  *
  * Registration alone never enables construction.
  *
- * Future construction requires an individually authorized
+ * Construction requires an individually authorized
  * property, matching world identity, approved chunk list
  * and persistent installation start record.
+ *
+ * Construction permit validation occurs outside the
+ * construction lock to avoid unsafe lock ordering.
  *
  * Physical construction remains locked.
  * ============================================================
@@ -67,10 +61,7 @@ public final class EarthGuemesGenerator {
             29999900;
 
     /*
-     * Independent generator construction lock.
-     *
-     * Do not enable until installer execution and
-     * completed structure verification are implemented.
+     * Independent generator construction safety lock.
      */
 
     private static final boolean CONSTRUCTION_APPROVED =
@@ -80,8 +71,8 @@ public final class EarthGuemesGenerator {
             residentialSites = List.of();
 
     /*
-     * Protect construction permit access and residential
-     * block generation against concurrent callbacks.
+     * Protect permit publication, revocation
+     * and residential generation callbacks.
      */
 
     private static final Object CONSTRUCTION_LOCK =
@@ -89,21 +80,25 @@ public final class EarthGuemesGenerator {
 
     private static ConstructionPermit activePermit;
 
+    /*
+     * Revision identity changes whenever construction
+     * permission or the residential registry changes.
+     *
+     * Prevents publication of a stale permit following
+     * revocation or residential registry replacement.
+     *
+     * Protected by CONSTRUCTION_LOCK.
+     */
+
+    private static Object permitRevision =
+            new Object();
+
     private EarthGuemesGenerator() {
     }
 
     /*
      * ========================================================
      * TEMPORARY CONSTRUCTION PERMIT
-     * ========================================================
-     *
-     * Permits are never persisted.
-     *
-     * A server restart must never automatically reactivate
-     * an interrupted residential construction operation.
-     *
-     * All mutable permit fields are protected by
-     * CONSTRUCTION_LOCK.
      * ========================================================
      */
 
@@ -325,7 +320,7 @@ public final class EarthGuemesGenerator {
             }
 
             /*
-             * Alpha ownership currently uses world-aligned
+             * Alpha ownership uses world-aligned
              * 24 x 32 block boundaries.
              */
 
@@ -748,12 +743,17 @@ public final class EarthGuemesGenerator {
         }
 
         /*
-         * Publish only the complete validated registry.
+         * Publish the complete validated registry.
+         *
+         * Invalidate any permit validation that began
+         * before this registry was published.
          */
 
         synchronized (CONSTRUCTION_LOCK) {
 
             activePermit = null;
+
+            permitRevision = new Object();
 
             residentialSites =
                     List.copyOf(approvedSites);
@@ -955,6 +955,8 @@ public final class EarthGuemesGenerator {
 
             activePermit = null;
 
+            permitRevision = new Object();
+
             residentialSites = List.of();
         }
     }
@@ -964,18 +966,23 @@ public final class EarthGuemesGenerator {
      * ISSUE TEMPORARY CONSTRUCTION PERMIT
      * ========================================================
      *
-     * Intended exclusively for the future controlled
-     * installer.
-     *
      * Must be called on the server main thread after
      * persistent IN_PROGRESS status has been recorded.
+     *
+     * Phase 1:
+     * Capture the registry and permit revision.
+     *
+     * Phase 2:
+     * Perform world, ownership, ledger and geographic
+     * validation outside CONSTRUCTION_LOCK.
+     *
+     * Phase 3:
+     * Publish the permit only if the original registry
+     * and permit revision remain unchanged.
      *
      * Does not generate or load chunks.
      *
      * Does not replace administrator authorization.
-     *
-     * Both independent physical construction locks
-     * must be enabled before a permit can be issued.
      * ========================================================
      */
 
@@ -1033,192 +1040,249 @@ public final class EarthGuemesGenerator {
 
         try {
 
-            synchronized (CONSTRUCTION_LOCK) {
+            /*
+             * Phase 1: Capture the immutable registry
+             * and current permit revision.
+             */
 
-                /*
-                 * Never replace an existing permit.
-                 */
+            final List<ResidentialSite> sites;
+
+            final Object revision;
+
+            synchronized (CONSTRUCTION_LOCK) {
 
                 if (activePermit != null) {
 
                     return false;
                 }
 
-                List<ResidentialSite> sites =
-                        residentialSites;
+                sites = residentialSites;
 
-                if (sites.size() != MAX_ALPHA_HOMES
+                revision = permitRevision;
+            }
 
-                        || !EarthAlphaSiteFinder
-                                .hasDevelopmentChunkClearance(
-                                        sites
-                                )) {
+            /*
+             * Phase 2: Perform all external inspections
+             * outside the construction lock.
+             *
+             * Never hold CONSTRUCTION_LOCK while performing
+             * Bukkit world or persistent ledger queries.
+             */
+
+            if (sites.size() != MAX_ALPHA_HOMES
+
+                    || !EarthAlphaSiteFinder
+                            .hasDevelopmentChunkClearance(
+                                    sites
+                            )) {
+
+                return false;
+            }
+
+            String propertyId =
+                    propertyPlan.getPropertyId();
+
+            if (!isValidPropertyId(propertyId)) {
+
+                return false;
+            }
+
+            /*
+             * Resolve the requested property from the
+             * captured registry, not the live registry.
+             */
+
+            ResidentialSite site = null;
+
+            for (ResidentialSite candidate : sites) {
+
+                if (propertyId.equals(
+                        candidate.getPropertyId()
+                )) {
+
+                    site = candidate;
+
+                    break;
+                }
+            }
+
+            if (!sameSite(
+                    site,
+                    propertyPlan.getSite()
+            )) {
+
+                return false;
+            }
+
+            /*
+             * Require exactly one active installation.
+             */
+
+            for (ResidentialSite registeredSite : sites) {
+
+                String registeredId =
+                        registeredSite.getPropertyId();
+
+                if (!EarthResidentialInstallation
+                        .matchesApprovedSite(
+                                world,
+                                registeredSite
+                        )) {
 
                     return false;
                 }
 
-                String propertyId =
-                        propertyPlan.getPropertyId();
+                InstallationStatus status =
+                        EarthResidentialInstallation
+                                .getStatus(registeredId);
 
-                if (!isValidPropertyId(propertyId)) {
+                if (propertyId.equals(registeredId)) {
+
+                    if (status
+                            != InstallationStatus.IN_PROGRESS) {
+
+                        return false;
+                    }
+
+                } else if (
+
+                        status != InstallationStatus.APPROVED
+
+                        && status
+                            != InstallationStatus.COMPLETED) {
 
                     return false;
                 }
 
-                ResidentialSite site =
-                        getResidentialSite(propertyId);
+                /*
+                 * Completed sites may have owners.
+                 *
+                 * Unfinished sites must remain unowned.
+                 */
 
-                if (!sameSite(
-                        site,
-                        propertyPlan.getSite()
+                if (status != InstallationStatus.COMPLETED
+
+                        && EarthEconomy.getPropertyOwner(
+                                registeredId
+                        ) != null) {
+
+                    return false;
+                }
+
+                /*
+                 * Recheck all unfinished sites without
+                 * loading or generating their chunks.
+                 */
+
+                if (status != InstallationStatus.COMPLETED) {
+
+                    SafetyResult safety =
+                            EarthResidentialSafety.inspectSite(
+                                    world,
+                                    registeredSite,
+                                    geographicDataReady
+                            );
+
+                    if (!safety.isSafe()) {
+
+                        return false;
+                    }
+                }
+            }
+
+            /*
+             * Recalculate the permitted chunk set.
+             */
+
+            List<ConstructionChunk> required =
+                    EarthResidentialInstaller
+                            .calculateRequiredChunks(site);
+
+            if (required.isEmpty()
+
+                    || required.size()
+                        != propertyPlan.getChunkCount()) {
+
+                return false;
+            }
+
+            Set<Long> expectedKeys =
+                    new HashSet<>();
+
+            Set<Long> plannedKeys =
+                    new HashSet<>();
+
+            for (ConstructionChunk chunk : required) {
+
+                expectedKeys.add(chunk.getKey());
+
+                if (world.isChunkLoaded(
+                        chunk.getChunkX(),
+                        chunk.getChunkZ()
                 )) {
 
                     return false;
                 }
 
-                /*
-                 * Require exactly one active installation.
-                 */
+                if (world.isChunkGenerated(
+                        chunk.getChunkX(),
+                        chunk.getChunkZ()
+                )) {
 
-                for (ResidentialSite registeredSite : sites) {
-
-                    String registeredId =
-                            registeredSite.getPropertyId();
-
-                    if (!EarthResidentialInstallation
-                            .matchesApprovedSite(
-                                    world,
-                                    registeredSite
-                            )) {
-
-                        return false;
-                    }
-
-                    InstallationStatus status =
-                            EarthResidentialInstallation
-                                    .getStatus(registeredId);
-
-                    if (propertyId.equals(registeredId)) {
-
-                        if (status
-                                != InstallationStatus.IN_PROGRESS) {
-
-                            return false;
-                        }
-
-                    } else if (
-
-                            status != InstallationStatus.APPROVED
-
-                            && status
-                                != InstallationStatus.COMPLETED) {
-
-                        return false;
-                    }
-
-                    /*
-                     * Completed sites may have owners.
-                     * Unfinished sites must remain unowned.
-                     */
-
-                    if (status != InstallationStatus.COMPLETED
-
-                            && EarthEconomy.getPropertyOwner(
-                                    registeredId
-                            ) != null) {
-
-                        return false;
-                    }
-
-                    /*
-                     * Recheck all unfinished sites without
-                     * loading or generating their chunks.
-                     */
-
-                    if (status != InstallationStatus.COMPLETED) {
-
-                        SafetyResult safety =
-                                EarthResidentialSafety.inspectSite(
-                                        world,
-                                        registeredSite,
-                                        geographicDataReady
-                                );
-
-                        if (!safety.isSafe()) {
-
-                            return false;
-                        }
-                    }
+                    return false;
                 }
+            }
 
-                /*
-                 * Recalculate the permitted chunk set.
-                 */
+            for (ConstructionChunk chunk
+                    : propertyPlan.getChunks()) {
 
-                List<ConstructionChunk> required =
-                        EarthResidentialInstaller
-                                .calculateRequiredChunks(site);
+                plannedKeys.add(chunk.getKey());
+            }
 
-                if (required.isEmpty()
+            if (expectedKeys.size() != required.size()
 
-                        || required.size()
-                            != propertyPlan.getChunkCount()) {
+                    || plannedKeys.size()
+                        != propertyPlan.getChunkCount()
+
+                    || !expectedKeys.equals(plannedKeys)) {
+
+                return false;
+            }
+
+            /*
+             * Prepare the candidate permit outside
+             * the construction lock.
+             */
+
+            ConstructionPermit candidate =
+                    new ConstructionPermit(
+                            world.getUID(),
+                            site,
+                            expectedKeys
+                    );
+
+            /*
+             * Phase 3: Publish only if no permit or registry
+             * change occurred during safety validation.
+             *
+             * No world inspection or persistent storage
+             * operations are performed inside this section.
+             */
+
+            synchronized (CONSTRUCTION_LOCK) {
+
+                if (activePermit != null
+
+                        || residentialSites != sites
+
+                        || permitRevision != revision) {
 
                     return false;
                 }
 
-                Set<Long> expectedKeys =
-                        new HashSet<>();
+                activePermit = candidate;
 
-                Set<Long> plannedKeys =
-                        new HashSet<>();
-
-                for (ConstructionChunk chunk : required) {
-
-                    expectedKeys.add(chunk.getKey());
-
-                    if (world.isChunkLoaded(
-                            chunk.getChunkX(),
-                            chunk.getChunkZ()
-                    )) {
-
-                        return false;
-                    }
-
-                    if (world.isChunkGenerated(
-                            chunk.getChunkX(),
-                            chunk.getChunkZ()
-                    )) {
-
-                        return false;
-                    }
-                }
-
-                for (ConstructionChunk chunk
-                        : propertyPlan.getChunks()) {
-
-                    plannedKeys.add(chunk.getKey());
-                }
-
-                if (expectedKeys.size() != required.size()
-
-                        || plannedKeys.size()
-                            != propertyPlan.getChunkCount()
-
-                        || !expectedKeys.equals(plannedKeys)) {
-
-                    return false;
-                }
-
-                /*
-                 * Publish the individually scoped permit.
-                 */
-
-                activePermit = new ConstructionPermit(
-                        world.getUID(),
-                        site,
-                        expectedKeys
-                );
+                permitRevision = new Object();
 
                 return true;
             }
@@ -1240,13 +1304,15 @@ public final class EarthGuemesGenerator {
      * CONSTRUCTION PERMIT REVOCATION
      * ========================================================
      *
-     * Waits for any residential generation section
+     * Waits for any active residential generation section
      * currently holding CONSTRUCTION_LOCK.
+     *
+     * Invalidates pending permit validation.
      *
      * Does not change persistent installation records.
      *
-     * The future installer must record failures and
-     * handle any partially generated construction.
+     * The execution coordinator must handle failures
+     * and partially generated constructions.
      * ========================================================
      */
 
@@ -1255,6 +1321,8 @@ public final class EarthGuemesGenerator {
         synchronized (CONSTRUCTION_LOCK) {
 
             activePermit = null;
+
+            permitRevision = new Object();
         }
     }
 
@@ -1355,12 +1423,10 @@ public final class EarthGuemesGenerator {
      * LEGACY GENERATION ENTRY POINT
      * ========================================================
      *
-     * Preserved for compatibility with EarthGenerator.
+     * Preserved for compatibility.
      *
      * Calls without explicit world identity must never
      * generate residential structures.
-     *
-     * EarthGenerator will be integrated separately.
      * ========================================================
      */
 
@@ -1388,7 +1454,7 @@ public final class EarthGuemesGenerator {
      * Uses only the scoped construction permit and
      * current geographic data readiness.
      *
-     * All permit validation and residential generation
+     * Permit validation and residential block generation
      * are serialized under CONSTRUCTION_LOCK.
      * ========================================================
      */
@@ -1518,6 +1584,7 @@ public final class EarthGuemesGenerator {
                  * Suspend all further residential callbacks.
                  *
                  * Propagate the generation failure.
+                 *
                  * Do not mark the installation COMPLETED.
                  */
 
