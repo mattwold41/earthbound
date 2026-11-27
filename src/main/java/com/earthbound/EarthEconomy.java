@@ -1,3 +1,4 @@
+
 package com.earthbound;
 
 import java.io.File;
@@ -13,9 +14,15 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.UUID;
 
+import org.bukkit.Bukkit;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+
+import com.earthbound.EarthAlphaResidentialGenerator.ResidentialSite;
+import com.earthbound.EarthResidentialInstallation.InstallationStatus;
+import com.earthbound.EarthPropertyManager.PurchaseEligibility;
 
 public class EarthEconomy {
 
@@ -42,6 +49,9 @@ public class EarthEconomy {
 
     private static final String STORE =
             "accounts.general-store";
+
+    private static final String RESIDENTIAL_WORLD =
+            "earthbound";
 
     public enum Treasury {
         ANACORTES,
@@ -100,6 +110,11 @@ public class EarthEconomy {
 
             plugin.getLogger().info(
                     "EarthBound secure economy loaded!"
+            );
+
+            plugin.getLogger().info(
+                    "Independent residential purchase "
+                    + "transaction protection enabled."
             );
 
         } catch (Exception exception) {
@@ -177,6 +192,45 @@ public class EarthEconomy {
         try {
 
             long cents = toCents(amount);
+
+            if (cents <= 0
+                    || cents > MAX_TRANSACTION) {
+
+                return -1;
+            }
+
+            return cents;
+
+        } catch (RuntimeException exception) {
+
+            return -1;
+        }
+    }
+
+
+    /*
+     * Property purchases must use exact monetary amounts.
+     *
+     * Do not accept fractional cents that would otherwise
+     * be rounded to the registered property price.
+     */
+
+    private static long exactPropertyPriceCents(
+            double amount
+    ) {
+
+        if (!Double.isFinite(amount)
+                || amount <= 0.0) {
+
+            return -1;
+        }
+
+        try {
+
+            long cents =
+                    BigDecimal.valueOf(amount)
+                            .movePointRight(2)
+                            .longValueExact();
 
             if (cents <= 0
                     || cents > MAX_TRANSACTION) {
@@ -1059,8 +1113,8 @@ public class EarthEconomy {
                 playerPath(uuid),
                 null,
                 uuid.toString(),
-                "SYSTEM",
                 cents,
+                "SYSTEM",
                 "Money removed"
         );
     }
@@ -1157,53 +1211,326 @@ public class EarthEconomy {
 
     /*
      * ============================================================
-     * ATOMIC GOVERNMENT PROPERTY PURCHASE
+     * INDEPENDENT RESIDENTIAL TRANSACTION PROTECTION
+     * ============================================================
+     *
+     * The economy must never trust:
+     *
+     * - A property sale banner.
+     * - An open purchase menu.
+     * - Prior purchase eligibility checks.
+     * - A caller's requested property price.
+     * - Successful generation callbacks alone.
+     *
+     * The authoritative installation record must be
+     * COMPLETED and match the approved residential site.
+     *
+     * This inspection must run on the main thread
+     * while the economy transaction lock is held.
+     *
+     * No financial changes occur during this inspection.
      * ============================================================
      */
 
-    public static synchronized boolean
-            purchaseGovernmentProperty(
-                    Player player,
-                    double amount,
-                    String propertyId
-            ) {
+    private static String inspectPropertyTransaction(
+            Player player,
+            String propertyId,
+            long cents,
+            EarthProperty property
+    ) {
 
-        long cents = transactionCents(amount);
+        if (!Bukkit.isPrimaryThread()) {
 
-        if (cents <= 0
-                || !validPropertyId(propertyId)
-                || !ensureAccount(player)) {
-
-            return false;
+            return "Main-thread execution required.";
         }
 
-        EarthProperty property =
-                EarthPropertyManager.getProperty(
+        if (!ready
+                || data == null
+                || plugin == null
+                || !plugin.isEnabled()) {
+
+            return "Economy unavailable.";
+        }
+
+        if (player == null || !player.isOnline()) {
+
+            return "Purchasing player unavailable.";
+        }
+
+        if (propertyId == null
+                || !propertyId.matches("guemes_home_0[1-6]")) {
+
+            return "Invalid Friends Alpha property identity.";
+        }
+
+        if (cents <= 0 || cents > MAX_TRANSACTION) {
+
+            return "Invalid purchase amount.";
+        }
+
+        if (!EarthPropertyManager.isReady()) {
+
+            return "Property ownership system unavailable.";
+        }
+
+        if (property == null
+
+                || !propertyId.equals(property.getId())
+
+                || EarthPropertyManager.getProperty(
+                        propertyId
+                ) != property) {
+
+            return "Registered property unavailable or changed.";
+        }
+
+        if (property.isOwned()) {
+
+            return "Property already has an owner.";
+        }
+
+        /*
+         * Independently validate the exact purchase price.
+         */
+
+        if (exactPropertyPriceCents(
+                property.getPrice()
+        ) != cents) {
+
+            return "Registered property price mismatch.";
+        }
+
+        /*
+         * Respect the current residential configuration.
+         */
+
+        if (!plugin.getConfig().getBoolean(
+                "residential.enabled",
+                false
+        )) {
+
+            return "Residential development disabled.";
+        }
+
+        if (!RESIDENTIAL_WORLD.equals(
+                plugin.getConfig().getString(
+                        "residential.world",
+                        RESIDENTIAL_WORLD
+                )
+        )) {
+
+            return "Invalid configured residential world.";
+        }
+
+        ConfigurationSection home =
+                plugin.getConfig().getConfigurationSection(
+                        "properties.alpha-homes."
+                        + propertyId
+                );
+
+        if (home == null
+                || !home.getBoolean("enabled", false)) {
+
+            return "Residential property disabled.";
+        }
+
+        if (!home.contains("price")
+
+                || exactPropertyPriceCents(
+                        home.getDouble("price")
+                ) != cents) {
+
+            return "Configured property price mismatch.";
+        }
+
+        /*
+         * Suspend transactions during active construction
+         * or unresolved execution review.
+         */
+
+        if (EarthResidentialExecution.hasActiveExecution()) {
+
+            return "Residential execution requires attention.";
+        }
+
+        /*
+         * Independently inspect installation storage.
+         */
+
+        if (!EarthResidentialInstallation.isReady()) {
+
+            return "Installation storage unavailable.";
+        }
+
+        InstallationStatus installationStatus =
+                EarthResidentialInstallation.getStatus(
                         propertyId
                 );
 
-        if (property == null
-                || property.isOwned()
-                || transactionCents(property.getPrice())
-                        != cents) {
+        if (installationStatus
+                != InstallationStatus.COMPLETED) {
 
-            return false;
+            return "Installation is not COMPLETED: "
+                    + installationStatus;
         }
 
-        UUID uuid = player.getUniqueId();
+        /*
+         * Require the authoritative loaded world.
+         *
+         * Never load a missing world as part of a purchase.
+         */
+
+        if (!RESIDENTIAL_WORLD.equals(
+                property.getWorldName()
+        )
+
+                || !RESIDENTIAL_WORLD.equals(
+                        home.getString(
+                                "world",
+                                RESIDENTIAL_WORLD
+                        )
+                )) {
+
+            return "Residential property world mismatch.";
+        }
+
+        World world =
+                Bukkit.getWorld(RESIDENTIAL_WORLD);
+
+        if (world == null
+
+                || !RESIDENTIAL_WORLD.equals(
+                        world.getName()
+                )
+
+                || Bukkit.getWorld(world.getUID()) != world) {
+
+            return "Residential world unavailable.";
+        }
+
+        /*
+         * Independently resolve the registered
+         * residential construction site.
+         */
+
+        ResidentialSite site =
+                EarthGuemesGenerator.getResidentialSite(
+                        propertyId
+                );
+
+        if (site == null
+
+                || !propertyId.equals(
+                        site.getPropertyId()
+                )
+
+                || site.getDesign() == null) {
+
+            return "Registered residential site unavailable.";
+        }
+
+        /*
+         * Check world UUID, design revision, coordinates,
+         * orientation, ground height and approved boundaries.
+         */
+
+        if (!EarthResidentialInstallation
+                .matchesApprovedSite(world, site)) {
+
+            return "Persistent installation identity mismatch.";
+        }
+
+        /*
+         * Independently verify the property boundaries
+         * against the approved residential site.
+         */
+
+        if (property.getMinX() != site.getMinX()
+
+                || property.getMaxX() != site.getMaxX()
+
+                || property.getMinZ() != site.getMinZ()
+
+                || property.getMaxZ() != site.getMaxZ()) {
+
+            return "Approved property boundary mismatch.";
+        }
+
+        /*
+         * Check authoritative persistent ownership.
+         */
 
         String ownerPath =
                 "property-owners." + propertyId;
 
         if (data.contains(ownerPath)) {
 
-            return false;
+            return "Persistent property ownership already exists.";
         }
 
         /*
-         * FRIENDS ALPHA:
-         * ONE PROPERTY PER PLAYER
+         * Request the full property management eligibility
+         * inspection again from inside the economy.
+         *
+         * This adds the complete development separation,
+         * configuration and property-column inspections.
+         *
+         * The manager performs read-only economy checks.
+         * Java synchronized locks are reentrant, allowing
+         * this same-thread inspection.
+         *
+         * Never call purchaseProperty() from here.
          */
+
+        PurchaseEligibility eligibility =
+                EarthPropertyManager
+                        .checkPurchaseEligibility(propertyId);
+
+        if (eligibility != PurchaseEligibility.ELIGIBLE) {
+
+            return "Property eligibility rejected: "
+                    + eligibility.name();
+        }
+
+        /*
+         * Final storage and installation confirmation.
+         */
+
+        if (!ready
+
+                || data == null
+
+                || !EarthResidentialInstallation.isReady()
+
+                || EarthResidentialInstallation.getStatus(
+                        propertyId
+                ) != InstallationStatus.COMPLETED) {
+
+            return "Final installation readiness check failed.";
+        }
+
+        return null;
+    }
+
+
+    /*
+     * ============================================================
+     * AUTHORITATIVE ONE-PROPERTY-PER-PLAYER CHECK
+     * ============================================================
+     *
+     * Include all persisted property ownership records,
+     * even properties currently disabled in configuration.
+     * ============================================================
+     */
+
+    private static boolean playerMayPurchaseProperty(
+            UUID uuid
+    ) {
+
+        if (uuid == null || !ready || data == null) {
+
+            return false;
+        }
 
         ConfigurationSection owners =
                 data.getConfigurationSection(
@@ -1217,19 +1544,174 @@ public class EarthEconomy {
 
         for (String id : owners.getKeys(false)) {
 
-            if (uuid.toString().equals(
-                    owners.getString(id))) {
+            String savedOwner =
+                    owners.getString(id);
+
+            if (savedOwner == null) {
+
+                return false;
+            }
+
+            UUID existingOwner =
+                    UUID.fromString(savedOwner);
+
+            if (uuid.equals(existingOwner)) {
 
                 return false;
             }
         }
 
+        return true;
+    }
+
+
+    /*
+     * ============================================================
+     * ATOMIC GOVERNMENT PROPERTY PURCHASE
+     * ============================================================
+     *
+     * The financial transaction independently requires:
+     *
+     * - Main-thread execution.
+     * - An available online player.
+     * - Available financial storage.
+     * - A valid registered Alpha property.
+     * - Exact configured and registered pricing.
+     * - Persistent COMPLETED installation status.
+     * - Matching installation identity.
+     * - Matching property boundaries.
+     * - Full property purchase eligibility.
+     * - No current property owner.
+     * - One property per player.
+     * - Sufficient available funds.
+     *
+     * Property balances, ownership and history are
+     * committed together in the existing economy file.
+     * ============================================================
+     */
+
+    public static synchronized boolean
+            purchaseGovernmentProperty(
+                    Player player,
+                    double amount,
+                    String propertyId
+            ) {
+
+        /*
+         * No Bukkit world or property inspection
+         * may run asynchronously.
+         */
+
+        if (!Bukkit.isPrimaryThread()) {
+
+            return false;
+        }
+
+        if (!ready
+                || data == null
+                || plugin == null
+                || !plugin.isEnabled()
+
+                || player == null
+                || !player.isOnline()
+
+                || propertyId == null
+                || !propertyId.matches("guemes_home_0[1-6]")) {
+
+            return false;
+        }
+
+        long cents =
+                exactPropertyPriceCents(amount);
+
+        if (cents <= 0) {
+
+            return false;
+        }
+
         try {
+
+            EarthProperty property =
+                    EarthPropertyManager.getProperty(
+                            propertyId
+                    );
+
+            /*
+             * Reject unauthorized purchases before
+             * creating an account or preparing a transaction.
+             */
+
+            String rejected =
+                    inspectPropertyTransaction(
+                            player,
+                            propertyId,
+                            cents,
+                            property
+                    );
+
+            if (rejected != null) {
+
+                plugin.getLogger().warning(
+                        "Residential financial purchase rejected: "
+                        + propertyId
+                        + " - "
+                        + rejected
+                );
+
+                return false;
+            }
+
+            UUID uuid = player.getUniqueId();
+
+            String ownerPath =
+                    "property-owners." + propertyId;
+
+            if (data.contains(ownerPath)) {
+
+                return false;
+            }
+
+            /*
+             * FRIENDS ALPHA:
+             * ONE PROPERTY PER PLAYER
+             */
+
+            if (!playerMayPurchaseProperty(uuid)) {
+
+                return false;
+            }
+
+            /*
+             * Only an otherwise eligible request
+             * may initialize a missing player account.
+             */
+
+            if (!ensureAccount(player)) {
+
+                return false;
+            }
+
+            if (!ready || data == null) {
+
+                return false;
+            }
+
+            /*
+             * Recheck persistent ownership after
+             * account initialization.
+             */
+
+            if (data.contains(ownerPath)
+                    || !playerMayPurchaseProperty(uuid)) {
+
+                return false;
+            }
 
             YamlConfiguration proposed =
                     copyData();
 
-            String account = playerPath(uuid);
+            String account =
+                    playerPath(uuid);
 
             long balance = readCents(
                     proposed,
@@ -1247,6 +1729,9 @@ public class EarthEconomy {
              * 60% ANACORTES
              * 20% WASHINGTON
              * 20% USA
+             *
+             * Federal share receives any remaining cents
+             * so the total is always exact.
              */
 
             long cityShare = cents * 60 / 100;
@@ -1344,11 +1829,68 @@ public class EarthEconomy {
             );
 
             /*
+             * FINAL INDEPENDENT PURCHASE INSPECTION
+             *
+             * Proposed balances and ownership remain
+             * separate from the authoritative economy.
+             *
+             * Reject the proposal without committing
+             * if any installation conditions changed.
+             */
+
+            rejected =
+                    inspectPropertyTransaction(
+                            player,
+                            propertyId,
+                            cents,
+                            property
+                    );
+
+            if (rejected != null) {
+
+                plugin.getLogger().warning(
+                        "Final residential financial "
+                        + "purchase rejected: "
+                        + propertyId
+                        + " - "
+                        + rejected
+                );
+
+                return false;
+            }
+
+            if (data.contains(ownerPath)
+
+                    || !playerMayPurchaseProperty(uuid)
+
+                    || readCents(data, account) != balance) {
+
+                return false;
+            }
+
+            /*
              * ALL BALANCES AND OWNERSHIP ARE
              * COMMITTED TOGETHER.
              */
 
-            return commit(proposed);
+            if (!commit(proposed)) {
+
+                return false;
+            }
+
+            /*
+             * Financial ownership is now persistent.
+             *
+             * Synchronize the registered property owner
+             * here as well as in EarthPropertyManager.
+             *
+             * This protects ownership consistency when
+             * a valid purchase calls this method directly.
+             */
+
+            property.setOwner(uuid);
+
+            return true;
 
         } catch (Exception exception) {
 
