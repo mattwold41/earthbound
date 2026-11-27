@@ -1,6 +1,7 @@
 
 package com.earthbound;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -21,6 +22,7 @@ import com.earthbound.EarthResidentialInstaller.PreflightResult;
 
 import com.earthbound.EarthResidentialInstallation.InstallationStatus;
 import com.earthbound.EarthResidentialAuthorization.AuthorizationResult;
+import com.earthbound.EarthResidentialVerification.VerificationResult;
 
 /*
  * ============================================================
@@ -28,22 +30,25 @@ import com.earthbound.EarthResidentialAuthorization.AuthorizationResult;
  * Friends Alpha
  * ============================================================
  *
- * Coordinates controlled residential chunk generation.
- *
  * Responsibilities:
  *
- * - Final installation preflight.
+ * - Final construction preflight.
  * - Explicit console authorization.
  * - Persistent installation start.
  * - Individual construction permits.
  * - Sequential asynchronous chunk requests.
- * - Main-thread progress monitoring.
- * - Construction failure handling.
+ * - Temporary construction chunk retention.
+ * - Main-thread execution monitoring.
+ * - Physical structure verification.
+ * - World save request.
+ * - Persistent installation completion.
+ * - Failure handling.
  * - Construction permit withdrawal.
+ * - Chunk ticket cleanup.
  *
- * Successful generation does NOT mean a completed house.
+ * Successful generation alone does NOT mean completion.
  *
- * Physical structure verification must occur separately.
+ * Property sales are not activated by this class.
  *
  * Physical construction remains locked.
  * ============================================================
@@ -51,11 +56,9 @@ import com.earthbound.EarthResidentialAuthorization.AuthorizationResult;
 
 public final class EarthResidentialExecution {
 
-    private static final boolean EXECUTION_APPROVED =
-            false;
+    private static final boolean EXECUTION_APPROVED = false;
 
-    private static final String WORLD_NAME =
-            "earthbound";
+    private static final String WORLD_NAME = "earthbound";
 
     private static final String START_CONFIRMATION =
             "START-GUEMES-INSTALLATION";
@@ -109,6 +112,8 @@ public final class EarthResidentialExecution {
 
         AWAITING_VERIFICATION,
 
+        COMPLETED,
+
         FAILED
     }
 
@@ -134,17 +139,14 @@ public final class EarthResidentialExecution {
         }
 
         public ExecutionStatus getStatus() {
-
             return status;
         }
 
         public String getMessage() {
-
             return message;
         }
 
         public boolean isStarted() {
-
             return status == ExecutionStatus.STARTED;
         }
     }
@@ -171,6 +173,16 @@ public final class EarthResidentialExecution {
 
         private final List<ConstructionChunk> chunks;
 
+        private final boolean geographicDataReady;
+
+        /*
+         * Only tickets acquired by this execution session
+         * are tracked for removal.
+         */
+
+        private final List<ConstructionChunk> retainedChunks =
+                new ArrayList<>();
+
         private ExecutionStatus status =
                 ExecutionStatus.GENERATING;
 
@@ -190,7 +202,8 @@ public final class EarthResidentialExecution {
                 EarthBound plugin,
                 World world,
                 DevelopmentPlan development,
-                PropertyPlan property
+                PropertyPlan property,
+                boolean geographicDataReady
         ) {
 
             this.plugin = plugin;
@@ -199,33 +212,21 @@ public final class EarthResidentialExecution {
 
             this.worldId = world.getUID();
 
-            this.propertyId =
-                    property.getPropertyId();
+            this.propertyId = property.getPropertyId();
 
             this.property = property;
 
             this.development = development;
 
-            this.chunks =
-                    List.copyOf(property.getChunks());
+            this.chunks = List.copyOf(property.getChunks());
+
+            this.geographicDataReady = geographicDataReady;
         }
     }
 
     /*
      * ========================================================
      * START CONTROLLED RESIDENTIAL EXECUTION
-     * ========================================================
-     *
-     * Must be called on the server main thread.
-     *
-     * No construction is allowed without:
-     *
-     * - Execution integration approval.
-     * - Installer physical construction approval.
-     * - Explicit console authorization.
-     * - Successful installation preflight.
-     * - Persistent IN_PROGRESS record.
-     * - Individual construction permit.
      * ========================================================
      */
 
@@ -240,7 +241,6 @@ public final class EarthResidentialExecution {
     ) {
 
         if (!EXECUTION_APPROVED
-
                 || !EarthResidentialInstaller
                         .isPhysicalConstructionEnabled()) {
 
@@ -284,9 +284,7 @@ public final class EarthResidentialExecution {
         }
 
         if (world == null
-
                 || !WORLD_NAME.equals(world.getName())
-
                 || Bukkit.getWorld(world.getUID()) != world) {
 
             return result(
@@ -297,6 +295,8 @@ public final class EarthResidentialExecution {
 
         /*
          * Never allow simultaneous installations.
+         *
+         * Failed sessions remain reserved for manual review.
          */
 
         if (activeSession != null) {
@@ -337,7 +337,8 @@ public final class EarthResidentialExecution {
                     plugin,
                     world,
                     development,
-                    preflight.getProperty()
+                    preflight.getProperty(),
+                    geographicDataReady
             );
 
             if (session.chunks.isEmpty()) {
@@ -349,14 +350,13 @@ public final class EarthResidentialExecution {
             }
 
             /*
-             * Reserve the execution coordinator before
-             * attempting persistent authorization.
+             * Reserve execution before recording authorization.
              */
 
             activeSession = session;
 
             /*
-             * Persist IN_PROGRESS before issuing permission.
+             * Persist IN_PROGRESS before permitting generation.
              */
 
             AuthorizationResult authorization =
@@ -408,11 +408,10 @@ public final class EarthResidentialExecution {
             session.installationStarted = true;
 
             /*
-             * Independently verify persistent start.
+             * Independently verify persistent installation start.
              */
 
             if (!EarthResidentialInstallation.isReady()
-
                     || EarthResidentialInstallation
                             .getStatus(propertyId)
                             != InstallationStatus.IN_PROGRESS) {
@@ -430,8 +429,7 @@ public final class EarthResidentialExecution {
             }
 
             /*
-             * Issue permission for the exact property
-             * and its exact construction chunks.
+             * Issue permission for the exact approved property.
              */
 
             boolean permitIssued =
@@ -457,13 +455,6 @@ public final class EarthResidentialExecution {
             }
 
             session.permitIssued = true;
-
-            /*
-             * All monitoring takes place on the main thread.
-             *
-             * Generation is requested through Paper's
-             * asynchronous chunk loading API.
-             */
 
             final ExecutionSession monitoredSession =
                     session;
@@ -525,12 +516,10 @@ public final class EarthResidentialExecution {
      * MAIN-THREAD EXECUTION MONITOR
      * ========================================================
      *
-     * Never waits synchronously for an incomplete future.
+     * Never wait synchronously for an incomplete future.
      *
-     * Only one explicit chunk request may be pending.
-     *
-     * Paper may independently generate additional
-     * neighboring chunks.
+     * Only one explicit construction chunk request
+     * may be pending at a time.
      * ========================================================
      */
 
@@ -539,12 +528,10 @@ public final class EarthResidentialExecution {
     ) {
 
         if (!Bukkit.isPrimaryThread()) {
-
             return;
         }
 
         if (activeSession != session
-
                 || session.status
                         != ExecutionStatus.GENERATING) {
 
@@ -560,10 +547,7 @@ public final class EarthResidentialExecution {
 
             if (invalidReason != null) {
 
-                fail(
-                        session,
-                        invalidReason
-                );
+                fail(session, invalidReason);
 
                 return;
             }
@@ -592,7 +576,7 @@ public final class EarthResidentialExecution {
                 }
 
                 /*
-                 * The future is already complete.
+                 * Future is already complete.
                  */
 
                 Chunk completedChunk =
@@ -623,6 +607,25 @@ public final class EarthResidentialExecution {
                     return;
                 }
 
+                /*
+                 * Keep this chunk loaded until
+                 * physical verification is resolved.
+                 */
+
+                if (!retainConstructionChunk(
+                        session,
+                        expected
+                )) {
+
+                    fail(
+                            session,
+                            "Construction chunk retention failed: "
+                            + expected
+                    );
+
+                    return;
+                }
+
                 session.pendingChunk = null;
 
                 session.nextChunkIndex++;
@@ -639,7 +642,7 @@ public final class EarthResidentialExecution {
             }
 
             /*
-             * Every required chunk request has completed.
+             * All required chunk requests have completed.
              */
 
             if (session.nextChunkIndex
@@ -694,6 +697,271 @@ public final class EarthResidentialExecution {
 
     /*
      * ========================================================
+     * RETAIN COMPLETED CONSTRUCTION CHUNK
+     * ========================================================
+     *
+     * Use plugin chunk tickets only after an authorized
+     * asynchronous construction request has completed.
+     *
+     * Do not deliberately load a missing chunk here.
+     * ========================================================
+     */
+
+    private static boolean retainConstructionChunk(
+            ExecutionSession session,
+            ConstructionChunk chunk
+    ) {
+
+        if (!Bukkit.isPrimaryThread()
+                || activeSession != session
+                || !session.plugin.isEnabled()
+                || Bukkit.getWorld(session.worldId)
+                        != session.world) {
+
+            return false;
+        }
+
+        int chunkX = chunk.getChunkX();
+
+        int chunkZ = chunk.getChunkZ();
+
+        if (!session.world.isChunkLoaded(chunkX, chunkZ)
+                || !session.world.isChunkGenerated(
+                        chunkX,
+                        chunkZ
+                )) {
+
+            return false;
+        }
+
+        for (ConstructionChunk retained
+                : session.retainedChunks) {
+
+            if (retained.getKey() == chunk.getKey()) {
+
+                return false;
+            }
+        }
+
+        /*
+         * Reject an unexpected existing EarthBound ticket.
+         *
+         * This avoids removing a ticket acquired by
+         * another EarthBound system.
+         */
+
+        if (session.world.getPluginChunkTickets(
+                chunkX,
+                chunkZ
+        ).contains(session.plugin)) {
+
+            return false;
+        }
+
+        boolean added =
+                session.world.addPluginChunkTicket(
+                        chunkX,
+                        chunkZ,
+                        session.plugin
+                );
+
+        if (!added) {
+
+            return false;
+        }
+
+        /*
+         * Track ownership immediately after acquisition.
+         */
+
+        session.retainedChunks.add(chunk);
+
+        if (!session.world.isChunkLoaded(chunkX, chunkZ)
+                || !session.world.getPluginChunkTickets(
+                        chunkX,
+                        chunkZ
+                ).contains(session.plugin)) {
+
+            return false;
+        }
+
+        session.plugin.getLogger().info(
+                "Construction chunk retained: " + chunk
+        );
+
+        return true;
+    }
+
+    /*
+     * ========================================================
+     * CHECK RETAINED CONSTRUCTION CHUNKS
+     * ========================================================
+     */
+
+    private static boolean verifyRetainedChunks(
+            ExecutionSession session
+    ) {
+
+        if (Bukkit.getWorld(session.worldId)
+                != session.world) {
+
+            return false;
+        }
+
+        for (ConstructionChunk retained
+                : session.retainedChunks) {
+
+            int chunkX = retained.getChunkX();
+
+            int chunkZ = retained.getChunkZ();
+
+            if (!session.world.isChunkLoaded(
+                    chunkX,
+                    chunkZ
+            )) {
+
+                return false;
+            }
+
+            if (!session.world.getPluginChunkTickets(
+                    chunkX,
+                    chunkZ
+            ).contains(session.plugin)) {
+
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static boolean allConstructionChunksRetained(
+            ExecutionSession session
+    ) {
+
+        if (session.retainedChunks.size()
+                != session.chunks.size()) {
+
+            return false;
+        }
+
+        for (ConstructionChunk required
+                : session.chunks) {
+
+            boolean found = false;
+
+            for (ConstructionChunk retained
+                    : session.retainedChunks) {
+
+                if (required.getKey()
+                        == retained.getKey()) {
+
+                    found = true;
+
+                    break;
+                }
+            }
+
+            if (!found) {
+
+                return false;
+            }
+        }
+
+        return verifyRetainedChunks(session);
+    }
+
+    /*
+     * ========================================================
+     * RELEASE SESSION CHUNK TICKETS
+     * ========================================================
+     *
+     * Remove only tickets acquired by this session.
+     *
+     * Never forcibly unload construction chunks.
+     *
+     * Failed removals remain tracked for shutdown cleanup.
+     * ========================================================
+     */
+
+    private static boolean releaseConstructionChunks(
+            ExecutionSession session
+    ) {
+
+        boolean releasedAll = true;
+
+        for (int index =
+                    session.retainedChunks.size() - 1;
+
+                index >= 0;
+
+                index--) {
+
+            ConstructionChunk chunk =
+                    session.retainedChunks.get(index);
+
+            try {
+
+                int chunkX = chunk.getChunkX();
+
+                int chunkZ = chunk.getChunkZ();
+
+                if (Bukkit.getWorld(session.worldId)
+                        != session.world) {
+
+                    releasedAll = false;
+
+                    continue;
+                }
+
+                if (session.world.getPluginChunkTickets(
+                        chunkX,
+                        chunkZ
+                ).contains(session.plugin)) {
+
+                    session.world.removePluginChunkTicket(
+                            chunkX,
+                            chunkZ,
+                            session.plugin
+                    );
+                }
+
+                if (session.world.getPluginChunkTickets(
+                        chunkX,
+                        chunkZ
+                ).contains(session.plugin)) {
+
+                    releasedAll = false;
+
+                    session.plugin.getLogger().warning(
+                            "Construction chunk ticket remains: "
+                            + chunk
+                    );
+
+                    continue;
+                }
+
+                session.retainedChunks.remove(index);
+
+            } catch (RuntimeException exception) {
+
+                releasedAll = false;
+
+                session.plugin.getLogger().log(
+                        Level.SEVERE,
+                        "Unable to release construction chunk: "
+                        + chunk,
+                        exception
+                );
+            }
+        }
+
+        return releasedAll
+                && session.retainedChunks.isEmpty();
+    }
+
+    /*
+     * ========================================================
      * REVALIDATE ACTIVE EXECUTION
      * ========================================================
      */
@@ -702,8 +970,47 @@ public final class EarthResidentialExecution {
             ExecutionSession session
     ) {
 
-        if (!EXECUTION_APPROVED
+        String invalidReason =
+                validateInstallationConditions(session);
 
+        if (invalidReason != null) {
+
+            return invalidReason;
+        }
+
+        if (EarthGuemesGenerator.hasConstructionFailed(
+                session.worldId,
+                session.propertyId
+        )) {
+
+            return "Construction permit missing or failed.";
+        }
+
+        if (!verifyRetainedChunks(session)) {
+
+            return "Previously retained construction "
+                    + "chunks are unavailable.";
+        }
+
+        return null;
+    }
+
+    /*
+     * ========================================================
+     * COMMON INSTALLATION CONDITIONS
+     * ========================================================
+     *
+     * Used during generation and completion.
+     *
+     * Does not require an active construction permit.
+     * ========================================================
+     */
+
+    private static String validateInstallationConditions(
+            ExecutionSession session
+    ) {
+
+        if (!EXECUTION_APPROVED
                 || !EarthResidentialInstaller
                         .isPhysicalConstructionEnabled()) {
 
@@ -713,6 +1020,11 @@ public final class EarthResidentialExecution {
         if (!session.plugin.isEnabled()) {
 
             return "EarthBound plugin is unavailable.";
+        }
+
+        if (activeSession != session) {
+
+            return "Construction session is no longer active.";
         }
 
         if (Bukkit.getWorld(session.worldId)
@@ -733,7 +1045,6 @@ public final class EarthResidentialExecution {
         }
 
         if (!EarthEconomy.isReady()
-
                 || !EarthPropertyManager.isReady()) {
 
             return "Property ownership systems unavailable.";
@@ -741,7 +1052,6 @@ public final class EarthResidentialExecution {
 
         if (EarthResidentialInstallation
                 .getStatus(session.propertyId)
-
                 != InstallationStatus.IN_PROGRESS) {
 
             return "Installation no longer IN_PROGRESS.";
@@ -763,12 +1073,35 @@ public final class EarthResidentialExecution {
             return "Construction property has an owner.";
         }
 
+        var currentSites =
+                List.copyOf(
+                        EarthGuemesGenerator.getResidentialSites()
+                );
+
         if (!EarthAlphaSiteFinder
                 .hasDevelopmentChunkClearance(
-                        EarthGuemesGenerator.getResidentialSites()
+                        currentSites
                 )) {
 
             return "Residential chunk separation invalid.";
+        }
+
+        /*
+         * Confirm current registered sites still match
+         * their original approved installation identities.
+         */
+
+        for (var currentSite : currentSites) {
+
+            if (!EarthResidentialInstallation
+                    .matchesApprovedSite(
+                            session.world,
+                            currentSite
+                    )) {
+
+                return "Registered residential identity changed: "
+                        + currentSite.getPropertyId();
+            }
         }
 
         PlanResultAdapter boundaryResult =
@@ -779,17 +1112,9 @@ public final class EarthResidentialExecution {
             return boundaryResult.message;
         }
 
-        if (EarthGuemesGenerator.hasConstructionFailed(
-                session.worldId,
-                session.propertyId
-        )) {
-
-            return "Construction permit missing or failed.";
-        }
-
         /*
-         * Verify neighboring unfinished property chunks
-         * have not been generated during this installation.
+         * Verify neighboring unfinished properties
+         * remain unowned and ungenerated.
          */
 
         for (PropertyPlan neighboring
@@ -878,15 +1203,13 @@ public final class EarthResidentialExecution {
         ) {
 
             this.safe = safe;
-
             this.message = message;
         }
     }
 
-    private static PlanResultAdapter
-            inspectCurrentProperty(
-                    ExecutionSession session
-            ) {
+    private static PlanResultAdapter inspectCurrentProperty(
+            ExecutionSession session
+    ) {
 
         var site = session.property.getSite();
 
@@ -950,12 +1273,8 @@ public final class EarthResidentialExecution {
      * FINISH CHUNK GENERATION
      * ========================================================
      *
-     * This is not installation completion.
-     *
-     * All required callbacks must have been observed.
-     *
-     * Physical verification and persistent COMPLETED
-     * recording will be implemented separately.
+     * Generation completion does not automatically
+     * establish successful installation.
      * ========================================================
      */
 
@@ -978,8 +1297,31 @@ public final class EarthResidentialExecution {
             return;
         }
 
+        if (session.pendingChunk != null
+                || session.nextChunkIndex
+                        != session.chunks.size()) {
+
+            fail(
+                    session,
+                    "Construction chunk requests remain unresolved."
+            );
+
+            return;
+        }
+
+        if (!allConstructionChunksRetained(session)) {
+
+            fail(
+                    session,
+                    "Required construction chunks "
+                    + "are not fully retained."
+            );
+
+            return;
+        }
+
         /*
-         * Withdraw permission before further verification.
+         * Withdraw permission before physical inspection.
          */
 
         EarthGuemesGenerator.revokeConstructionPermit();
@@ -991,14 +1333,6 @@ public final class EarthResidentialExecution {
         session.status =
                 ExecutionStatus.AWAITING_VERIFICATION;
 
-        /*
-         * Retain the session to prevent another installation
-         * from starting before verification is resolved.
-         *
-         * The persistent status intentionally remains
-         * IN_PROGRESS.
-         */
-
         session.plugin.getLogger().info(
                 "Residential generation requests completed: "
                 + session.propertyId
@@ -1008,14 +1342,388 @@ public final class EarthResidentialExecution {
                 "Construction permit withdrawn."
         );
 
-        session.plugin.getLogger().warning(
-                "Physical structure verification required."
+        session.plugin.getLogger().info(
+                "Beginning physical structure verification."
         );
 
-        session.plugin.getLogger().warning(
-                "Property remains IN_PROGRESS and must "
-                + "not be released for sale."
-        );
+        verifyAndComplete(session);
+    }
+
+    /*
+     * ========================================================
+     * VERIFY AND COMPLETE INSTALLATION
+     * ========================================================
+     *
+     * Required sequence:
+     *
+     * 1. Confirm execution identity.
+     * 2. Confirm generation permit withdrawn.
+     * 3. Confirm required chunks retained.
+     * 4. Verify physical residential structure.
+     * 5. Request world save.
+     * 6. Repeat final safety and physical checks.
+     * 7. Persist COMPLETED.
+     * 8. Release construction chunk tickets.
+     * 9. Release successful execution session.
+     *
+     * World saving and ledger persistence are not
+     * a single atomic transaction.
+     * ========================================================
+     */
+
+    private static void verifyAndComplete(
+            ExecutionSession session
+    ) {
+
+        if (!Bukkit.isPrimaryThread()
+                || activeSession != session
+                || session.status
+                        != ExecutionStatus.AWAITING_VERIFICATION) {
+
+            return;
+        }
+
+        try {
+
+            String invalidReason =
+                    validateCompletionConditions(session);
+
+            if (invalidReason != null) {
+
+                fail(session, invalidReason);
+
+                return;
+            }
+
+            /*
+             * Initial physical structure verification.
+             */
+
+            VerificationResult verification =
+                    EarthResidentialVerification.verify(
+                            session.plugin,
+                            session.world,
+                            session.propertyId,
+                            session.geographicDataReady
+                    );
+
+            if (!isMatchingVerification(
+                    session,
+                    verification
+            )) {
+
+                fail(
+                        session,
+                        "Physical structure verification rejected: "
+                        + verification.getMessage()
+                );
+
+                return;
+            }
+
+            session.plugin.getLogger().info(
+                    "Physical residential verification passed: "
+                    + session.propertyId
+            );
+
+            /*
+             * Request a Minecraft world save while
+             * construction chunks remain retained.
+             *
+             * This does not establish an atomic
+             * world-storage and ledger transaction.
+             */
+
+            session.plugin.getLogger().info(
+                    "Requesting world save before "
+                    + "installation completion."
+            );
+
+            session.world.save();
+
+            /*
+             * World save operations may trigger other
+             * server activity or plugin event handlers.
+             *
+             * Recheck installation conditions afterward.
+             */
+
+            invalidReason =
+                    validateCompletionConditions(session);
+
+            if (invalidReason != null) {
+
+                fail(session, invalidReason);
+
+                return;
+            }
+
+            /*
+             * Repeat physical verification after saving.
+             *
+             * Do not rely solely on the earlier result.
+             */
+
+            VerificationResult finalVerification =
+                    EarthResidentialVerification.verify(
+                            session.plugin,
+                            session.world,
+                            session.propertyId,
+                            session.geographicDataReady
+                    );
+
+            if (!isMatchingVerification(
+                    session,
+                    finalVerification
+            )) {
+
+                fail(
+                        session,
+                        "Final residential verification rejected: "
+                        + finalVerification.getMessage()
+                );
+
+                return;
+            }
+
+            invalidReason =
+                    validateCompletionConditions(session);
+
+            if (invalidReason != null) {
+
+                fail(session, invalidReason);
+
+                return;
+            }
+
+            /*
+             * Persist verified installation completion.
+             */
+
+            boolean completed =
+                    EarthResidentialInstallation
+                            .completeInstallation(
+                                    session.world,
+                                    session.property.getSite(),
+                                    finalVerification.isVerified()
+                            );
+
+            if (!completed) {
+
+                fail(
+                        session,
+                        "Verified installation completion "
+                        + "could not be persisted."
+                );
+
+                return;
+            }
+
+            /*
+             * Independently confirm ledger completion.
+             */
+
+            if (!EarthResidentialInstallation.isReady()
+
+                    || EarthResidentialInstallation
+                            .getStatus(session.propertyId)
+                            != InstallationStatus.COMPLETED
+
+                    || !EarthResidentialInstallation
+                            .matchesApprovedSite(
+                                    session.world,
+                                    session.property.getSite()
+                            )) {
+
+                fail(
+                        session,
+                        "Persistent installation completion "
+                        + "could not be confirmed."
+                );
+
+                return;
+            }
+
+            session.status = ExecutionStatus.COMPLETED;
+
+            /*
+             * Release only this execution session's
+             * temporary construction tickets.
+             */
+
+            boolean ticketsReleased =
+                    releaseConstructionChunks(session);
+
+            session.plugin.getLogger().info(
+                    "========================================"
+            );
+
+            session.plugin.getLogger().info(
+                    "EARTHBOUND RESIDENTIAL INSTALLATION"
+            );
+
+            session.plugin.getLogger().info(
+                    "Property: " + session.propertyId
+            );
+
+            session.plugin.getLogger().info(
+                    "Installation status: COMPLETED"
+            );
+
+            session.plugin.getLogger().info(
+                    "World UUID: " + session.worldId
+            );
+
+            session.plugin.getLogger().info(
+                    "Verified blocks: "
+                    + finalVerification.getCheckedBlocks()
+            );
+
+            session.plugin.getLogger().info(
+                    "Block mismatches: "
+                    + finalVerification.getMismatchedBlocks()
+            );
+
+            session.plugin.getLogger().info(
+                    "Construction tickets released: "
+                    + ticketsReleased
+            );
+
+            session.plugin.getLogger().info(
+                    "World save requested before ledger completion."
+            );
+
+            session.plugin.getLogger().info(
+                    "Property sale activation remains disabled."
+            );
+
+            session.plugin.getLogger().info(
+                    "========================================"
+            );
+
+            if (!ticketsReleased) {
+
+                /*
+                 * Completion was already persisted.
+                 *
+                 * Do not attempt to rewrite COMPLETED
+                 * as FAILED because cleanup was unsuccessful.
+                 */
+
+                session.plugin.getLogger().severe(
+                        "Completed installation requires "
+                        + "chunk ticket cleanup review."
+                );
+
+                return;
+            }
+
+            /*
+             * Release the successful session.
+             *
+             * A future installation must independently
+             * pass all preflight and authorization checks.
+             */
+
+            activeSession = null;
+
+        } catch (RuntimeException exception) {
+
+            session.plugin.getLogger().log(
+                    Level.SEVERE,
+                    "Residential verification or completion failed.",
+                    exception
+            );
+
+            if (session.status == ExecutionStatus.COMPLETED) {
+
+                /*
+                 * Persistent completion must not be
+                 * reversed by a later cleanup error.
+                 */
+
+                releaseConstructionChunks(session);
+
+                session.plugin.getLogger().severe(
+                        "Completed installation requires "
+                        + "manual cleanup review."
+                );
+
+            } else {
+
+                fail(
+                        session,
+                        "Unexpected verification or completion failure."
+                );
+            }
+        }
+    }
+
+    /*
+     * ========================================================
+     * VALIDATE COMPLETION CONDITIONS
+     * ========================================================
+     */
+
+    private static String validateCompletionConditions(
+            ExecutionSession session
+    ) {
+
+        if (session.status
+                != ExecutionStatus.AWAITING_VERIFICATION) {
+
+            return "Installation is not awaiting verification.";
+        }
+
+        if (session.permitIssued
+                || EarthGuemesGenerator
+                        .isResidentialGenerationEnabled()) {
+
+            return "Construction permission remains active.";
+        }
+
+        if (session.pendingChunk != null
+                || session.nextChunkIndex
+                        != session.chunks.size()) {
+
+            return "Construction requests remain unresolved.";
+        }
+
+        if (!allConstructionChunksRetained(session)) {
+
+            return "Required construction chunks are unavailable.";
+        }
+
+        return validateInstallationConditions(session);
+    }
+
+    /*
+     * ========================================================
+     * CONFIRM VERIFICATION RESULT IDENTITY
+     * ========================================================
+     */
+
+    private static boolean isMatchingVerification(
+            ExecutionSession session,
+            VerificationResult verification
+    ) {
+
+        return verification != null
+
+                && verification.isVerified()
+
+                && session.worldId.equals(
+                        verification.getWorldId()
+                )
+
+                && session.propertyId.equals(
+                        verification.getPropertyId()
+                )
+
+                && verification.getCheckedBlocks()
+                        == verification.getExpectedBlocks()
+
+                && verification.getMismatchedBlocks() == 0;
     }
 
     /*
@@ -1024,13 +1732,10 @@ public final class EarthResidentialExecution {
      * ========================================================
      *
      * Withdraw construction permission.
-     *
-     * Stop issuing further requests.
-     *
-     * Record persistent FAILED status when possible.
-     *
-     * Retain the failed session and suspend further
-     * installation until manual review.
+     * Cancel the monitor.
+     * Release temporary construction tickets.
+     * Persist FAILED when possible.
+     * Retain unresolved sessions for manual review.
      * ========================================================
      */
 
@@ -1042,10 +1747,11 @@ public final class EarthResidentialExecution {
         session.status = ExecutionStatus.FAILED;
 
         /*
-         * Prevent subsequent residential callbacks.
+         * Revoke permission even if local permit state
+         * is uncertain following an unexpected error.
          */
 
-        if (session.permitIssued) {
+        if (activeSession == session) {
 
             EarthGuemesGenerator.revokeConstructionPermit();
 
@@ -1055,20 +1761,22 @@ public final class EarthResidentialExecution {
         cancelMonitor(session);
 
         /*
-         * Do not assume cancellation of a CompletableFuture
-         * cancels Paper's underlying chunk generation.
+         * A pending request may still finish.
          *
-         * The pending request may still finish.
+         * Cancelling a CompletableFuture does not prove
+         * Paper cancelled underlying chunk generation.
          */
 
         if (session.pendingChunk != null
-
                 && !session.pendingChunk.isDone()) {
 
             session.plugin.getLogger().warning(
                     "A pending chunk request may still finish."
             );
         }
+
+        boolean ticketsReleased =
+                releaseConstructionChunks(session);
 
         String failureReason =
                 reason == null || reason.isBlank()
@@ -1133,10 +1841,22 @@ public final class EarthResidentialExecution {
                 + failureRecorded
         );
 
+        session.plugin.getLogger().severe(
+                "Construction tickets released: "
+                + ticketsReleased
+        );
+
         if (!failureRecorded) {
 
             session.plugin.getLogger().severe(
                     "Installation ledger requires manual review."
+            );
+        }
+
+        if (!ticketsReleased) {
+
+            session.plugin.getLogger().severe(
+                    "Construction chunk tickets require manual review."
             );
         }
 
@@ -1178,7 +1898,6 @@ public final class EarthResidentialExecution {
     public static ExecutionStatus getExecutionStatus() {
 
         if (!Bukkit.isPrimaryThread()
-
                 || activeSession == null) {
 
             return null;
@@ -1190,7 +1909,6 @@ public final class EarthResidentialExecution {
     public static String getActivePropertyId() {
 
         if (!Bukkit.isPrimaryThread()
-
                 || activeSession == null) {
 
             return null;
@@ -1202,7 +1920,6 @@ public final class EarthResidentialExecution {
     public static int getCompletedChunkRequests() {
 
         if (!Bukkit.isPrimaryThread()
-
                 || activeSession == null) {
 
             return 0;
@@ -1214,7 +1931,6 @@ public final class EarthResidentialExecution {
     public static int getRequiredChunkRequests() {
 
         if (!Bukkit.isPrimaryThread()
-
                 || activeSession == null) {
 
             return 0;
@@ -1223,13 +1939,25 @@ public final class EarthResidentialExecution {
         return activeSession.chunks.size();
     }
 
+    public static int getRetainedConstructionChunkCount() {
+
+        if (!Bukkit.isPrimaryThread()
+                || activeSession == null) {
+
+            return 0;
+        }
+
+        return activeSession.retainedChunks.size();
+    }
+
     /*
      * ========================================================
      * EXECUTION SHUTDOWN
      * ========================================================
      *
-     * EarthBound shutdown integration must call this
-     * before shutting down the installation ledger.
+     * Called before installation ledger shutdown.
+     *
+     * Never mark an interrupted installation completed.
      * ========================================================
      */
 
@@ -1244,25 +1972,54 @@ public final class EarthResidentialExecution {
 
         if (session == null) {
 
+            EarthGuemesGenerator.revokeConstructionPermit();
+
             return;
         }
 
-        if (session.status != ExecutionStatus.FAILED) {
+        try {
 
-            fail(
-                    session,
-                    "Server shutdown before residential "
-                    + "installation verification."
-            );
+            if (session.status == ExecutionStatus.COMPLETED) {
 
-        } else {
+                /*
+                 * Persistent completion already succeeded.
+                 *
+                 * Only cleanup remains.
+                 */
 
-            cancelMonitor(session);
+                cancelMonitor(session);
+
+            } else if (
+                    session.status != ExecutionStatus.FAILED
+            ) {
+
+                fail(
+                        session,
+                        "Server shutdown before residential "
+                        + "installation completion."
+                );
+
+            } else {
+
+                cancelMonitor(session);
+            }
+
+        } finally {
+
+            EarthGuemesGenerator.revokeConstructionPermit();
+
+            session.permitIssued = false;
+
+            if (!releaseConstructionChunks(session)) {
+
+                session.plugin.getLogger().severe(
+                        "Residential chunk ticket cleanup "
+                        + "was incomplete during shutdown."
+                );
+            }
+
+            activeSession = null;
         }
-
-        EarthGuemesGenerator.revokeConstructionPermit();
-
-        activeSession = null;
     }
 
     /*
