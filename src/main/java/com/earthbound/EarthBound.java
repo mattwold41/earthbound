@@ -1,3 +1,4 @@
+
 package com.earthbound;
 
 import java.util.logging.Level;
@@ -17,8 +18,7 @@ import com.earthbound.roads.EarthRoadData;
 import com.earthbound.roads.EarthRoadElevationProfiles;
 import com.earthbound.roads.EarthRoadSpatialIndex;
 
-import com.earthbound.EarthResidentialInstallation
-        .InstallationStatus;
+import com.earthbound.EarthResidentialInstallation.InstallationStatus;
 
 public class EarthBound extends JavaPlugin {
 
@@ -230,8 +230,7 @@ public class EarthBound extends JavaPlugin {
 
             if (!residentialConfigLoaded) {
 
-                EarthGuemesGenerator
-                        .clearResidentialSites();
+                EarthGuemesGenerator.clearResidentialSites();
 
                 getLogger().warning(
                         "Residential development remains disabled."
@@ -260,14 +259,12 @@ public class EarthBound extends JavaPlugin {
 
         getLogger().info(
                 "Geographically validated residential sites: "
-                + EarthGuemesGenerator
-                        .getResidentialSiteCount()
+                + EarthGuemesGenerator.getResidentialSiteCount()
         );
 
         getLogger().info(
                 "Residential construction enabled: "
-                + EarthGuemesGenerator
-                        .isResidentialGenerationEnabled()
+                + EarthGuemesGenerator.isResidentialGenerationEnabled()
         );
 
         /*
@@ -876,8 +873,7 @@ public class EarthBound extends JavaPlugin {
         try {
 
             var sites =
-                    EarthGuemesGenerator
-                            .getResidentialSites();
+                    EarthGuemesGenerator.getResidentialSites();
 
             if (sites.size() != REQUIRED_ALPHA_HOMES) {
 
@@ -1348,8 +1344,7 @@ public class EarthBound extends JavaPlugin {
 
         getLogger().info(
                 "Road elevation profile count: "
-                + EarthRoadElevationProfiles
-                        .getProfileCount()
+                + EarthRoadElevationProfiles.getProfileCount()
         );
 
         /*
@@ -1376,8 +1371,7 @@ public class EarthBound extends JavaPlugin {
 
         getLogger().info(
                 "Indexed road cells: "
-                + EarthRoadSpatialIndex
-                        .getIndexedCellCount()
+                + EarthRoadSpatialIndex.getIndexedCellCount()
         );
 
         getLogger().info(
@@ -1396,6 +1390,51 @@ public class EarthBound extends JavaPlugin {
     @Override
     public void onDisable() {
 
+        /*
+         * ====================================================
+         * RESIDENTIAL EXECUTION SHUTDOWN
+         * ====================================================
+         *
+         * Suspend active construction before releasing
+         * installation storage and geographic data.
+         *
+         * Attempt to record interrupted installations.
+         *
+         * Never automatically mark an unfinished
+         * residential installation as completed.
+         */
+
+        try {
+
+            EarthResidentialExecution.shutdown();
+
+            getLogger().info(
+                    "Residential execution shutdown processed."
+            );
+
+        } catch (RuntimeException exception) {
+
+            getLogger().log(
+                    Level.SEVERE,
+                    "Residential execution shutdown failed. "
+                    + "Manual installation review required.",
+                    exception
+            );
+
+        } finally {
+
+            /*
+             * Independently withdraw construction permission
+             * even if execution shutdown encounters an error.
+             */
+
+            EarthGuemesGenerator.revokeConstructionPermit();
+        }
+
+        /*
+         * SAVE PROPERTY DATA
+         */
+
         if (EarthPropertyManager.save()) {
 
             getLogger().info(
@@ -1409,17 +1448,29 @@ public class EarthBound extends JavaPlugin {
             );
         }
 
+        /*
+         * SAVE ECONOMY DATA
+         */
+
         EarthEconomy.save();
 
         getLogger().info(
                 "EarthBound economy saved!"
         );
 
+        /*
+         * CLEAR PROPERTY BANNER REGISTRY
+         */
+
         EarthPropertyBannerRegistry.clear();
 
         getLogger().info(
                 "EarthBound banner registry cleared!"
         );
+
+        /*
+         * CLEAR RESIDENTIAL REGISTRY
+         */
 
         EarthGuemesGenerator.clearResidentialSites();
 
@@ -1433,7 +1484,8 @@ public class EarthBound extends JavaPlugin {
          * Every successful installation state change
          * is already saved immediately.
          *
-         * Shutdown only releases the in-memory ledger.
+         * Execution shutdown must occur before this point.
+         *
          * Persistent installation records are retained.
          */
 
@@ -1443,6 +1495,10 @@ public class EarthBound extends JavaPlugin {
                 "EarthBound residential installation "
                 + "tracking closed."
         );
+
+        /*
+         * CLEAR GEOGRAPHIC ROAD SYSTEMS
+         */
 
         EarthRoadSpatialIndex.clear();
 
