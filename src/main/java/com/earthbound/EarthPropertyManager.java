@@ -1,3 +1,4 @@
+
 package com.earthbound;
 
 import java.util.ArrayList;
@@ -12,15 +13,22 @@ import java.util.UUID;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
+
+import com.earthbound.EarthAlphaResidentialGenerator.ResidentialSite;
+import com.earthbound.EarthResidentialInstallation.InstallationStatus;
 
 public class EarthPropertyManager {
 
     private static JavaPlugin plugin;
 
     private static boolean ownershipLoaded = false;
+
+    private static final String RESIDENTIAL_WORLD =
+            "earthbound";
 
     private static final Map<String, EarthProperty> properties =
             new LinkedHashMap<>();
@@ -77,6 +85,11 @@ public class EarthPropertyManager {
                     + "Purchases are disabled."
             );
         }
+
+        plugin.getLogger().info(
+                "Verified residential installation "
+                + "purchase restrictions are active."
+        );
     }
 
 
@@ -90,6 +103,13 @@ public class EarthPropertyManager {
     /*
      * ============================================================
      * LOAD ALPHA PROPERTIES FROM CONFIG.YML
+     * ============================================================
+     *
+     * Register property boundaries independently of
+     * installation completion.
+     *
+     * Unfinished properties must remain protected.
+     * Registration does not authorize a sale.
      * ============================================================
      */
 
@@ -439,6 +459,556 @@ public class EarthPropertyManager {
 
     /*
      * ============================================================
+     * RESIDENTIAL PURCHASE ELIGIBILITY
+     * ============================================================
+     *
+     * This inspection is independent of:
+     *
+     * - Property sale banners.
+     * - Property purchase menus.
+     * - Player interaction events.
+     * - Construction permit availability.
+     *
+     * Only successfully completed Alpha homes may
+     * pass residential installation eligibility.
+     *
+     * This method does not:
+     *
+     * - Authorize an actual financial transaction.
+     * - Modify property ownership.
+     * - Generate or load chunks.
+     * - Place or remove blocks.
+     * - Change installation records.
+     * - Activate property sale markers.
+     *
+     * Missing or inconsistent information fails closed.
+     * ============================================================
+     */
+
+    public enum PurchaseEligibility {
+
+        ELIGIBLE,
+
+        MAIN_THREAD_REQUIRED,
+
+        PLUGIN_UNAVAILABLE,
+
+        PROPERTY_SYSTEM_UNAVAILABLE,
+
+        INSTALLATION_STORAGE_UNAVAILABLE,
+
+        INVALID_PROPERTY,
+
+        RESIDENTIAL_DISABLED,
+
+        PROPERTY_DISABLED,
+
+        INVALID_WORLD,
+
+        INVALID_RESIDENTIAL_SITE,
+
+        INVALID_INSTALLATION_STATUS,
+
+        INSTALLATION_IDENTITY_MISMATCH,
+
+        PROPERTY_BOUNDARY_MISMATCH,
+
+        PROPERTY_PRICE_MISMATCH,
+
+        PROPERTY_ALREADY_OWNED,
+
+        ACTIVE_RESIDENTIAL_EXECUTION,
+
+        ELIGIBILITY_CHECK_FAILED
+    }
+
+
+    /*
+     * ============================================================
+     * READ-ONLY PURCHASE ELIGIBILITY INSPECTION
+     * ============================================================
+     */
+
+    public static PurchaseEligibility checkPurchaseEligibility(
+            String propertyId
+    ) {
+
+        if (!Bukkit.isPrimaryThread()) {
+
+            return PurchaseEligibility.MAIN_THREAD_REQUIRED;
+        }
+
+        if (plugin == null || !plugin.isEnabled()) {
+
+            return PurchaseEligibility.PLUGIN_UNAVAILABLE;
+        }
+
+        if (!isReady()) {
+
+            return PurchaseEligibility
+                    .PROPERTY_SYSTEM_UNAVAILABLE;
+        }
+
+        /*
+         * Friends Alpha has exactly six approved
+         * residential property identities.
+         *
+         * Unknown government property types must not
+         * bypass the installation verification requirement.
+         */
+
+        if (propertyId == null
+                || !propertyId.matches("guemes_home_0[1-6]")) {
+
+            return PurchaseEligibility.INVALID_PROPERTY;
+        }
+
+        EarthProperty property =
+                getProperty(propertyId);
+
+        if (property == null
+                || !propertyId.equals(property.getId())
+                || !validPrice(property.getPrice())) {
+
+            return PurchaseEligibility.INVALID_PROPERTY;
+        }
+
+        try {
+
+            return inspectResidentialPurchase(
+                    propertyId,
+                    property
+            );
+
+        } catch (RuntimeException exception) {
+
+            plugin.getLogger().warning(
+                    "Residential purchase eligibility "
+                    + "inspection failed for "
+                    + propertyId
+                    + ": "
+                    + exception.getMessage()
+            );
+
+            return PurchaseEligibility
+                    .ELIGIBILITY_CHECK_FAILED;
+        }
+    }
+
+
+    /*
+     * ============================================================
+     * INTERNAL RESIDENTIAL PURCHASE INSPECTION
+     * ============================================================
+     */
+
+    private static PurchaseEligibility inspectResidentialPurchase(
+            String propertyId,
+            EarthProperty property
+    ) {
+
+        /*
+         * Require available persistent installation storage.
+         */
+
+        if (!EarthResidentialInstallation.isReady()) {
+
+            return PurchaseEligibility
+                    .INSTALLATION_STORAGE_UNAVAILABLE;
+        }
+
+        /*
+         * Respect the residential configuration.
+         */
+
+        if (!plugin.getConfig().getBoolean(
+                "residential.enabled",
+                false
+        )) {
+
+            return PurchaseEligibility.RESIDENTIAL_DISABLED;
+        }
+
+        if (!RESIDENTIAL_WORLD.equals(
+                plugin.getConfig().getString(
+                        "residential.world",
+                        RESIDENTIAL_WORLD
+                )
+        )) {
+
+            return PurchaseEligibility.INVALID_WORLD;
+        }
+
+        /*
+         * Require an enabled property configuration.
+         */
+
+        ConfigurationSection home =
+                plugin.getConfig().getConfigurationSection(
+                        "properties.alpha-homes."
+                        + propertyId
+                );
+
+        if (home == null
+                || !home.getBoolean("enabled", false)) {
+
+            return PurchaseEligibility.PROPERTY_DISABLED;
+        }
+
+        /*
+         * Validate world identity without loading a world.
+         */
+
+        if (!RESIDENTIAL_WORLD.equals(
+                property.getWorldName()
+        ) || !RESIDENTIAL_WORLD.equals(
+                home.getString("world", RESIDENTIAL_WORLD)
+        )) {
+
+            return PurchaseEligibility.INVALID_WORLD;
+        }
+
+        World world =
+                Bukkit.getWorld(RESIDENTIAL_WORLD);
+
+        if (world == null
+                || !RESIDENTIAL_WORLD.equals(world.getName())
+                || Bukkit.getWorld(world.getUID()) != world) {
+
+            return PurchaseEligibility.INVALID_WORLD;
+        }
+
+        /*
+         * Suspend purchases while a residential execution
+         * session is active or requires manual review.
+         */
+
+        if (EarthResidentialExecution.hasActiveExecution()) {
+
+            return PurchaseEligibility
+                    .ACTIVE_RESIDENTIAL_EXECUTION;
+        }
+
+        /*
+         * Require the authoritative installation state.
+         *
+         * NOT_STARTED, APPROVED, IN_PROGRESS and FAILED
+         * are never eligible for purchase.
+         */
+
+        InstallationStatus installationStatus =
+                EarthResidentialInstallation.getStatus(
+                        propertyId
+                );
+
+        if (installationStatus
+                != InstallationStatus.COMPLETED) {
+
+            return PurchaseEligibility
+                    .INVALID_INSTALLATION_STATUS;
+        }
+
+        /*
+         * Require the registered residential development
+         * and its construction separation safeguards.
+         */
+
+        List<ResidentialSite> sites =
+                List.copyOf(
+                        EarthGuemesGenerator.getResidentialSites()
+                );
+
+        if (sites.size() != 6
+                || !EarthAlphaSiteFinder
+                        .hasDevelopmentChunkClearance(sites)) {
+
+            return PurchaseEligibility
+                    .INVALID_RESIDENTIAL_SITE;
+        }
+
+        ResidentialSite site = null;
+
+        for (ResidentialSite candidate : sites) {
+
+            if (propertyId.equals(
+                    candidate.getPropertyId()
+            )) {
+
+                site = candidate;
+
+                break;
+            }
+        }
+
+        if (site == null || site.getDesign() == null) {
+
+            return PurchaseEligibility
+                    .INVALID_RESIDENTIAL_SITE;
+        }
+
+        /*
+         * Verify persistent installation identity:
+         *
+         * - World UUID.
+         * - Property ID.
+         * - Architectural design and revision.
+         * - House orientation.
+         * - Ground height.
+         * - Approved coordinates.
+         * - Complete property boundaries.
+         */
+
+        if (!EarthResidentialInstallation
+                .matchesApprovedSite(world, site)) {
+
+            return PurchaseEligibility
+                    .INSTALLATION_IDENTITY_MISMATCH;
+        }
+
+        /*
+         * Verify registered property bounds.
+         */
+
+        if (property.getMinX() != site.getMinX()
+                || property.getMaxX() != site.getMaxX()
+                || property.getMinZ() != site.getMinZ()
+                || property.getMaxZ() != site.getMaxZ()) {
+
+            return PurchaseEligibility
+                    .PROPERTY_BOUNDARY_MISMATCH;
+        }
+
+        long width =
+                (long) property.getMaxX()
+                - property.getMinX() + 1;
+
+        long length =
+                (long) property.getMaxZ()
+                - property.getMinZ() + 1;
+
+        if (width != EarthAlphaResidentialGenerator.PLOT_WIDTH
+                || length
+                    != EarthAlphaResidentialGenerator.PLOT_LENGTH) {
+
+            return PurchaseEligibility
+                    .PROPERTY_BOUNDARY_MISMATCH;
+        }
+
+        /*
+         * Check that the current property configuration
+         * still agrees with the approved boundaries.
+         */
+
+        if (!home.isInt("min-x")
+                || !home.isInt("min-z")
+
+                || home.getInt("min-x")
+                    != property.getMinX()
+
+                || home.getInt("min-z")
+                    != property.getMinZ()
+
+                || home.getInt("width", 24)
+                    != EarthAlphaResidentialGenerator.PLOT_WIDTH
+
+                || home.getInt("length", 32)
+                    != EarthAlphaResidentialGenerator.PLOT_LENGTH) {
+
+            return PurchaseEligibility
+                    .PROPERTY_BOUNDARY_MISMATCH;
+        }
+
+        /*
+         * Require registered and configured prices
+         * to agree before any transaction is allowed.
+         */
+
+        if (!home.contains("price")) {
+
+            return PurchaseEligibility.PROPERTY_PRICE_MISMATCH;
+        }
+
+        double configuredPrice =
+                home.getDouble("price");
+
+        if (!validPrice(configuredPrice)
+                || Double.compare(
+                        configuredPrice,
+                        property.getPrice()
+                ) != 0) {
+
+            return PurchaseEligibility.PROPERTY_PRICE_MISMATCH;
+        }
+
+        /*
+         * Check both the in-memory property owner and
+         * the authoritative economy ownership record.
+         */
+
+        if (property.isOwned()
+                || EarthEconomy.getPropertyOwner(
+                        propertyId
+                ) != null) {
+
+            return PurchaseEligibility.PROPERTY_ALREADY_OWNED;
+        }
+
+        /*
+         * Confirm all 768 property columns belong
+         * to the intended government-owned property.
+         *
+         * This uses coordinate-based property lookups.
+         * No Minecraft chunks are loaded.
+         */
+
+        for (int x = 0;
+                x < EarthAlphaResidentialGenerator.PLOT_WIDTH;
+                x++) {
+
+            for (int z = 0;
+                    z < EarthAlphaResidentialGenerator.PLOT_LENGTH;
+                    z++) {
+
+                Location location =
+                        new Location(
+                                world,
+                                site.getWorldX(x, z),
+                                site.getGroundY(),
+                                site.getWorldZ(x, z)
+                        );
+
+                EarthProperty registered =
+                        getPropertyAt(location);
+
+                if (registered != property
+
+                        || !propertyId.equals(
+                                registered.getId()
+                        )
+
+                        || registered.isOwned()
+
+                        || registered.getMinX()
+                            != site.getMinX()
+
+                        || registered.getMaxX()
+                            != site.getMaxX()
+
+                        || registered.getMinZ()
+                            != site.getMinZ()
+
+                        || registered.getMaxZ()
+                            != site.getMaxZ()) {
+
+                    return PurchaseEligibility
+                            .PROPERTY_BOUNDARY_MISMATCH;
+                }
+            }
+        }
+
+        /*
+         * Final readiness confirmation.
+         */
+
+        if (!EarthResidentialInstallation.isReady()) {
+
+            return PurchaseEligibility
+                    .INSTALLATION_STORAGE_UNAVAILABLE;
+        }
+
+        if (!isReady()) {
+
+            return PurchaseEligibility
+                    .PROPERTY_SYSTEM_UNAVAILABLE;
+        }
+
+        if (EarthResidentialInstallation.getStatus(propertyId)
+                != InstallationStatus.COMPLETED) {
+
+            return PurchaseEligibility
+                    .INVALID_INSTALLATION_STATUS;
+        }
+
+        return PurchaseEligibility.ELIGIBLE;
+    }
+
+
+    /*
+     * ============================================================
+     * PURCHASE ELIGIBILITY HELPER
+     * ============================================================
+     *
+     * Intended for future sale marker and menu checks.
+     *
+     * The purchase transaction must still repeat
+     * eligibility immediately before committing.
+     * ============================================================
+     */
+
+    public static boolean isPropertyPurchaseEligible(
+            String propertyId
+    ) {
+
+        return checkPurchaseEligibility(propertyId)
+                == PurchaseEligibility.ELIGIBLE;
+    }
+
+
+    /*
+     * ============================================================
+     * PURCHASE REJECTION MESSAGE
+     * ============================================================
+     */
+
+    private static void rejectPurchase(
+            Player player,
+            String propertyId,
+            PurchaseEligibility eligibility
+    ) {
+
+        if (eligibility
+                == PurchaseEligibility.PROPERTY_ALREADY_OWNED) {
+
+            player.sendMessage(
+                    "This property already has an owner."
+            );
+
+        } else if (
+                eligibility
+                    == PurchaseEligibility.INVALID_INSTALLATION_STATUS
+        ) {
+
+            player.sendMessage(
+                    "This home's installation has not "
+                    + "been successfully completed."
+            );
+
+            player.sendMessage(
+                    "The property is not available for purchase."
+            );
+
+        } else {
+
+            player.sendMessage(
+                    "This property is currently "
+                    + "unavailable for purchase."
+            );
+        }
+
+        if (plugin != null) {
+
+            plugin.getLogger().warning(
+                    "Residential purchase rejected: "
+                    + propertyId
+                    + " | Eligibility: "
+                    + eligibility.name()
+            );
+        }
+    }
+
+
+    /*
+     * ============================================================
      * PURCHASE GOVERNMENT PROPERTY
      * ============================================================
      */
@@ -459,9 +1029,17 @@ public class EarthPropertyManager {
 
         if (!Bukkit.isPrimaryThread()) {
 
-            plugin.getLogger().warning(
-                    "Asynchronous property purchase rejected."
-            );
+            if (plugin != null) {
+
+                plugin.getLogger().warning(
+                        "Asynchronous property purchase rejected."
+                );
+            }
+
+            return false;
+        }
+
+        if (plugin == null || !plugin.isEnabled()) {
 
             return false;
         }
@@ -488,6 +1066,28 @@ public class EarthPropertyManager {
 
             player.sendMessage(
                     "Property not found."
+            );
+
+            return false;
+        }
+
+        /*
+         * INDEPENDENT RESIDENTIAL PURCHASE SAFETY LOCK
+         *
+         * Never trust a banner or purchase menu
+         * as evidence of completed construction.
+         */
+
+        PurchaseEligibility eligibility =
+                checkPurchaseEligibility(propertyId);
+
+        if (eligibility
+                != PurchaseEligibility.ELIGIBLE) {
+
+            rejectPurchase(
+                    player,
+                    propertyId,
+                    eligibility
             );
 
             return false;
@@ -553,6 +1153,44 @@ public class EarthPropertyManager {
 
             player.sendMessage(
                     "You do not have enough money."
+            );
+
+            return false;
+        }
+
+        /*
+         * FINAL PURCHASE ELIGIBILITY CHECK
+         *
+         * Repeat immediately before the financial commit.
+         *
+         * No money or ownership may be transferred
+         * when residential installation eligibility fails.
+         */
+
+        PurchaseEligibility finalEligibility =
+                checkPurchaseEligibility(propertyId);
+
+        if (finalEligibility
+                != PurchaseEligibility.ELIGIBLE) {
+
+            rejectPurchase(
+                    player,
+                    propertyId,
+                    finalEligibility
+            );
+
+            return false;
+        }
+
+        if (getProperty(propertyId) != property
+                || Double.compare(
+                        property.getPrice(),
+                        price
+                ) != 0) {
+
+            player.sendMessage(
+                    "Property information changed. "
+                    + "Purchase cancelled."
             );
 
             return false;
