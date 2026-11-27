@@ -27,23 +27,18 @@ public class EarthPropertyManager {
 
     private static boolean ownershipLoaded = false;
 
-    private static final String RESIDENTIAL_WORLD =
-            "earthbound";
+    private static final String RESIDENTIAL_WORLD = "earthbound";
 
     private static final Map<String, EarthProperty> properties =
             new LinkedHashMap<>();
 
-
     /*
-     * ============================================================
      * INITIALIZE PROPERTY SYSTEM
-     * ============================================================
      */
 
     public static void setup(JavaPlugin earthBoundPlugin) {
 
         plugin = earthBoundPlugin;
-
         ownershipLoaded = false;
 
         properties.clear();
@@ -92,25 +87,17 @@ public class EarthPropertyManager {
         );
     }
 
-
     public static boolean isReady() {
 
         return ownershipLoaded
                 && EarthEconomy.isReady();
     }
 
-
     /*
-     * ============================================================
      * LOAD ALPHA PROPERTIES FROM CONFIG.YML
-     * ============================================================
      *
-     * Register property boundaries independently of
-     * installation completion.
-     *
-     * Unfinished properties must remain protected.
-     * Registration does not authorize a sale.
-     * ============================================================
+     * Registration remains independent of sale authorization
+     * so unfinished properties remain protected.
      */
 
     private static void registerAlphaProperties() {
@@ -171,19 +158,18 @@ public class EarthPropertyManager {
                 }
 
                 int minX = home.getInt("min-x");
-
                 int minZ = home.getInt("min-z");
 
                 int width = home.getInt("width", 24);
-
                 int length = home.getInt("length", 32);
 
-                if (width <= 0 || length <= 0
-                        || width > 256 || length > 256) {
+                if (width <= 0
+                        || length <= 0
+                        || width > 256
+                        || length > 256) {
 
                     plugin.getLogger().warning(
-                            "Invalid property dimensions: "
-                            + id
+                            "Invalid property dimensions: " + id
                     );
 
                     continue;
@@ -194,8 +180,7 @@ public class EarthPropertyManager {
                 if (!validPrice(price)) {
 
                     plugin.getLogger().warning(
-                            "Invalid property price: "
-                            + id
+                            "Invalid property price: " + id
                     );
 
                     continue;
@@ -244,11 +229,8 @@ public class EarthPropertyManager {
         }
     }
 
-
     /*
-     * ============================================================
      * PROPERTY VALIDATION
-     * ============================================================
      */
 
     private static boolean validPropertyId(String id) {
@@ -256,7 +238,6 @@ public class EarthPropertyManager {
         return id != null
                 && id.matches("[A-Za-z0-9_-]{1,128}");
     }
-
 
     private static boolean validPrice(double price) {
 
@@ -273,11 +254,8 @@ public class EarthPropertyManager {
         return Double.compare(price, rounded) == 0;
     }
 
-
     /*
-     * ============================================================
      * REGISTER A PROPERTY
-     * ============================================================
      */
 
     public static boolean registerProperty(
@@ -337,10 +315,6 @@ public class EarthPropertyManager {
 
         } else {
 
-            /*
-             * Ownership will be restored during setup.
-             */
-
             property.setOwner(null);
         }
 
@@ -348,7 +322,6 @@ public class EarthPropertyManager {
 
         return true;
     }
-
 
     private static boolean overlaps(
             EarthProperty first,
@@ -368,11 +341,8 @@ public class EarthPropertyManager {
                 && first.getMaxZ() >= second.getMinZ();
     }
 
-
     /*
-     * ============================================================
      * PROPERTY LOOKUPS
-     * ============================================================
      */
 
     public static EarthProperty getProperty(String id) {
@@ -385,14 +355,12 @@ public class EarthPropertyManager {
         return properties.get(id);
     }
 
-
     public static Collection<EarthProperty> getProperties() {
 
         return Collections.unmodifiableCollection(
                 properties.values()
         );
     }
-
 
     public static EarthProperty getPropertyAt(
             Location location
@@ -419,7 +387,6 @@ public class EarthPropertyManager {
         return null;
     }
 
-
     public static List<EarthProperty> getOwnedProperties(
             UUID playerId
     ) {
@@ -442,7 +409,6 @@ public class EarthPropertyManager {
         return owned;
     }
 
-
     public static boolean ownsProperty(
             Player player,
             EarthProperty property
@@ -456,38 +422,20 @@ public class EarthPropertyManager {
                 );
     }
 
-
     /*
-     * ============================================================
      * RESIDENTIAL PURCHASE ELIGIBILITY
-     * ============================================================
      *
-     * This inspection is independent of:
-     *
-     * - Property sale banners.
-     * - Property purchase menus.
-     * - Player interaction events.
-     * - Construction permit availability.
-     *
-     * Only successfully completed Alpha homes may
-     * pass residential installation eligibility.
-     *
-     * This method does not:
-     *
-     * - Authorize an actual financial transaction.
-     * - Modify property ownership.
-     * - Generate or load chunks.
-     * - Place or remove blocks.
-     * - Change installation records.
-     * - Activate property sale markers.
+     * This inspection does not modify ownership,
+     * generate chunks, place blocks or commit money.
      *
      * Missing or inconsistent information fails closed.
-     * ============================================================
      */
 
     public enum PurchaseEligibility {
 
         ELIGIBLE,
+
+        SALE_ACTIVATION_LOCKED,
 
         MAIN_THREAD_REQUIRED,
 
@@ -522,11 +470,8 @@ public class EarthPropertyManager {
         ELIGIBILITY_CHECK_FAILED
     }
 
-
     /*
-     * ============================================================
      * READ-ONLY PURCHASE ELIGIBILITY INSPECTION
-     * ============================================================
      */
 
     public static PurchaseEligibility checkPurchaseEligibility(
@@ -543,6 +488,20 @@ public class EarthPropertyManager {
             return PurchaseEligibility.PLUGIN_UNAVAILABLE;
         }
 
+        /*
+         * EXPLICIT PROPERTY SALE ACTIVATION LOCK
+         *
+         * A completed installation does not independently
+         * authorize a residential property sale.
+         */
+
+        if (!(plugin instanceof EarthBound earthBound)
+                || !EarthPropertySaleMarkers
+                        .isSaleActivationEnabled(earthBound)) {
+
+            return PurchaseEligibility.SALE_ACTIVATION_LOCKED;
+        }
+
         if (!isReady()) {
 
             return PurchaseEligibility
@@ -552,9 +511,6 @@ public class EarthPropertyManager {
         /*
          * Friends Alpha has exactly six approved
          * residential property identities.
-         *
-         * Unknown government property types must not
-         * bypass the installation verification requirement.
          */
 
         if (propertyId == null
@@ -595,11 +551,8 @@ public class EarthPropertyManager {
         }
     }
 
-
     /*
-     * ============================================================
      * INTERNAL RESIDENTIAL PURCHASE INSPECTION
-     * ============================================================
      */
 
     private static PurchaseEligibility inspectResidentialPurchase(
@@ -608,7 +561,7 @@ public class EarthPropertyManager {
     ) {
 
         /*
-         * Require available persistent installation storage.
+         * Require persistent installation storage.
          */
 
         if (!EarthResidentialInstallation.isReady()) {
@@ -618,7 +571,7 @@ public class EarthPropertyManager {
         }
 
         /*
-         * Respect the residential configuration.
+         * Respect residential configuration.
          */
 
         if (!plugin.getConfig().getBoolean(
@@ -661,6 +614,7 @@ public class EarthPropertyManager {
 
         if (!RESIDENTIAL_WORLD.equals(
                 property.getWorldName()
+
         ) || !RESIDENTIAL_WORLD.equals(
                 home.getString("world", RESIDENTIAL_WORLD)
         )) {
@@ -679,8 +633,8 @@ public class EarthPropertyManager {
         }
 
         /*
-         * Suspend purchases while a residential execution
-         * session is active or requires manual review.
+         * Suspend purchases during active construction
+         * or unresolved execution review.
          */
 
         if (EarthResidentialExecution.hasActiveExecution()) {
@@ -690,10 +644,7 @@ public class EarthPropertyManager {
         }
 
         /*
-         * Require the authoritative installation state.
-         *
-         * NOT_STARTED, APPROVED, IN_PROGRESS and FAILED
-         * are never eligible for purchase.
+         * Only COMPLETED installations qualify.
          */
 
         InstallationStatus installationStatus =
@@ -709,8 +660,8 @@ public class EarthPropertyManager {
         }
 
         /*
-         * Require the registered residential development
-         * and its construction separation safeguards.
+         * Verify the residential development and
+         * construction separation safeguards.
          */
 
         List<ResidentialSite> sites =
@@ -749,13 +700,8 @@ public class EarthPropertyManager {
         /*
          * Verify persistent installation identity:
          *
-         * - World UUID.
-         * - Property ID.
-         * - Architectural design and revision.
-         * - House orientation.
-         * - Ground height.
-         * - Approved coordinates.
-         * - Complete property boundaries.
+         * World UUID, property ID, design revision,
+         * orientation, elevation and approved boundaries.
          */
 
         if (!EarthResidentialInstallation
@@ -766,7 +712,7 @@ public class EarthPropertyManager {
         }
 
         /*
-         * Verify registered property bounds.
+         * Verify registered property boundaries.
          */
 
         if (property.getMinX() != site.getMinX()
@@ -795,8 +741,8 @@ public class EarthPropertyManager {
         }
 
         /*
-         * Check that the current property configuration
-         * still agrees with the approved boundaries.
+         * Check current configuration against
+         * the approved property boundaries.
          */
 
         if (!home.isInt("min-x")
@@ -819,8 +765,7 @@ public class EarthPropertyManager {
         }
 
         /*
-         * Require registered and configured prices
-         * to agree before any transaction is allowed.
+         * Verify registered and configured prices.
          */
 
         if (!home.contains("price")) {
@@ -841,8 +786,7 @@ public class EarthPropertyManager {
         }
 
         /*
-         * Check both the in-memory property owner and
-         * the authoritative economy ownership record.
+         * Check in-memory and persistent ownership.
          */
 
         if (property.isOwned()
@@ -854,11 +798,9 @@ public class EarthPropertyManager {
         }
 
         /*
-         * Confirm all 768 property columns belong
-         * to the intended government-owned property.
+         * Verify all 768 property columns.
          *
-         * This uses coordinate-based property lookups.
-         * No Minecraft chunks are loaded.
+         * This does not load Minecraft chunks.
          */
 
         for (int x = 0;
@@ -907,13 +849,24 @@ public class EarthPropertyManager {
         }
 
         /*
-         * Final readiness confirmation.
+         * FINAL READINESS CONFIRMATION
          */
 
         if (!EarthResidentialInstallation.isReady()) {
 
             return PurchaseEligibility
                     .INSTALLATION_STORAGE_UNAVAILABLE;
+        }
+
+        /*
+         * Repeat the explicit sale activation check.
+         */
+
+        if (!(plugin instanceof EarthBound earthBound)
+                || !EarthPropertySaleMarkers
+                        .isSaleActivationEnabled(earthBound)) {
+
+            return PurchaseEligibility.SALE_ACTIVATION_LOCKED;
         }
 
         if (!isReady()) {
@@ -932,17 +885,8 @@ public class EarthPropertyManager {
         return PurchaseEligibility.ELIGIBLE;
     }
 
-
     /*
-     * ============================================================
      * PURCHASE ELIGIBILITY HELPER
-     * ============================================================
-     *
-     * Intended for future sale marker and menu checks.
-     *
-     * The purchase transaction must still repeat
-     * eligibility immediately before committing.
-     * ============================================================
      */
 
     public static boolean isPropertyPurchaseEligible(
@@ -953,11 +897,8 @@ public class EarthPropertyManager {
                 == PurchaseEligibility.ELIGIBLE;
     }
 
-
     /*
-     * ============================================================
      * PURCHASE REJECTION MESSAGE
-     * ============================================================
      */
 
     private static void rejectPurchase(
@@ -967,16 +908,21 @@ public class EarthPropertyManager {
     ) {
 
         if (eligibility
+                == PurchaseEligibility.SALE_ACTIVATION_LOCKED) {
+
+            player.sendMessage(
+                    "Residential property sales are currently locked."
+            );
+
+        } else if (eligibility
                 == PurchaseEligibility.PROPERTY_ALREADY_OWNED) {
 
             player.sendMessage(
                     "This property already has an owner."
             );
 
-        } else if (
-                eligibility
-                    == PurchaseEligibility.INVALID_INSTALLATION_STATUS
-        ) {
+        } else if (eligibility
+                == PurchaseEligibility.INVALID_INSTALLATION_STATUS) {
 
             player.sendMessage(
                     "This home's installation has not "
@@ -1006,11 +952,8 @@ public class EarthPropertyManager {
         }
     }
 
-
     /*
-     * ============================================================
      * PURCHASE GOVERNMENT PROPERTY
-     * ============================================================
      */
 
     public static boolean purchaseProperty(
@@ -1074,8 +1017,10 @@ public class EarthPropertyManager {
         /*
          * INDEPENDENT RESIDENTIAL PURCHASE SAFETY LOCK
          *
-         * Never trust a banner or purchase menu
-         * as evidence of completed construction.
+         * Includes explicit sale authorization and
+         * complete residential installation eligibility.
+         *
+         * Never trust a banner or purchase menu alone.
          */
 
         PurchaseEligibility eligibility =
@@ -1161,10 +1106,8 @@ public class EarthPropertyManager {
         /*
          * FINAL PURCHASE ELIGIBILITY CHECK
          *
-         * Repeat immediately before the financial commit.
-         *
-         * No money or ownership may be transferred
-         * when residential installation eligibility fails.
+         * Repeat sale authorization and installation
+         * eligibility before calling the economy.
          */
 
         PurchaseEligibility finalEligibility =
@@ -1199,14 +1142,15 @@ public class EarthPropertyManager {
         /*
          * ATOMIC PROPERTY TRANSACTION
          *
-         * EarthEconomy commits all of the following:
+         * The economy independently checks sale authorization
+         * and commits the following together:
          *
-         * 1. Player balance deduction
-         * 2. Anacortes treasury deposit
-         * 3. Washington treasury deposit
-         * 4. USA treasury deposit
-         * 5. Property ownership
-         * 6. Transaction history
+         * Player balance deduction.
+         * Anacortes treasury deposit.
+         * Washington treasury deposit.
+         * USA treasury deposit.
+         * Property ownership.
+         * Transaction history.
          */
 
         boolean purchased =
@@ -1237,9 +1181,9 @@ public class EarthPropertyManager {
         }
 
         /*
-         * The purchase has already been committed.
+         * Purchase has already been committed.
          *
-         * Update the in-memory property owner.
+         * Synchronize in-memory ownership.
          * No additional ownership save is required.
          */
 
@@ -1277,11 +1221,8 @@ public class EarthPropertyManager {
         return true;
     }
 
-
     /*
-     * ============================================================
      * RESTORE SAVED PROPERTY OWNERS
-     * ============================================================
      */
 
     private static boolean loadOwners() {
@@ -1292,7 +1233,7 @@ public class EarthPropertyManager {
         try {
 
             /*
-             * Read every owner before changing any
+             * Read every owner before changing
              * in-memory ownership records.
              */
 
@@ -1345,27 +1286,16 @@ public class EarthPropertyManager {
         return true;
     }
 
-
     /*
-     * ============================================================
      * VERIFY SAVED PROPERTY OWNERSHIP
-     * ============================================================
+     *
+     * Ownership is saved automatically by EarthEconomy.
+     *
+     * Never overwrite economy-v2.yml using a separate
+     * property ownership file.
      */
 
     public static boolean save() {
-
-        /*
-         * Compatibility with EarthBound.onDisable().
-         *
-         * Ownership is saved automatically by EarthEconomy
-         * when the financial transaction is committed.
-         *
-         * This method verifies that the current property
-         * owners match the authoritative financial records.
-         *
-         * Never overwrite economy-v2.yml using a separate
-         * property ownership file.
-         */
 
         if (!isReady()) {
 
